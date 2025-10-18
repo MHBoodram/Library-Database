@@ -1,5 +1,7 @@
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useEffect, useState } from "react";
 import { getItems, addItem } from "./api";
+import NavBar from "./components/NavBar"
 
 export default function App() {
   const [items, setItems] = useState([]);
@@ -36,7 +38,9 @@ export default function App() {
   if (loading) return <p style={{ padding: 16 }}>Loading…</p>;
 
   return (
-    <div style={{ maxWidth: 560, margin: "2rem auto", padding: 16 }}>
+    <BrowserRouter>
+      <NavBar></NavBar>
+      <div style={{ maxWidth: 560, margin: "2rem auto", padding: 16 }}>
       <h1>Items</h1>
       {err && <p style={{ color: "crimson" }}>{err}</p>}
 
@@ -52,6 +56,7 @@ export default function App() {
 
       <ul>{items.map(i => <li key={i.id}>{i.name}</li>)}</ul>
     </div>
+    </BrowserRouter>
   );
 }
 
