@@ -7,8 +7,5 @@ if (!process.env.DATABASE_URL) {
   process.exit(1);
 }
 
-export const pool = mysql.createPool({
-  uri: process.env.DATABASE_URL,     // e.g. mysql://appadmin:pass@localhost:3306/appdb
-  waitForConnections: true,
-  connectionLimit: 10
-});
+// Prefer passing the connection string directly to createPool
+export const pool = mysql.createPool(process.env.DATABASE_URL);
