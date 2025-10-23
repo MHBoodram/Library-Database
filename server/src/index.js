@@ -9,7 +9,6 @@ import jwt from "jsonwebtoken";
 const PORT = Number(process.env.PORT) || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString("hex");
 
-// allow both common Vite ports in dev; adjust as needed or just use FRONTEND_ORIGIN
 const ALLOWED_ORIGINS = new Set([
   process.env.FRONTEND_ORIGIN || "http://localhost:5173",
   "http://localhost:5174",
@@ -24,22 +23,16 @@ function setCors(res, origin) {
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
   }
 }
-
 function sendJSON(res, statusCode, data) {
   res.statusCode = statusCode;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.end(JSON.stringify(data));
 }
-
 async function readJSONBody(req) {
   const chunks = [];
   for await (const c of req) chunks.push(c);
   if (!chunks.length) return {};
-  try {
-    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
-  } catch {
-    throw new Error("invalid_json");
-  }
+  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
 }
 
 function getAuthUser(req) {
@@ -64,18 +57,33 @@ function requireAuth(req, res) {
 
 const server = http.createServer(async (req, res) => {
   try {
+    // 1) CORS first (so even early returns include headers)
     const origin = req.headers.origin || "";
     setCors(res, origin);
-
     if (req.method === "OPTIONS") {
-      res.statusCode = 204; // preflight OK
+      res.statusCode = 204;
       return res.end();
     }
 
+    // 2) Parse URL once, then use pathname everywhere
     const url = new URL(req.url, `http://${req.headers.host}`);
     const { pathname } = url;
 
-    // GET /api/health
+    // 3) Session helpers
+    function setSessionCookie(res, sid) {
+      res.setHeader("Set-Cookie", `sid=${sid}; HttpOnly; Path=/; SameSite=Lax`);
+    }
+    function clearSessionCookie(res) {
+      res.setHeader("Set-Cookie", `sid=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax`);
+    }
+    function getSession(req) {
+      const m = (req.headers.cookie || "").match(/(?:^|;\s*)sid=([^;]+)/);
+      return m ? sessions.get(m[1]) : null;
+    }
+
+    // 4) Routes
+
+    // health
     if (req.method === "GET" && pathname === "/api/health") {
       return sendJSON(res, 200, { ok: true, node: process.version });
     }
@@ -158,6 +166,8 @@ const server = http.createServer(async (req, res) => {
       );
       return sendJSON(res, 200, { ok: true });
     }
+
+    
 
     if (req.method === "DELETE" && pathname.startsWith("/api/items/")) {
       const auth = requireAuth(req, res);
@@ -283,10 +293,10 @@ const server = http.createServer(async (req, res) => {
     }
 
     // 404
-    sendJSON(res, 404, { error: "not_found" });
+    return sendJSON(res, 404, { error: "not_found" });
   } catch (err) {
     console.error("Server error:", err);
-    sendJSON(res, 500, { error: "server_error" });
+    return sendJSON(res, 500, { error: "server_error" });
   }
 });
 

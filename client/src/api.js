@@ -1,17 +1,29 @@
 const API_BASE = import.meta.env.VITE_API_BASE;
 
+async function api(path, init = {}) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    credentials: "include",
+    headers: { "Content-Type": "application/json", ...(init.headers || {}) },
+    ...init,
+  });
+  // Try to read JSON either way
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(body?.error || res.statusText || "Request failed");
+  }
+  return body;
+}
+
 export async function getItems() {
-  const res = await fetch(`${API_BASE}/items`);
-  if (!res.ok) throw new Error("Failed to fetch items");
-  return res.json();
+  return api("/items");                   // returns array
 }
 
 export async function addItem(name) {
-  const res = await fetch(`${API_BASE}/items`, {
+  return api("/items", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name })
-  });
-  if (!res.ok) throw new Error("Failed to add item");
-  return res.json();
+    body: JSON.stringify({ name }),
+  });                                     // returns created row
 }
+
+// (You can also export api for /auth routes elsewhere)
+export { api };
