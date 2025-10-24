@@ -87,7 +87,9 @@ const server = http.createServer(async (req, res) => {
       const last = (body.last_name || "").trim();
       const email = (body.email || "").trim().toLowerCase();
       const password = body.password || "";
-      const role = (body.role || "student").trim();
+      // Force all public registrations to be "student" role
+      // Staff/faculty must be created by admin
+      const role = "student";
       if (!first || !last || !email || !password)
         return sendJSON(res, 400, { error: "missing_fields" });
 
@@ -248,22 +250,34 @@ const server = http.createServer(async (req, res) => {
       return sendJSON(res, 200, { ok: true });
     }
 
-    // ---------- REPORTS (views) ----------
+    // ---------- REPORTS (views) - Staff/Admin only ----------
     if (req.method === "GET" && pathname === "/api/reports/overdue") {
       const auth = requireAuth(req, res);
       if (!auth) return;
+      // Only staff can view reports
+      if (auth.role !== 'staff') {
+        return sendJSON(res, 403, { error: "forbidden", message: "Access denied. Staff only." });
+      }
       const [rows] = await pool.query("SELECT * FROM v_overdue_loans");
       return sendJSON(res, 200, rows);
     }
     if (req.method === "GET" && pathname === "/api/reports/balances") {
       const auth = requireAuth(req, res);
       if (!auth) return;
+      // Only staff can view reports
+      if (auth.role !== 'staff') {
+        return sendJSON(res, 403, { error: "forbidden", message: "Access denied. Staff only." });
+      }
       const [rows] = await pool.query("SELECT * FROM v_user_balances");
       return sendJSON(res, 200, rows);
     }
     if (req.method === "GET" && pathname === "/api/reports/top-items") {
       const auth = requireAuth(req, res);
       if (!auth) return;
+      // Only staff can view reports
+      if (auth.role !== 'staff') {
+        return sendJSON(res, 403, { error: "forbidden", message: "Access denied. Staff only." });
+      }
       const [rows] = await pool.query("SELECT * FROM v_top_items_30d");
       return sendJSON(res, 200, rows);
     }

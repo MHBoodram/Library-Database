@@ -6,7 +6,8 @@
   "main": "index.js",
   "scripts": {
     "dev": "nodemon src/index.js",
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "seed:staff": "node src/scripts/seedStaff.js"
   },
   "keywords": [],
   "author": "",
