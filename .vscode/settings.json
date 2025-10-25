@@ -1,0 +1,21 @@
+{
+    "sqltools.connections": [
+        {
+            "mysqlOptions": {
+                "authProtocol": "default",
+                "enableSsl": "Enabled",
+                "ssl": {
+                    "ca": "/etc/ssl/certs/DigiCert_Global_Root_G2.pem"
+                }
+            },
+            "ssh": "Disabled",
+            "previewLimit": 50,
+            "server": "library-db.mysql.database.azure.com",
+            "port": 3306,
+            "driver": "MySQL",
+            "name": "Library database",
+            "database": "mysql",
+            "username": "db2root"
+        }
+    ]
+}
