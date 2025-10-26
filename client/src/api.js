@@ -1,29 +1,66 @@
-const API_BASE = import.meta.env.VITE_API_BASE;
+// src/api.js
+const RAW_BASE = import.meta.env.VITE_API_BASE || "http://localhost:3000/api";
+const API_BASE = RAW_BASE.replace(/\/+$/, ""); // strip trailing slashes
 
-async function api(path, init = {}) {
-  const res = await fetch(`${API_BASE}${path}`, {
+export function join(path) {
+  const p = String(path || "").replace(/^\/+/, ""); // strip leading slashes
+  return `${API_BASE}/${p}`;
+}
+
+// define the function first...
+async function api(path, { method = "GET", body, token, headers } = {}) {
+  const url = join(path);
+  const res = await fetch(url, {
+    method,
     credentials: "include",
-    headers: { "Content-Type": "application/json", ...(init.headers || {}) },
-    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(headers || {}),
+    },
+    body: body && typeof body === "object" ? JSON.stringify(body) : body,
   });
-  // Try to read JSON either way
-  const body = await res.json().catch(() => ({}));
+
+  let data = {};
+  try { data = await res.json(); } catch {}
   if (!res.ok) {
-    throw new Error(body?.error || res.statusText || "Request failed");
+    const err = new Error(data?.error || res.statusText || "Request failed");
+    err.status = res.status;
+    err.data = data;
+    throw err;
   }
-  return body;
+  return data;
 }
 
-export async function getItems() {
-  return api("/items");                   // returns array
-}
+// ---- Feature helpers ----
 
-export async function addItem(name) {
-  return api("/items", {
+// items
+export const getItems = (token) =>
+  api("/items", { token }); // GET /api/items → array
+
+export const addItem = (token, { title, subject, classification }) =>
+  api("/items", {
     method: "POST",
-    body: JSON.stringify({ name }),
-  });                                     // returns created row
-}
+    token,
+    body: { title, subject, classification },
+  });
 
-// (You can also export api for /auth routes elsewhere)
-export { api };
+export const updateItem = (token, id, patch) =>
+  api(`/items/${id}`, { method: "PUT", token, body: patch });
+
+export const deleteItem = (token, id) =>
+  api(`/items/${id}`, { method: "DELETE", token });
+
+// auth (example)
+export const login = (email, password) =>
+  api("/auth/login", { method: "POST", body: { email, password } });
+
+// add this next to login()
+export const register = ({ first_name, last_name, email, password }) =>
+  api("/auth/register", {
+    method: "POST",
+    body: { first_name, last_name, email, password },
+  });
+
+export default api;
+export { api, API_BASE };

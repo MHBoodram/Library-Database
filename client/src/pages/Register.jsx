@@ -1,129 +1,142 @@
-import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useState } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import { useAuth } from "../AuthContext";
+import { api } from "../api";
 
 export default function Register() {
-  const [formData, setFormData] = useState({
-    first_name: '',
-    last_name: '',
-    email: '',
-    password: '',
-    role: 'student',
-  });
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
+  const nav = useNavigate();
+  const { Login } = useAuth();
 
-  function handleChange(e) {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+  const [form, setForm] = useState({
+    first_name: "",
+    last_name: "",
+    email: "",
+    password: "",
+    confirm: "",
+  });
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  function onChange(e) {
+    const { name, value } = e.target;
+    setForm((f) => ({ ...f, [name]: value }));
   }
 
-  async function handleSubmit(e) {
+  async function onSubmit(e) {
     e.preventDefault();
-    setError('');
+    setError("");
+
+    const first_name = form.first_name.trim();
+    const last_name  = form.last_name.trim();
+    const email      = form.email.trim().toLowerCase();
+    const password   = form.password;
+
+    if (!first_name || !last_name || !email || !password) {
+      return setError("All fields are required.");
+    }
+    if (password !== form.confirm) {
+      return setError("Passwords do not match.");
+    }
+
     setLoading(true);
-
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE}/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+      // 1) Create the account (role defaults to "student" on the server)
+      await api("/auth/register", {
+        method: "POST",
+        body: { first_name, last_name, email, password },
       });
 
-      const data = await response.json();
+      // 2) Auto-login so the app is immediately authenticated
+      const user = await Login(email, password);
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Registration failed');
-      }
-
-      // Auto-login after registration
-      const loginResponse = await fetch(`${import.meta.env.VITE_API_BASE}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          email: formData.email, 
-          password: formData.password 
-        }),
-      });
-
-      const loginData = await loginResponse.json();
-
-      if (loginResponse.ok) {
-        localStorage.setItem('token', loginData.token);
-        localStorage.setItem('user', JSON.stringify(loginData.user));
-        navigate('/');
-      } else {
-        navigate('/login');
-      }
+      // 3) Route by role
+      if (user.role === "staff") nav("/staff", { replace: true });
+      else nav("/app", { replace: true });
     } catch (err) {
-      setError(err.message || 'Registration failed');
+      setError(err?.data?.error || err.message || "Registration failed");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div style={{ maxWidth: 400, margin: '4rem auto', padding: 24 }}>
+    <div style={{ maxWidth: 400, margin: "4rem auto", padding: 24 }}>
       <h1>Register</h1>
 
       {error && (
-        <div style={{ 
-          padding: 12, 
-          marginBottom: 16, 
-          backgroundColor: '#fee', 
-          color: '#c00',
-          borderRadius: 4 
-        }}>
+        <div
+          style={{
+            padding: 12,
+            marginBottom: 16,
+            backgroundColor: "#fee",
+            color: "#c00",
+            borderRadius: 4,
+          }}
+        >
           {error}
         </div>
       )}
 
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={onSubmit}>
         <div style={{ marginBottom: 16 }}>
-          <label style={{ display: 'block', marginBottom: 4 }}>First Name</label>
+          <label style={{ display: "block", marginBottom: 4 }}>First Name</label>
           <input
             type="text"
             name="first_name"
-            value={formData.first_name}
-            onChange={handleChange}
+            value={form.first_name}
+            onChange={onChange}
             required
-            style={{ width: '100%', padding: 8, fontSize: 16 }}
+            style={{ width: "100%", padding: 8, fontSize: 16 }}
           />
         </div>
 
         <div style={{ marginBottom: 16 }}>
-          <label style={{ display: 'block', marginBottom: 4 }}>Last Name</label>
+          <label style={{ display: "block", marginBottom: 4 }}>Last Name</label>
           <input
             type="text"
             name="last_name"
-            value={formData.last_name}
-            onChange={handleChange}
+            value={form.last_name}
+            onChange={onChange}
             required
-            style={{ width: '100%', padding: 8, fontSize: 16 }}
+            style={{ width: "100%", padding: 8, fontSize: 16 }}
           />
         </div>
 
         <div style={{ marginBottom: 16 }}>
-          <label style={{ display: 'block', marginBottom: 4 }}>Email</label>
+          <label style={{ display: "block", marginBottom: 4 }}>Email</label>
           <input
             type="email"
             name="email"
-            value={formData.email}
-            onChange={handleChange}
+            value={form.email}
+            onChange={onChange}
             required
-            style={{ width: '100%', padding: 8, fontSize: 16 }}
+            style={{ width: "100%", padding: 8, fontSize: 16 }}
           />
         </div>
 
         <div style={{ marginBottom: 16 }}>
-          <label style={{ display: 'block', marginBottom: 4 }}>Password</label>
+          <label style={{ display: "block", marginBottom: 4 }}>Password</label>
           <input
             type="password"
             name="password"
-            value={formData.password}
-            onChange={handleChange}
+            value={form.password}
+            onChange={onChange}
             required
             minLength={6}
-            style={{ width: '100%', padding: 8, fontSize: 16 }}
+            style={{ width: "100%", padding: 8, fontSize: 16 }}
+          />
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ display: "block", marginBottom: 4 }}>Confirm Password</label>
+          <input
+            type="password"
+            name="confirm"
+            value={form.confirm}
+            onChange={onChange}
+            required
+            minLength={6}
+            style={{ width: "100%", padding: 8, fontSize: 16 }}
           />
         </div>
 
@@ -131,21 +144,21 @@ export default function Register() {
           type="submit"
           disabled={loading}
           style={{
-            width: '100%',
+            width: "100%",
             padding: 12,
             fontSize: 16,
-            backgroundColor: '#28a745',
-            color: 'white',
-            border: 'none',
+            backgroundColor: "#28a745",
+            color: "white",
+            border: "none",
             borderRadius: 4,
-            cursor: loading ? 'not-allowed' : 'pointer',
+            cursor: loading ? "not-allowed" : "pointer",
           }}
         >
-          {loading ? 'Registering...' : 'Register'}
+          {loading ? "Registering..." : "Register"}
         </button>
       </form>
 
-      <p style={{ marginTop: 16, textAlign: 'center' }}>
+      <p style={{ marginTop: 16, textAlign: "center" }}>
         Already have an account? <Link to="/login">Login here</Link>
       </p>
     </div>
