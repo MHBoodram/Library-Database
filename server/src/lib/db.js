@@ -34,14 +34,17 @@ if (isAzure || !isLocalHost) {
 }
 
 
+// keep everything above as-is (your DB_SSL / DB_SSL_CA logic)
 export const pool = mysql.createPool({
   host: process.env.DB_HOST,
   port: Number(process.env.DB_PORT || 3306),
   user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD || "", // still used if provided
+  password: process.env.DB_PASSWORD || "",
   database: process.env.DB_NAME,
-  ssl: (process.env.DB_SSL || "off").toLowerCase() === "on" ? { rejectUnauthorized: true } : undefined,
+  // ⬇️ use the prepared ssl object
+  ssl,
 });
+
 
 
 // Optional: call this from your server startup to verify DB connectivity
