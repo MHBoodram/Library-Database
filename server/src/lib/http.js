@@ -1,18 +1,33 @@
 // Shared HTTP + auth helpers
 import jwt from "jsonwebtoken";
 
-export function setCors(res, origin, allowed = [
-  process.env.FRONTEND_ORIGIN || "http://localhost:5173",
-  "http://localhost:5174",
-]) {
-  if (!origin || allowed.includes(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin || allowed[0]);
+export function setCors(req, res) {
+  const allowed = (process.env.ALLOWED_ORIGINS ||
+    "https://library-database-xi.vercel.app,http://localhost:5173,http://localhost:5174"
+  ).split(",").map(s => s.trim()).filter(Boolean);
+
+  const origin = req.headers.origin;
+
+  if (origin && allowed.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
     res.setHeader("Access-Control-Allow-Credentials", "true");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      req.headers["access-control-request-headers"] || "Content-Type, Authorization"
+    );
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
   }
+
+  // Always handle preflight here
+  if (req.method === "OPTIONS") {
+    res.statusCode = 204; // No Content
+    res.end();
+    return true;          // preflight handled
+  }
+  return false;           // continue to router
 }
+
 
 export function sendJSON(res, code, data) {
   res.statusCode = code;

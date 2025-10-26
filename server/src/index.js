@@ -35,7 +35,7 @@ r.add("POST",   "/api/copies",     createCopy(JWT_SECRET));
 r.add("PUT",    "/api/copies/:id", updateCopy(JWT_SECRET));
 r.add("DELETE", "/api/copies/:id", deleteCopy(JWT_SECRET));
 
-// loans
+// loans 
 r.add("POST", "/api/loans/checkout", checkout(JWT_SECRET));
 r.add("POST", "/api/loans/return",   returnLoan(JWT_SECRET));
 
@@ -50,17 +50,16 @@ r.add("GET", "/api/reports/top-items",  topItems(JWT_SECRET));
 
 // server
 const server = http.createServer(async (req, res) => {
-  const origin = req.headers.origin || "";
-  setCors(res, origin);
-  if (req.method === "OPTIONS") { res.statusCode = 204; return res.end(); }
+  if (setCors(req, res)) return;  // CORS & preflight first
 
   const url = new URL(req.url, `http://${req.headers.host}`);
   const m = r.match(req.method, url.pathname);
-  if (!m) return sendJSON(res, 404, { error:"not_found" });
+  if (!m) return sendJSON(res, 404, { error: "not_found" });
 
   try { await m.handler(req, res, m.params); }
-  catch (e) { console.error("Server error:", e); sendJSON(res, 500, { error:"server_error" }); }
+  catch (e) { console.error("Server error:", e); sendJSON(res, 500, { error: "server_error" }); }
 });
+
 
 server.listen(PORT, () => {
   console.log(`API running on http://localhost:${PORT}`);
