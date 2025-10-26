@@ -1,11 +1,9 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { useAuth } from "../AuthContext";
 import { api } from "../api";
 
 export default function Register() {
   const nav = useNavigate();
-  const { Login } = useAuth();
 
   const [form, setForm] = useState({
     first_name: "",
@@ -46,12 +44,8 @@ export default function Register() {
         body: { first_name, last_name, email, password },
       });
 
-      // 2) Auto-login so the app is immediately authenticated
-      const user = await Login(email, password);
+      nav("/login?registered=1", { replace: true, state: { email } });
 
-      // 3) Route by role
-      if (user.role === "staff") nav("/staff", { replace: true });
-      else nav("/app", { replace: true });
     } catch (err) {
       setError(err?.data?.error || err.message || "Registration failed");
     } finally {
