@@ -11,13 +11,14 @@ export default function Register() {
     email: "",
     password: "",
     confirm: "",
+    make_employee: false,
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   function onChange(e) {
-    const { name, value } = e.target;
-    setForm((f) => ({ ...f, [name]: value }));
+    const { name, value, type, checked } = e.target;
+    setForm((f) => ({ ...f, [name]: type === "checkbox" ? checked : value }));
   }
 
   async function onSubmit(e) {
@@ -38,10 +39,10 @@ export default function Register() {
 
     setLoading(true);
     try {
-      // 1) Create the account (role defaults to "student" on the server)
+      // 1) Create the account (optionally flagged as staff on the server)
       await api("/auth/register", {
         method: "POST",
-        body: { first_name, last_name, email, password },
+        body: { first_name, last_name, email, password, make_employee: form.make_employee },
       });
 
       nav("/login?registered=1", { replace: true, state: { email } });
@@ -132,6 +133,18 @@ export default function Register() {
             minLength={6}
             style={{ width: "100%", padding: 8, fontSize: 16 }}
           />
+        </div>
+
+        <div style={{ marginBottom: 24 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input
+              type="checkbox"
+              name="make_employee"
+              checked={form.make_employee}
+              onChange={onChange}
+            />
+            <span>Register as staff (enable employee portal features)</span>
+          </label>
         </div>
 
         <button

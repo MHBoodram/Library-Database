@@ -68,7 +68,13 @@ export function AuthProvider({ children }) {
   }, [save]);
 
   const register = useCallback(
-    async (first_name, last_name, email, password, { autoLogin = true } = {}) => {
+    async (
+      first_name,
+      last_name,
+      email,
+      password,
+      { autoLogin = true, makeEmployee = false } = {}
+    ) => {
       await api("auth/register", {
         method: "POST",
         body: {
@@ -76,6 +82,7 @@ export function AuthProvider({ children }) {
           last_name: last_name.trim(),
           email: email.trim().toLowerCase(),
           password,
+          make_employee: makeEmployee,
         },
       });
       if (!autoLogin) return null;
