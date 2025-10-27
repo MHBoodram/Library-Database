@@ -10,6 +10,9 @@ import { createCopy, updateCopy, deleteCopy } from "./api/copies.js";
 import { checkout, returnLoan } from "./api/loans.js";
 import { placeHold, cancelHold } from "./api/holds.js";
 import { overdue, balances, topItems } from "./api/reports.js";
+import { listFines } from "./api/staff.js";
+import { createReservation, listReservations } from "./api/reservations.js";
+import { createRoom } from "./api/rooms.js";
 
 const PORT = Number(process.env.PORT) || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || "devsecret";
@@ -47,6 +50,12 @@ r.add("DELETE", "/api/holds/:id",    cancelHold(JWT_SECRET));
 r.add("GET", "/api/reports/overdue",    overdue(JWT_SECRET));
 r.add("GET", "/api/reports/balances",   balances(JWT_SECRET));
 r.add("GET", "/api/reports/top-items",  topItems(JWT_SECRET));
+
+// staff tools
+r.add("GET", "/api/staff/fines", listFines(JWT_SECRET));
+r.add("GET", "/api/staff/reservations", listReservations(JWT_SECRET));
+r.add("POST", "/api/staff/reservations", createReservation(JWT_SECRET));
+r.add("POST", "/api/staff/rooms", createRoom(JWT_SECRET));
 
 // server
 const server = http.createServer(async (req, res) => {

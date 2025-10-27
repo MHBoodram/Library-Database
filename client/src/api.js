@@ -8,7 +8,7 @@ export function join(path) {
 }
 
 // define the function first...
-async function api(path, { method = "GET", body, token, headers } = {}) {
+async function api(path, { method = "GET", body, token, headers, signal } = {}) {
   const url = join(path);
   const res = await fetch(url, {
     method,
@@ -18,6 +18,7 @@ async function api(path, { method = "GET", body, token, headers } = {}) {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(headers || {}),
     },
+    ...(signal ? { signal } : {}),
     body: body && typeof body === "object" ? JSON.stringify(body) : body,
   });
 
@@ -61,6 +62,18 @@ export const register = ({ first_name, last_name, email, password }) =>
     method: "POST",
     body: { first_name, last_name, email, password },
   });
+
+export const createReservation = (token, payload) =>
+  api("/staff/reservations", { method: "POST", token, body: payload });
+
+export const listReservations = (token, params = {}) => {
+  const qs = new URLSearchParams(params);
+  const path = qs.toString() ? `/staff/reservations?${qs.toString()}` : "/staff/reservations";
+  return api(path, { token });
+};
+
+export const createRoom = (token, payload) =>
+  api("/staff/rooms", { method: "POST", token, body: payload });
 
 export default api;
 export { api, API_BASE };

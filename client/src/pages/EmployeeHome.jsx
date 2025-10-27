@@ -1,19 +1,25 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useAuth } from "../AuthContext";
 
 /**
  * EmployeeDashboard.jsx
  *
- * Drop this file anywhere under your React src/ (e.g., src/pages/EmployeeDashboard.jsx)
- * and add a route like <Route path="/staff" element={<EmployeeDashboard />} />.
+ * Authenticated staff landing page that bundles:
+ *  - Fines search UI backed by GET /api/staff/fines
+ *  - Item ingestion form (POST /api/items + optional /api/copies)
  *
- * Assumptions
- * - You have an authenticated employee session (e.g., via cookies/JWT).
- * - Backend exposes GET /api/employee/fines to return joined fine rows (see expected shape below).
- * - Backend exposes POST /api/items to create a new library item (scaffolded form below).
- * - Vite env variable VITE_API_BASE points at your backend origin (e.g., http://localhost:3000/api).
+ * Assumes AuthProvider supplies useApi() wrapper that adds auth headers.
  */
 
 const API_BASE = import.meta.env.VITE_API_BASE?.replace(/\/$/, "") || ""; // e.g., http://localhost:3000/api
+
+const STATUS_OPTIONS = [
+  { value: "active", label: "Active only" },
+  { value: "all", label: "All statuses" },
+  { value: "unpaid", label: "Unpaid" },
+  { value: "paid", label: "Paid" },
+  { value: "waived", label: "Waived" },
+];
 
 function formatDate(due) {
   if (!due) return "—";
@@ -27,7 +33,9 @@ function formatDate(due) {
 }
 
 export default function EmployeeDashboard() {
-  const [tab, setTab] = useState("fines"); // "fines" | "addItem"
+  const { useApi, user } = useAuth();
+  const apiWithAuth = useApi();
+  const [tab, setTab] = useState("fines"); // "fines" | "checkout" | "reservations" | "addItem"
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
       <header className="border-b bg-white">
@@ -44,6 +52,22 @@ export default function EmployeeDashboard() {
             </button>
             <button
               className={`px-3 py-2 rounded-md text-sm font-medium ${
+                tab === "checkout" ? "bg-gray-900 text-white" : "bg-gray-200 hover:bg-gray-300"
+              }`}
+              onClick={() => setTab("checkout")}
+            >
+              Checkout Loan
+            </button>
+            <button
+              className={`px-3 py-2 rounded-md text-sm font-medium ${
+                tab === "reservations" ? "bg-gray-900 text-white" : "bg-gray-200 hover:bg-gray-300"
+              }`}
+              onClick={() => setTab("reservations")}
+            >
+              Room Reservations
+            </button>
+            <button
+              className={`px-3 py-2 rounded-md text-sm font-medium ${
                 tab === "addItem" ? "bg-gray-900 text-white" : "bg-gray-200 hover:bg-gray-300"
               }`}
               onClick={() => setTab("addItem")}
@@ -55,7 +79,10 @@ export default function EmployeeDashboard() {
       </header>
 
       <main className="mx-auto max-w-6xl px-4 py-6">
-        {tab === "fines" ? <FinesPanel /> : <AddItemPanel />}
+        {tab === "fines" && <FinesPanel api={apiWithAuth} />}
+        {tab === "checkout" && <CheckoutPanel api={apiWithAuth} staffUser={user} />}
+        {tab === "reservations" && <ReservationsPanel api={apiWithAuth} staffUser={user} />}
+        {tab === "addItem" && <AddItemPanel api={apiWithAuth} />}
       </main>
     </div>
   );
@@ -64,100 +91,96 @@ export default function EmployeeDashboard() {
 /** =============================
  * FINES PANEL
  * ==============================*/
-function FinesPanel() {
+function FinesPanel({ api }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // simple client filters
-  const [q, setQ] = useState("");
-  const [status, setStatus] = useState(""); // "paid" | "unpaid" | "waived" | ""
+  const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [status, setStatus] = useState("active");
   const [onlyOverdue, setOnlyOverdue] = useState(false);
 
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  useEffect(() => {
+    const handle = setTimeout(() => setDebouncedQuery(query.trim()), 250);
+    return () => clearTimeout(handle);
+  }, [query]);
 
-  // Fetch from backend
-  async function fetchFines() {
-    setLoading(true);
-    setError("");
-    try {
-      const params = new URLSearchParams();
-      if (q) params.set("q", q);
-      if (status) params.set("status", status);
-      if (onlyOverdue) params.set("overdue", "1");
-      params.set("page", String(page));
-      params.set("pageSize", String(pageSize));
+  const fetchFines = useCallback(
+    async (signal) => {
+      if (!api) return;
+      setLoading(true);
+      setError("");
+      try {
+        const params = new URLSearchParams();
+        if (debouncedQuery) params.set("q", debouncedQuery);
+        if (status) params.set("status", status);
+        params.set("pageSize", "200");
 
-      const url = `${API_BASE}/employee/fines?${params.toString()}`;
-      const res = await fetch(url, { credentials: "include" });
-      if (!res.ok) {
-        const msg = await safeError(res);
-        throw new Error(msg || `Request failed: ${res.status}`);
+        const qs = params.toString();
+        const data = await api(`staff/fines${qs ? `?${qs}` : ""}`, { signal });
+        const list = Array.isArray(data?.rows) ? data.rows : Array.isArray(data) ? data : [];
+        setRows(list);
+      } catch (err) {
+        if (signal?.aborted) return;
+        setError(err.message || "Failed to load fines");
+      } finally {
+        if (!signal?.aborted) setLoading(false);
       }
-      /** Expected response shape (array of rows):
-       * [
-       *   {
-       *     first_name: string,
-       *     last_name: string,
-       *     fine_id: number,
-       *     status: "paid" | "unpaid" | "waived",
-       *     loan_id: number,
-       *     due_date: string | Date,
-       *     title: string
-       *   },
-       *   ...
-       * ]
-       */
-      const data = await res.json();
-      setRows(Array.isArray(data?.rows) ? data.rows : Array.isArray(data) ? data : []);
-    } catch (err) {
-      setError(err.message || "Failed to load fines");
-    } finally {
-      setLoading(false);
-    }
-  }
+    },
+    [api, debouncedQuery, status]
+  );
 
   useEffect(() => {
-    fetchFines();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, pageSize]);
+    const controller = new AbortController();
+    fetchFines(controller.signal);
+    return () => controller.abort();
+  }, [fetchFines]);
 
   const filtered = useMemo(() => {
-    const term = q.trim().toLowerCase();
+    const term = debouncedQuery.toLowerCase();
     return rows.filter((r) => {
-      const matchesTerm = !term
-        || r.first_name?.toLowerCase().includes(term)
-        || r.last_name?.toLowerCase().includes(term)
-        || String(r.fine_id).includes(term)
-        || String(r.loan_id).includes(term)
-        || r.title?.toLowerCase().includes(term);
-
-      const matchesStatus = !status || r.status === status;
+      const matchesTerm =
+        !term ||
+        r.first_name?.toLowerCase().includes(term) ||
+        r.last_name?.toLowerCase().includes(term) ||
+        String(r.fine_id).includes(term) ||
+        String(r.loan_id).includes(term) ||
+        r.title?.toLowerCase().includes(term);
 
       const overdue = r.due_date ? new Date(r.due_date) < new Date() : false;
       const matchesOverdue = !onlyOverdue || overdue;
 
-      return matchesTerm && matchesStatus && matchesOverdue;
+      return matchesTerm && matchesOverdue;
     });
-  }, [rows, q, status, onlyOverdue]);
+  }, [rows, debouncedQuery, onlyOverdue]);
+
+  const activeCount = useMemo(
+    () =>
+      rows.filter(
+        (r) => !["paid", "waived"].includes(String(r.status || "").toLowerCase())
+      ).length,
+    [rows]
+  );
 
   return (
     <section className="space-y-4">
       <FiltersBar
-        q={q}
-        setQ={setQ}
+        q={query}
+        setQ={setQuery}
         status={status}
         setStatus={setStatus}
         onlyOverdue={onlyOverdue}
         setOnlyOverdue={setOnlyOverdue}
-        onSearch={() => {
-          setPage(1);
-          fetchFines();
-        }}
       />
 
       <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between border-b bg-gray-50 px-5 py-3 text-sm">
+          <span className="font-medium text-gray-700">
+            Showing {filtered.length} of {rows.length} results
+          </span>
+          <span className="text-gray-500">Active fines: {activeCount}</span>
+        </div>
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead className="bg-gray-100 text-left">
@@ -174,15 +197,21 @@ function FinesPanel() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td className="p-4" colSpan={7}>Loading…</td>
+                  <td className="p-4" colSpan={7}>
+                    Loading…
+                  </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td className="p-4 text-red-600" colSpan={7}>{error}</td>
+                  <td className="p-4 text-red-600" colSpan={7}>
+                    {error}
+                  </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td className="p-4" colSpan={7}>No results.</td>
+                  <td className="p-4" colSpan={7}>
+                    No fines match your search.
+                  </td>
                 </tr>
               ) : (
                 filtered.map((r) => (
@@ -195,55 +224,140 @@ function FinesPanel() {
                     </Td>
                     <Td>#{r.loan_id}</Td>
                     <Td>{formatDate(r.due_date)}</Td>
-                    <Td className="max-w-[24ch] truncate" title={r.title}>{r.title}</Td>
+                    <Td className="max-w-[24ch] truncate" title={r.title}>
+                      {r.title}
+                    </Td>
                   </tr>
                 ))
               )}
             </tbody>
           </table>
         </div>
-
-        <div className="flex items-center justify-between border-t bg-gray-50 px-4 py-3 text-sm">
-          <div className="flex items-center gap-2">
-            <label className="text-gray-600">Rows per page</label>
-            <select
-              className="rounded border bg-white px-2 py-1"
-              value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
-                setPage(1);
-              }}
-            >
-              {[5, 10, 20, 50].map((n) => (
-                <option key={n} value={n}>{n}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              className="rounded-md bg-white px-3 py-1.5 border disabled:opacity-50"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-            >
-              Prev
-            </button>
-            <span>
-              Page <strong>{page}</strong>
-            </span>
-            <button
-              className="rounded-md bg-white px-3 py-1.5 border disabled:opacity-50"
-              onClick={() => setPage((p) => p + 1)}
-              disabled={filtered.length < pageSize}
-            >
-              Next
-            </button>
-          </div>
-        </div>
       </div>
     </section>
   );
 }
+
+/** =============================
+ * CHECKOUT PANEL
+ * ==============================*/
+function CheckoutPanel({ api, staffUser }) {
+  const [form, setForm] = useState({ user_id: "", copy_id: "" });
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  function update(field, value) {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  async function onSubmit(e) {
+    e.preventDefault();
+    setSubmitting(true);
+    setMessage("");
+    setError("");
+    try {
+      const user_id = Number(form.user_id);
+      const copy_id = Number(form.copy_id);
+      if (!user_id || !copy_id) {
+        throw new Error("Both patron ID and copy ID are required.");
+      }
+      const body = {
+        user_id,
+        copy_id,
+        ...(staffUser?.employee_id ? { employee_id: staffUser.employee_id } : {}),
+      };
+      await api("loans/checkout", { method: "POST", body });
+      setMessage(`Checked out copy #${copy_id} to user #${user_id}.`);
+      setForm({ user_id: "", copy_id: "" });
+    } catch (err) {
+      const code = err?.data?.error;
+      const serverMessage = err?.data?.message;
+      if (code === "loan_limit_exceeded") {
+        setError(serverMessage || "The patron has reached their loan limit.");
+      } else if (code === "copy_not_available") {
+        setError(serverMessage || "That copy is not available for checkout.");
+      } else if (code === "copy_not_found") {
+        setError(serverMessage || "Copy not found.");
+      } else if (code === "user_not_found") {
+        setError(serverMessage || "User not found.");
+      } else if (err?.message) {
+        setError(serverMessage || err.message);
+      } else {
+        setError("Checkout failed. Please try again.");
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <form onSubmit={onSubmit} className="rounded-xl border bg-white p-4 shadow-sm space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold">Checkout Item</h2>
+          <p className="text-sm text-gray-600">
+            Scan or enter a patron ID and copy barcode. Trigger safety stops checkouts beyond the allowed loan limit.
+          </p>
+        </div>
+
+        <Field label="Patron ID">
+          <input
+            className="w-full rounded-md border px-3 py-2"
+            value={form.user_id}
+            onChange={(e) => update("user_id", e.target.value)}
+            placeholder="e.g., 123"
+          />
+        </Field>
+
+        <Field label="Copy ID / Barcode">
+          <input
+            className="w-full rounded-md border px-3 py-2"
+            value={form.copy_id}
+            onChange={(e) => update("copy_id", e.target.value)}
+            placeholder="e.g., 456"
+          />
+        </Field>
+
+        {error && (
+          <div className="rounded-md bg-red-100 px-3 py-2 text-sm text-red-700">
+            {error}
+          </div>
+        )}
+        {message && (
+          <div className="rounded-md bg-green-100 px-3 py-2 text-sm text-green-700">
+            {message}
+          </div>
+        )}
+
+        <button
+          type="submit"
+          disabled={submitting}
+          className="rounded-md bg-gray-900 text-white px-4 py-2 disabled:opacity-50"
+        >
+          {submitting ? "Processing…" : "Checkout"}
+        </button>
+
+        <p className="text-xs text-gray-500">
+          Loan limit enforcement is powered by the <code>loan_limit</code> trigger. If MySQL signals the custom error,
+          the API returns <code>loan_limit_exceeded</code> and we surface it here.
+        </p>
+      </form>
+
+      <div className="rounded-xl border bg-white p-4 shadow-sm space-y-3 text-sm text-gray-700">
+        <h3 className="font-medium">Tip</h3>
+        <p>
+          Leave the employee field blank to let the API capture your staff ID automatically ({staffUser?.employee_id ?? "N/A"}).
+        </p>
+        <p>
+          Patron IDs correspond to <code>user.user_id</code>, and copy IDs are from <code>copy.copy_id</code>. You can extend this
+          panel later to search by barcode or card number.
+        </p>
+      </div>
+    </section>
+  );
+}
+
 
 function Th({ children }) {
   return <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-600">{children}</th>;
@@ -267,7 +381,7 @@ function StatusPill({ status }) {
   );
 }
 
-function FiltersBar({ q, setQ, status, setStatus, onlyOverdue, setOnlyOverdue, onSearch }) {
+function FiltersBar({ q, setQ, status, setStatus, onlyOverdue, setOnlyOverdue }) {
   return (
     <div className="flex flex-wrap items-end gap-3">
       <div className="flex-1 min-w-[240px]">
@@ -287,10 +401,11 @@ function FiltersBar({ q, setQ, status, setStatus, onlyOverdue, setOnlyOverdue, o
           value={status}
           onChange={(e) => setStatus(e.target.value)}
         >
-          <option value="">Any</option>
-          <option value="unpaid">Unpaid</option>
-          <option value="paid">Paid</option>
-          <option value="waived">Waived</option>
+          {STATUS_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
         </select>
       </div>
 
@@ -298,13 +413,6 @@ function FiltersBar({ q, setQ, status, setStatus, onlyOverdue, setOnlyOverdue, o
         <input id="overdue" type="checkbox" checked={onlyOverdue} onChange={(e) => setOnlyOverdue(e.target.checked)} />
         <label htmlFor="overdue" className="text-sm">Only overdue</label>
       </div>
-
-      <button
-        className="mt-6 rounded-md bg-gray-900 text-white px-4 py-2 hover:opacity-90"
-        onClick={onSearch}
-      >
-        Refresh
-      </button>
     </div>
   );
 }
@@ -321,16 +429,13 @@ async function safeError(res) {
 /** =============================
  * ADD-ITEM PANEL (scaffold)
  * ==============================*/
-function AddItemPanel() {
+function AddItemPanel({ api }) {
   const [form, setForm] = useState({
     title: "",
-    author: "",
-    isbn: "",
-    publication_year: "",
-    category: "",
-    copies_total: 1,
-    shelf_location: "",
+    subject: "",
+    classification: "",
   });
+  const [copies, setCopies] = useState([{ barcode: "", shelf_location: "" }]);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -338,23 +443,95 @@ function AddItemPanel() {
     setForm((f) => ({ ...f, [field]: value }));
   }
 
+  function updateCopy(index, field, value) {
+    setCopies((list) =>
+      list.map((copy, i) => (i === index ? { ...copy, [field]: value } : copy))
+    );
+  }
+
+  function addCopyRow() {
+    setCopies((list) => [...list, { barcode: "", shelf_location: "" }]);
+  }
+
+  function removeCopyRow(index) {
+    setCopies((list) => (list.length <= 1 ? list : list.filter((_, i) => i !== index)));
+  }
+
   async function onSubmit(e) {
     e.preventDefault();
     setSubmitting(true);
     setMessage("");
     try {
-      const res = await fetch(`${API_BASE}/items`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      if (!res.ok) {
-        const msg = await safeError(res);
-        throw new Error(msg || `Request failed: ${res.status}`);
+      const title = form.title.trim();
+      if (!title) {
+        throw new Error("Title is required");
       }
-      setMessage("Item created ✔");
-      setForm({ title: "", author: "", isbn: "", publication_year: "", category: "", copies_total: 1, shelf_location: "" });
+
+      const itemPayload = {
+        title,
+        subject: form.subject.trim() || undefined,
+        classification: form.classification.trim() || undefined,
+      };
+
+      let itemResponse;
+      if (api) {
+        itemResponse = await api("items", {
+          method: "POST",
+          body: itemPayload,
+        });
+      } else {
+        const res = await fetch(`${API_BASE}/items`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(itemPayload),
+        });
+        if (!res.ok) {
+          const msg = await safeError(res);
+          throw new Error(msg || `Request failed: ${res.status}`);
+        }
+        itemResponse = await res.json();
+      }
+
+      const item_id = itemResponse?.item_id;
+      const copyPayloads = copies
+        .map((copy) => ({
+          barcode: copy.barcode.trim(),
+          shelf_location: copy.shelf_location.trim(),
+        }))
+        .filter((copy) => copy.barcode);
+
+      let createdCopies = 0;
+      if (item_id && copyPayloads.length) {
+        for (const copy of copyPayloads) {
+          const body = {
+            item_id,
+            barcode: copy.barcode,
+            shelf_location: copy.shelf_location || undefined,
+          };
+          if (api) {
+            await api("copies", { method: "POST", body });
+          } else {
+            const res = await fetch(`${API_BASE}/copies`, {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body),
+            });
+            if (!res.ok) {
+              const msg = await safeError(res);
+              throw new Error(msg || `Copy creation failed (${res.status})`);
+            }
+          }
+          createdCopies += 1;
+        }
+      }
+
+      setMessage(
+        `Item created${createdCopies ? ` with ${createdCopies} ${createdCopies === 1 ? "copy" : "copies"}` : ""} ✅`
+      );
+      setForm({ title: "", subject: "", classification: "" });
+      setCopies([{ barcode: "", shelf_location: "" }]);
     } catch (err) {
       setMessage(`Failed: ${err.message}`);
     } finally {
@@ -372,32 +549,60 @@ function AddItemPanel() {
             <input className="w-full rounded-md border px-3 py-2" value={form.title} onChange={(e) => update("title", e.target.value)} required />
           </Field>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Field label="Author">
-              <input className="w-full rounded-md border px-3 py-2" value={form.author} onChange={(e) => update("author", e.target.value)} />
-            </Field>
-            <Field label="ISBN">
-              <input className="w-full rounded-md border px-3 py-2" value={form.isbn} onChange={(e) => update("isbn", e.target.value)} />
-            </Field>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Field label="Publication Year">
-              <input type="number" className="w-full rounded-md border px-3 py-2" value={form.publication_year} onChange={(e) => update("publication_year", e.target.value)} />
-            </Field>
-            <Field label="Category">
-              <input className="w-full rounded-md border px-3 py-2" value={form.category} onChange={(e) => update("category", e.target.value)} />
-            </Field>
-            <Field label="Copies (total)">
-              <input type="number" min={1} className="w-full rounded-md border px-3 py-2" value={form.copies_total} onChange={(e) => update("copies_total", Number(e.target.value))} />
-            </Field>
-          </div>
-
-          <Field label="Shelf Location">
-            <input className="w-full rounded-md border px-3 py-2" value={form.shelf_location} onChange={(e) => update("shelf_location", e.target.value)} />
+          <Field label="Subject">
+            <input className="w-full rounded-md border px-3 py-2" value={form.subject} onChange={(e) => update("subject", e.target.value)} placeholder="e.g., Literature" />
           </Field>
 
-          {/* TODO: cover image upload, media type, call number, etc. */}
+          <Field label="Classification / Call Number">
+            <input className="w-full rounded-md border px-3 py-2" value={form.classification} onChange={(e) => update("classification", e.target.value)} placeholder="e.g., 813.52 FIT" />
+          </Field>
+
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-gray-700">Copies</h3>
+            <p className="text-xs text-gray-500">
+              Provide at least one barcode if you want to create physical copies now. Leave additional rows blank to skip.
+            </p>
+
+            {copies.map((copy, index) => (
+              <div key={index} className="grid grid-cols-1 md:grid-cols-[1fr,1fr,auto] gap-3 items-end">
+                <Field label={`Barcode ${copies.length > 1 ? `#${index + 1}` : ""}`}>
+                  <input
+                    className="w-full rounded-md border px-3 py-2"
+                    value={copy.barcode}
+                    onChange={(e) => updateCopy(index, "barcode", e.target.value)}
+                    placeholder="e.g., BC-000123"
+                  />
+                </Field>
+                <Field label="Shelf Location">
+                  <input
+                    className="w-full rounded-md border px-3 py-2"
+                    value={copy.shelf_location}
+                    onChange={(e) => updateCopy(index, "shelf_location", e.target.value)}
+                    placeholder="Stacks A3"
+                  />
+                </Field>
+                <div className="pb-2">
+                  {copies.length > 1 && (
+                    <button
+                      type="button"
+                      className="mt-6 text-xs text-red-600 hover:underline"
+                      onClick={() => removeCopyRow(index)}
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            <button
+              type="button"
+              className="text-xs font-medium text-gray-700 hover:underline"
+              onClick={addCopyRow}
+            >
+              + Add another copy
+            </button>
+          </div>
 
           <div className="flex items-center gap-3 pt-2">
             <button
@@ -414,26 +619,27 @@ function AddItemPanel() {
 
       <aside className="space-y-3">
         <div className="rounded-xl border bg-white p-4 shadow-sm">
-          <h3 className="font-medium mb-2">API Contract (proposed)</h3>
+          <h3 className="font-medium mb-2">What this does</h3>
           <ul className="list-disc list-inside text-sm text-gray-700 space-y-1">
-            <li><code>GET {API_BASE}/employee/fines</code> → array of rows with fields: first_name, last_name, fine_id, status, loan_id, due_date, title.</li>
-            <li>Optional query params: <code>q</code>, <code>status</code>, <code>overdue=1</code>, <code>page</code>, <code>pageSize</code>.</li>
-            <li><code>POST {API_BASE}/items</code> → create item with body: title, author, isbn, publication_year, category, copies_total, shelf_location.</li>
+            <li>Creates a library item via <code>POST /api/items</code> (fields: title, subject, classification).</li>
+            <li>Optionally creates one copy per barcode entered via <code>POST /api/copies</code>.</li>
+            <li>Shelf location is stored on each copy so you can mix locations per barcode.</li>
+            <li>Need additional metadata? Extend the <code>item</code> table and update this form accordingly.</li>
           </ul>
         </div>
 
         <div className="rounded-xl border bg-white p-4 shadow-sm">
-          <h3 className="font-medium mb-2">Next Steps</h3>
+          <h3 className="font-medium mb-2">Ideas to expand</h3>
           <ol className="list-decimal list-inside text-sm text-gray-700 space-y-1">
-            <li>Wire the route: <code>/staff</code> → <code>&lt;EmployeeDashboard /&gt;</code>.</li>
-            <li>Implement backend SQL join for fines (see sample below).</li>
-            <li>Add server-side pagination/sorting if your fines table grows.</li>
-            <li>Add optimistic updates for fine status changes (mark paid/waive) if desired.</li>
+            <li>Capture media type so policies can pick the right loan rule.</li>
+            <li>Generate barcodes automatically (e.g., prefix + sequence) instead of hand entry.</li>
+            <li>Allow uploading cover art or importing bibliographic data from ISBN.</li>
+            <li>Add inline copy management (mark lost, transfer location, etc.).</li>
           </ol>
         </div>
 
         <div className="rounded-xl border bg-white p-4 shadow-sm text-xs text-gray-600">
-          <h4 className="font-semibold mb-1">Sample SQL (backend idea)</h4>
+          <h4 className="font-semibold mb-1">Sample fine lookup SQL</h4>
           <pre className="whitespace-pre-wrap">
 {`SELECT u.first_name, u.last_name,
        f.fine_id, f.status,
@@ -462,4 +668,259 @@ function Field({ label, children }) {
       {children}
     </label>
   );
+}
+
+/** =============================
+ * RESERVATIONS PANEL
+ * ==============================*/
+function ReservationsPanel({ api, staffUser }) {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const [form, setForm] = useState({ user_id: "", room_id: "", start_time: "", end_time: "" });
+  const [submitMessage, setSubmitMessage] = useState("");
+  const [submitError, setSubmitError] = useState("");
+  const [roomForm, setRoomForm] = useState({ room_number: "", capacity: "", features: "" });
+  const [roomMessage, setRoomMessage] = useState("");
+  const [roomError, setRoomError] = useState("");
+  const [refreshFlag, setRefreshFlag] = useState(0);
+
+  const fetchReservations = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const data = await api("staff/reservations");
+      setRows(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setError(err.message || "Failed to load reservations");
+    } finally {
+      setLoading(false);
+    }
+  }, [api]);
+
+  useEffect(() => {
+    fetchReservations();
+  }, [fetchReservations, refreshFlag]);
+
+  function update(field, value) {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  async function onSubmit(e) {
+    e.preventDefault();
+    setSubmitError("");
+    setSubmitMessage("");
+    try {
+      const payload = {
+        user_id: Number(form.user_id),
+        room_id: Number(form.room_id),
+        start_time: form.start_time,
+        end_time: form.end_time,
+        employee_id: staffUser?.employee_id,
+      };
+      await api("staff/reservations", { method: "POST", body: payload });
+      setSubmitMessage("Reservation created successfully.");
+      setForm({ user_id: "", room_id: "", start_time: "", end_time: "" });
+      setRefreshFlag((f) => f + 1);
+    } catch (err) {
+      const code = err?.data?.error;
+      const msg = err?.data?.message || err.message;
+      if (code === "reservation_conflict") {
+        setSubmitError(msg || "That room is already booked for the selected time.");
+      } else if (code === "invalid_payload" || code === "invalid_timespan") {
+        setSubmitError(msg || "Please check the form inputs.");
+      } else {
+        setSubmitError(msg || "Failed to create reservation.");
+      }
+    }
+  }
+
+  return (
+    <section className="space-y-4">
+      <div className="rounded-xl border bg-white p-4 shadow-sm">
+        <h2 className="text-lg font-semibold">Create Room Reservation</h2>
+        <p className="text-sm text-gray-600 mb-4">
+          Submitting overlapping times for the same room will surface the <code>prevent_overlap</code> trigger as a conflict.
+        </p>
+        <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Field label="Patron ID">
+            <input
+              className="w-full rounded-md border px-3 py-2"
+              value={form.user_id}
+              onChange={(e) => update("user_id", e.target.value)}
+              placeholder="e.g., 15"
+              required
+            />
+          </Field>
+          <Field label="Room ID">
+            <input
+              className="w-full rounded-md border px-3 py-2"
+              value={form.room_id}
+              onChange={(e) => update("room_id", e.target.value)}
+              placeholder="e.g., 2"
+              required
+            />
+          </Field>
+          <Field label="Start Time">
+            <input
+              type="datetime-local"
+              className="w-full rounded-md border px-3 py-2"
+              value={form.start_time}
+              onChange={(e) => update("start_time", e.target.value)}
+              required
+            />
+          </Field>
+          <Field label="End Time">
+            <input
+              type="datetime-local"
+              className="w-full rounded-md border px-3 py-2"
+              value={form.end_time}
+              onChange={(e) => update("end_time", e.target.value)}
+              required
+            />
+          </Field>
+          <div className="md:col-span-2 flex items-center gap-3">
+            <button type="submit" className="rounded-md bg-gray-900 text-white px-4 py-2 disabled:opacity-50">
+              Create Reservation
+            </button>
+            {submitMessage && <span className="text-sm text-green-700">{submitMessage}</span>}
+            {submitError && <span className="text-sm text-red-600">{submitError}</span>}
+          </div>
+        </form>
+      </div>
+
+      <div className="rounded-xl border bg-white p-4 shadow-sm">
+        <h3 className="text-md font-semibold mb-2">Quick Add Room</h3>
+        <p className="text-xs text-gray-600 mb-3">Creates a room entry that can be used for reservations.</p>
+        <form
+          className="grid grid-cols-1 md:grid-cols-3 gap-3"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setRoomMessage("");
+            setRoomError("");
+            try {
+              await api("staff/rooms", {
+                method: "POST",
+                body: {
+                  room_number: roomForm.room_number,
+                  capacity: roomForm.capacity ? Number(roomForm.capacity) : undefined,
+                  features: roomForm.features,
+                },
+              });
+              setRoomMessage(`Room ${roomForm.room_number} added.`);
+              setRoomForm({ room_number: "", capacity: "", features: "" });
+              setRefreshFlag((f) => f + 1);
+            } catch (err) {
+              const code = err?.data?.error;
+              const msg = err?.data?.message || err.message;
+              if (code === "room_exists") {
+                setRoomError(msg || "That room number already exists.");
+              } else if (code === "invalid_payload") {
+                setRoomError(msg || "Room number is required.");
+              } else {
+                setRoomError(msg || "Failed to add room.");
+              }
+            }
+          }}
+        >
+          <Field label="Room Number">
+            <input
+              className="w-full rounded-md border px-3 py-2"
+              value={roomForm.room_number}
+              onChange={(e) => setRoomForm((prev) => ({ ...prev, room_number: e.target.value }))}
+              placeholder="e.g., A201"
+              required
+            />
+          </Field>
+          <Field label="Capacity">
+            <input
+              type="number"
+              min={0}
+              className="w-full rounded-md border px-3 py-2"
+              value={roomForm.capacity}
+              onChange={(e) => setRoomForm((prev) => ({ ...prev, capacity: e.target.value }))}
+              placeholder="Optional"
+            />
+          </Field>
+          <Field label="Features">
+            <input
+              className="w-full rounded-md border px-3 py-2"
+              value={roomForm.features}
+              onChange={(e) => setRoomForm((prev) => ({ ...prev, features: e.target.value }))}
+              placeholder="Optional description"
+            />
+          </Field>
+          <div className="md:col-span-3 flex items-center gap-3">
+            <button type="submit" className="rounded-md bg-gray-900 text-white px-4 py-2">
+              Add Room
+            </button>
+            {roomMessage && <span className="text-sm text-green-700">{roomMessage}</span>}
+            {roomError && <span className="text-sm text-red-600">{roomError}</span>}
+          </div>
+        </form>
+      </div>
+
+      <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between border-b bg-gray-50 px-5 py-3 text-sm">
+          <span className="font-medium text-gray-700">Upcoming Reservations</span>
+          <button
+            onClick={() => setRefreshFlag((f) => f + 1)}
+            className="text-xs font-medium text-gray-700 hover:underline"
+          >
+            Refresh
+          </button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="bg-gray-100 text-left">
+              <tr>
+                <Th>ID</Th>
+                <Th>Room</Th>
+                <Th>Patron</Th>
+                <Th>Start</Th>
+                <Th>End</Th>
+                <Th>Status</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="p-4 text-center">Loading reservations…</td>
+                </tr>
+              ) : error ? (
+                <tr>
+                  <td colSpan={6} className="p-4 text-center text-red-600">{error}</td>
+                </tr>
+              ) : rows.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="p-4 text-center text-gray-600">No reservations yet.</td>
+                </tr>
+              ) : (
+                rows.map((r) => (
+                  <tr key={r.reservation_id} className="border-t">
+                    <Td>#{r.reservation_id}</Td>
+                    <Td>Room {r.room_number || r.room_id}</Td>
+                    <Td>
+                      {r.first_name} {r.last_name}
+                    </Td>
+                    <Td>{formatDateTime(r.start_time)}</Td>
+                    <Td>{formatDateTime(r.end_time)}</Td>
+                    <Td className="capitalize">{r.status}</Td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function formatDateTime(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString();
 }
