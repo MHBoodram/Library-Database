@@ -8,7 +8,6 @@ import Protected from "./components/Protected.jsx";
 import Home from "./pages/Home.jsx";
 import Login from "./pages/Login.jsx";
 import Register from "./pages/Register.jsx";
-import PatronDashboard from "./pages/PatronDashboard.jsx";
 import StaffDashboard from "./pages/StaffDashboard.jsx";
 
 import "./index.css";
@@ -27,7 +26,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
             path="/app"
             element={
               <Protected>
-                <PatronDashboard />
+                <Login />
               </Protected>
             }
           />

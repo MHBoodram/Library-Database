@@ -1,62 +1,60 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../AuthContext';
 
 export default function Reports() {
-  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [overdueLoans, setOverdueLoans] = useState([]);
   const [userBalances, setUserBalances] = useState([]);
   const [topItems, setTopItems] = useState([]);
   const navigate = useNavigate();
+  const { token, user, useApi } = useAuth();
+  const apiWithAuth = useApi();
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const userData = localStorage.getItem('user');
-
     if (!token) {
       navigate('/login');
       return;
     }
 
-    if (userData) {
-      const parsedUser = JSON.parse(userData);
-      setUser(parsedUser);
-
-      // Check if user has permission
-      if (parsedUser.role !== 'staff') {
-        setError('Access Denied: You do not have permission to view reports.');
-        setLoading(false);
-        return;
-      }
-
-      // Fetch reports
-      fetchReports(token);
+    if (!user) {
+      return;
     }
-  }, [navigate]);
 
-  async function fetchReports(token) {
-    try {
-      const headers = {
-        'Authorization': `Bearer ${token}`,
-      };
-
-      const [overdueRes, balancesRes, topItemsRes] = await Promise.all([
-        fetch(`${import.meta.env.VITE_API_BASE}/reports/overdue`, { headers }),
-        fetch(`${import.meta.env.VITE_API_BASE}/reports/balances`, { headers }),
-        fetch(`${import.meta.env.VITE_API_BASE}/reports/top-items`, { headers }),
-      ]);
-
-      if (overdueRes.ok) setOverdueLoans(await overdueRes.json());
-      if (balancesRes.ok) setUserBalances(await balancesRes.json());
-      if (topItemsRes.ok) setTopItems(await topItemsRes.json());
-
-    } catch (err) {
-      setError('Failed to load reports: ' + err.message);
-    } finally {
+    if (user.role !== 'staff') {
+      setError('Access Denied: You do not have permission to view reports.');
       setLoading(false);
+      return;
     }
-  }
+
+    let active = true;
+    (async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const [overdueRes, balancesRes, topItemsRes] = await Promise.all([
+          apiWithAuth('reports/overdue'),
+          apiWithAuth('reports/balances'),
+          apiWithAuth('reports/top-items'),
+        ]);
+
+        if (!active) return;
+        setOverdueLoans(Array.isArray(overdueRes) ? overdueRes : []);
+        setUserBalances(Array.isArray(balancesRes) ? balancesRes : []);
+        setTopItems(Array.isArray(topItemsRes) ? topItemsRes : []);
+      } catch (err) {
+        if (!active) return;
+        setError('Failed to load reports: ' + (err.message || 'Unknown error'));
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [token, user, navigate, apiWithAuth]);
 
   if (loading) {
     return <div style={{ padding: 16 }}>Loading reports...</div>;

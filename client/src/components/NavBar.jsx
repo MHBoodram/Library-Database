@@ -1,22 +1,13 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { useState, useEffect } from 'react'
 import './NavBar.css'
+import { useAuth } from '../AuthContext'
 
 function NavBar() {
-    const [user, setUser] = useState(null);
+    const { user, logout } = useAuth();
     const navigate = useNavigate();
 
-    useEffect(() => {
-        const userData = localStorage.getItem('user');
-        if (userData) {
-            setUser(JSON.parse(userData));
-        }
-    }, []);
-
     function handleLogout() {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        setUser(null);
+        logout();
         navigate('/login');
     }
 

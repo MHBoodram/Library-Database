@@ -3,23 +3,24 @@ import { useState } from "react";
 import { useAuth } from "./AuthContext";
 import { useNavigate } from "react-router-dom";
 
-export default function login() {
+export default function Login() {
   const nav = useNavigate();
-  const { login } = useAuth();
+  const { login: doLogin } = useAuth(); // avoid name clash
 
   const [email, setEmail] = useState("patron@demo.com");
   const [password, setPassword] = useState("demo123");
-  const [actor, setActor] = useState("patron");     // patron | employee
   const [error, setError] = useState("");
 
   async function onSubmit(e) {
     e.preventDefault();
     setError("");
     try {
-      const me = await login(email, password, actor);
-      // simple routing by role
-      if (me.role === "employee") nav("/staff");
-      else nav("/app");
+      const me = await doLogin(email, password); // returns user object
+      if (me.employee_id) {
+        nav("/staff");
+      } else {
+        nav("/app");
+      }
     } catch (err) {
       setError(err.message || "Login failed");
     }
@@ -39,13 +40,7 @@ export default function login() {
         <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
       </label>
 
-      <label>
-        Role
-        <select value={actor} onChange={(e) => setActor(e.target.value)}>
-          <option value="patron">Patron</option>
-          <option value="employee">Employee</option>
-        </select>
-      </label>
+      {/* removed Role select — backend decides via employee_id */}
 
       <button type="submit">Sign in</button>
       {error && <div style={{ color: "crimson" }}>{error}</div>}

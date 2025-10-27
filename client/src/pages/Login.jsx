@@ -1,12 +1,21 @@
-import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
+import { useAuth } from '../AuthContext';
 
 export default function Login() {
-  const [email, setEmail] = useState('');
+  const location = useLocation();
+  const { login, token, user } = useAuth();
+  const [email, setEmail] = useState(() => location.state?.email ?? '');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (token && user) {
+      navigate(user.employee_id ? '/staff' : '/');
+    }
+  }, [token, user, navigate]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -14,24 +23,8 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Login failed');
-      }
-
-      // Save token and user info
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
-
-      // Redirect to home
-      navigate('/');
+      const signedIn = await login(email, password);
+      navigate(signedIn?.employee_id ? '/staff' : '/');
     } catch (err) {
       setError(err.message || 'Login failed');
     } finally {

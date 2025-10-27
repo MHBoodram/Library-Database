@@ -1,63 +1,105 @@
-import { createContext, useContext, useMemo, useState, useCallback } from "react";
+import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import { api } from "./api";
 
-const AuthCtx = createContext(null);
+const DEFAULT_AUTH = { token: null, user: null };
+const AuthCtx = createContext({
+  ...DEFAULT_AUTH,
+  login: async () => DEFAULT_AUTH,
+  logout: () => {},
+  register: async () => DEFAULT_AUTH,
+  useApi: () => api,
+});
 
 function readStored() {
-  try { return JSON.parse(localStorage.getItem("auth")) ?? { token:null, user:null }; }
-  catch { return { token:null, user:null }; }
+  try {
+    const raw = localStorage.getItem("auth");
+    if (!raw) return DEFAULT_AUTH;
+    const parsed = JSON.parse(raw);
+    return {
+      token: parsed?.token ?? null,
+      user: parsed?.user ?? null,
+    };
+  } catch {
+    return DEFAULT_AUTH;
+  }
+}
+
+function normalizeUser(user) {
+  if (!user) return null;
+  const fullName = [user.first_name, user.last_name].filter(Boolean).join(" ").trim();
+  const normalizedRole = user.employee_id ? "staff" : user.role || "student";
+  return {
+    ...user,
+    role: normalizedRole,
+    name: (user.name && typeof user.name === "string" && user.name) || fullName || user.email || "",
+  };
 }
 
 export function AuthProvider({ children }) {
-  const [auth, setAuth] = useState(readStored);
+  const [auth, setAuth] = useState(() => {
+    const stored = readStored();
+    return { token: stored.token, user: normalizeUser(stored.user) };
+  });
 
   const save = useCallback((next) => {
-    setAuth(next);
-    localStorage.setItem("auth", JSON.stringify(next));
+    const normalized = {
+      token: next?.token ?? null,
+      user: normalizeUser(next?.user) ?? null,
+    };
+    setAuth(normalized);
+    localStorage.setItem("auth", JSON.stringify(normalized));
   }, []);
 
-  const Login = useCallback(async (email, password) => {
-    const { token, user } = await api("auth/login", {
-      method: "POST",
-      body: { email: email.trim().toLowerCase(), password }
-    });
-    save({ token, user });
-    return user; // caller can route by role
+  const login = useCallback(
+    async (email, password) => {
+      const { token, user } = await api("auth/login", {
+        method: "POST",
+        body: { email: email.trim().toLowerCase(), password },
+      });
+      const normalizedUser = normalizeUser(user);
+      save({ token, user: normalizedUser });
+      return normalizedUser;
+    },
+    [save]
+  );
+
+  const logout = useCallback(() => {
+    save(DEFAULT_AUTH);
   }, [save]);
 
-  const Logout = useCallback(() => {
-    save({ token:null, user:null });
-  }, [save]);
+  const register = useCallback(
+    async (first_name, last_name, email, password, { autoLogin = true } = {}) => {
+      await api("auth/register", {
+        method: "POST",
+        body: {
+          first_name: first_name.trim(),
+          last_name: last_name.trim(),
+          email: email.trim().toLowerCase(),
+          password,
+        },
+      });
+      if (!autoLogin) return null;
+      return login(email, password);
+    },
+    [login]
+  );
 
-  const Register = useCallback(async (first_name, last_name, email, password, { autoLogin=true } = {}) => {
-    await api("auth/register", {
-      method: "POST",
-      body: {
-        first_name: first_name.trim(),
-        last_name:  last_name.trim(),
-        email:      email.trim().toLowerCase(),
-        password
-      }
-    });
-    if (!autoLogin) return null;
-    const user = await Login(email, password);
-    return user;
-  }, [Login]);
-
-  // convenience: useApi wraps api() with current token
-  const useApi = () => {
+  const useApi = useCallback(() => {
     const { token } = auth;
-    return (path, opts={}) => api(path, { ...opts, token });
-  };
+    return (path, opts = {}) => api(path, { ...opts, token });
+  }, [auth]);
 
-  const value = useMemo(() => ({
-    token: auth.token,
-    user:  auth.user,
-    Login,
-    Logout,
-    Register,
-    useApi
-  }), [auth, Login, Logout, Register]);
+  const value = useMemo(
+    () => ({
+      token: auth.token,
+      user: auth.user,
+      login,
+      logout,
+      register,
+      useApi,
+    }),
+    [auth, login, logout, register, useApi]
+  );
 
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
 }
