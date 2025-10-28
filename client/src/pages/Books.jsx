@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../AuthContext";
+import NavBar from "../components/NavBar";
 
 export default function Books() {
   const { token, useApi } = useAuth();
@@ -64,6 +65,7 @@ export default function Books() {
 
   return (
     <div style={{ maxWidth: 1000, margin: "2rem auto", padding: 24 }}>
+      <NavBar />
       <h1>Find Books</h1>
       <p style={{ color: "#666", marginBottom: 16 }}>
         Search by Item ID, Title, or Author's full name.

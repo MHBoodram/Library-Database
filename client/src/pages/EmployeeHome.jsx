@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../AuthContext";
+import NavBar from "../components/NavBar";
 
 /**
  * EmployeeDashboard.jsx
@@ -45,6 +46,7 @@ export default function EmployeeDashboard() {
   }
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
+      <NavBar />
       <header className="border-b bg-white">
         <div className="mx-auto max-w-6xl px-4 py-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center justify-between gap-4">
