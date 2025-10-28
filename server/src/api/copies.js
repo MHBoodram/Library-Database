@@ -8,11 +8,22 @@ export const createCopy = (JWT_SECRET) => async (req, res) => {
   const barcode = (b.barcode||"").trim();
   if (!item_id || !barcode) return sendJSON(res, 400, { error: "invalid_payload" });
 
-  const [r] = await pool.execute(
-    "INSERT INTO copy(item_id, barcode, status, shelf_location, acquired_at) VALUES(?,?,?,?,CURDATE())",
-    [item_id, barcode, b.status||'available', b.shelf_location||null]
-  );
-  return sendJSON(res, 201, { copy_id: r.insertId });
+  try {
+    const [r] = await pool.execute(
+      "INSERT INTO copy(item_id, barcode, status, shelf_location, acquired_at) VALUES(?,?,?,?,CURDATE())",
+      [item_id, barcode, b.status||'available', b.shelf_location||null]
+    );
+    return sendJSON(res, 201, { copy_id: r.insertId });
+  } catch (err) {
+    if (err && err.code === "ER_DUP_ENTRY") {
+      return sendJSON(res, 409, {
+        error: "Barcode already in use",
+        code: "barcode_in_use",
+      });
+    }
+    console.error("Create copy failed:", err?.message || err);
+    return sendJSON(res, 500, { error: "copy_create_failed" });
+  }
 };
 
 export const updateCopy = (JWT_SECRET) => async (req, res, params) => {

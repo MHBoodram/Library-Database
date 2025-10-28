@@ -459,17 +459,25 @@ UNLOCK TABLES;
 /*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO' */ ;
 DELIMITER ;;
 /*!50003 CREATE*/ /*!50017 DEFINER=`db2root`@`%`*/ /*!50003 TRIGGER `loan_limit` BEFORE INSERT ON `loan` FOR EACH ROW begin
-    declare loan_lim int;
-    declare loan_count INT;
-    declare faculty bool;
-    select count(*) into loan_count from loan where user_id = new.user_id;
-    select isfaculty into faculty from user where user_id = new.user_id;
-    if faculty then 
+    declare loan_lim int default 5;
+    declare loan_count INT default 0;
+    declare faculty tinyint(1) default 0;
+
+    select coalesce(is_faculty,0) into faculty
+      from user
+     where user_id = new.user_id
+     limit 1;
+
+    if faculty = 1 then 
         set loan_lim = 7;
-    else set loan_lim = 5;
     end if;
 
-    if loan_count > loan_lim THEN
+    select count(*) into loan_count
+      from loan
+     where user_id = new.user_id
+       and status = 'active';
+
+    if loan_count >= loan_lim THEN
         signal SQLSTATE '45000'
         set MESSAGE_TEXT = 'Failed to add new loan: User loan limit exceeded';
     end if;

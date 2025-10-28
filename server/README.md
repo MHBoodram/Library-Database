@@ -59,3 +59,7 @@ Triggers compute due date, snapshot policy, set copy status, and create overdue 
 
 - Policy selection uses `fine_policy.media_type` x `user_category` and snapshots on loan.
 - Add appropriate rows to `fine_policy` for combinations you need (book/device/dvd x student/faculty/staff) with loan_days and limits.
+
+### Loan limit trigger
+
+If you have existing data, rerun `server/sql/loan_limit_trigger.sql` against your MySQL instance so faculty members receive an increased active-loan cap (7 vs 5 for others).
