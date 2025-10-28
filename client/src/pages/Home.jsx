@@ -28,8 +28,10 @@ export default function Home() {
       <NavBar />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <div>
-          <h1>Welcome, {user.name}!</h1>
-          <p style={{ color: '#666' }}>Role: {user.role}</p>
+          <h1>Welcome, {user.first_name} {user.last_name}!</h1>
+          <p style={{ color: '#666', marginTop: 4 }}>
+            Role: {user.role} · User ID: <span style={{ fontFamily: 'monospace' }}>#{user.user_id}</span>
+          </p>
         </div>
       </div>
 
