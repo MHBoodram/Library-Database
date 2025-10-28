@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 
 /**
@@ -33,15 +34,30 @@ function formatDate(due) {
 }
 
 export default function EmployeeDashboard() {
-  const { useApi, user } = useAuth();
+  const { useApi, user, logout } = useAuth();
   const apiWithAuth = useApi();
   const [tab, setTab] = useState("fines"); // "fines" | "checkout" | "activeLoans" | "reservations" | "addItem"
+  const navigate = useNavigate();
+
+  async function handleLogout() {
+    await logout();
+    navigate("/login");
+  }
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
       <header className="border-b bg-white">
-        <div className="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between">
-          <h1 className="text-2xl font-semibold tracking-tight">Employee Dashboard</h1>
-          <nav className="flex gap-2">
+        <div className="mx-auto max-w-6xl px-4 py-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center justify-between gap-4">
+            <h1 className="text-2xl font-semibold tracking-tight">Employee Dashboard</h1>
+            <button
+              onClick={handleLogout}
+              className="inline-flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+            >
+              <span role="img" aria-hidden="true">🚪</span>
+              Logout
+            </button>
+          </div>
+          <nav className="flex flex-wrap gap-2">
             <button
               className={`px-3 py-2 rounded-md text-sm font-medium ${
                 tab === "fines" ? "bg-gray-900 text-white" : "bg-gray-200 hover:bg-gray-300"
