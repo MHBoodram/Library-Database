@@ -3,6 +3,70 @@ import { pool } from "../lib/db.js";
 
 const ACTIVE_STATUSES = ["paid", "waived"]; // treated as inactive if matched
 
+export const listActiveLoans = (JWT_SECRET) => async (req, res) => {
+  const auth = requireRole(req, res, JWT_SECRET, "staff");
+  if (!auth) return;
+
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const q = (url.searchParams.get("q") || "").trim().toLowerCase();
+
+  const conditions = ["l.status = 'active'"];
+  const params = [];
+
+  if (q) {
+    const like = `%${q}%`;
+    conditions.push(
+      `(
+        LOWER(u.email) LIKE ?
+        OR LOWER(u.first_name) LIKE ?
+        OR LOWER(u.last_name) LIKE ?
+        OR LOWER(CONCAT(u.first_name, ' ', u.last_name)) LIKE ?
+        OR LOWER(i.title) LIKE ?
+        OR LOWER(CONCAT(e.first_name, ' ', e.last_name)) LIKE ?
+      )`
+    );
+    params.push(like, like, like, like, like, like);
+
+    const numeric = Number(q);
+    if (Number.isInteger(numeric)) {
+      conditions.push("(l.loan_id = ? OR c.copy_id = ?)");
+      params.push(numeric, numeric);
+    }
+  }
+
+  const whereClause = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  const sql = `
+    SELECT
+      l.loan_id,
+      l.due_date,
+      l.status,
+      u.email        AS user_email,
+      u.first_name   AS user_first_name,
+      u.last_name    AS user_last_name,
+      e.first_name   AS employee_first_name,
+      e.last_name    AS employee_last_name,
+      c.copy_id,
+      i.title        AS item_title
+    FROM loan l
+    JOIN user u     ON u.user_id = l.user_id
+    JOIN copy c     ON c.copy_id = l.copy_id
+    JOIN item i     ON i.item_id = c.item_id
+    LEFT JOIN employee e ON e.employee_id = l.employee_id
+    ${whereClause}
+    ORDER BY l.due_date ASC, l.loan_id ASC
+    LIMIT 500
+  `;
+
+  try {
+    const [rows] = await pool.query(sql, params);
+    return sendJSON(res, 200, { rows });
+  } catch (err) {
+    console.error("Failed to load active loans:", err.message);
+    return sendJSON(res, 500, { error: "active_loans_query_failed" });
+  }
+};
+
 export const listFines = (JWT_SECRET) => async (req, res) => {
   const auth = requireRole(req, res, JWT_SECRET, "staff");
   if (!auth) return;

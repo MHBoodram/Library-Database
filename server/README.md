@@ -49,6 +49,14 @@ Triggers compute due date, snapshot policy, set copy status, and create overdue 
 - POST /api/holds/place { user_id?, item_id | copy_id }
 - DELETE /api/holds/:id
 
+## Staff
+
+- GET /api/staff/loans/active → active loans with borrower, item, and employee details (staff auth)
+- GET /api/staff/fines → searchable fines table (staff auth)
+- GET /api/staff/reservations → list reservations (staff auth)
+- POST /api/staff/reservations → create reservation slot (staff auth)
+- POST /api/staff/rooms → add study rooms (staff auth)
+
 ## Reports
 
 - GET /api/reports/overdue

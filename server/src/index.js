@@ -10,7 +10,7 @@ import { createCopy, updateCopy, deleteCopy } from "./api/copies.js";
 import { checkout, returnLoan } from "./api/loans.js";
 import { placeHold, cancelHold } from "./api/holds.js";
 import { overdue, balances, topItems } from "./api/reports.js";
-import { listFines } from "./api/staff.js";
+import { listFines, listActiveLoans } from "./api/staff.js";
 import { createReservation, listReservations } from "./api/reservations.js";
 import { createRoom } from "./api/rooms.js";
 
@@ -53,6 +53,7 @@ r.add("GET", "/api/reports/top-items",  topItems(JWT_SECRET));
 
 // staff tools
 r.add("GET", "/api/staff/fines", listFines(JWT_SECRET));
+r.add("GET", "/api/staff/loans/active", listActiveLoans(JWT_SECRET));
 r.add("GET", "/api/staff/reservations", listReservations(JWT_SECRET));
 r.add("POST", "/api/staff/reservations", createReservation(JWT_SECRET));
 r.add("POST", "/api/staff/rooms", createRoom(JWT_SECRET));

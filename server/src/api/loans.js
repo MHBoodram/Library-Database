@@ -5,12 +5,31 @@ export const checkout = (JWT_SECRET) => async (req, res) => {
   const auth = requireAuth(req, res, JWT_SECRET); if (!auth) return;
   const b = await readJSONBody(req);
   const user_id = Number(b.user_id || auth.user_id);
-  const copy_id = Number(b.copy_id);
+  const identifierType = (b.identifier_type || "").toString().trim().toLowerCase();
+  const explicitMode = identifierType === "barcode" ? "barcode" : identifierType === "copy_id" ? "copy_id" : null;
+  const copyIdInput = Number(b.copy_id);
+  const barcodeInput = typeof b.barcode === "string" ? b.barcode.trim() : "";
   const employee_id = Number(b.employee_id) || null;
-  if (!user_id || !copy_id) return sendJSON(res, 400, { error:"invalid_payload" });
+
+  if (!user_id) {
+    return sendJSON(res, 400, { error:"invalid_payload", message: "User ID is required." });
+  }
+
+  const mode = explicitMode || (copyIdInput ? "copy_id" : barcodeInput ? "barcode" : "copy_id");
+  if (mode === "copy_id" && (!Number.isInteger(copyIdInput) || copyIdInput <= 0)) {
+    return sendJSON(res, 400, { error:"invalid_payload", message: "Valid copy_id is required." });
+  }
+  if (mode === "barcode" && !barcodeInput) {
+    return sendJSON(res, 400, { error:"invalid_payload", message: "Barcode is required." });
+  }
 
   try {
-    const result = await performCheckout({ user_id, copy_id, employee_id });
+    const result = await performCheckout({
+      user_id,
+      copy_id: mode === "copy_id" ? copyIdInput : null,
+      barcode: mode === "barcode" ? barcodeInput : "",
+      employee_id,
+    });
     return sendJSON(res, 201, {
       ok: true,
       loan_id: result.loan_id,
@@ -38,7 +57,7 @@ export const returnLoan = (JWT_SECRET) => async (req, res) => {
   return sendJSON(res, 200, { ok:true });
 };
 
-async function performCheckout({ user_id, copy_id, employee_id }) {
+async function performCheckout({ user_id, copy_id, barcode, employee_id }) {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -81,19 +100,44 @@ async function performCheckout({ user_id, copy_id, employee_id }) {
       );
     }
 
-    const [copyRows] = await conn.query(
-      `
-        SELECT c.status, c.item_id
-        FROM copy c
-        WHERE c.copy_id = ?
-        FOR UPDATE
-      `,
-      [copy_id]
-    );
-    if (!copyRows.length) {
-      throw createAppError("copy_not_found", "Copy not found.", 404);
+    let resolvedCopyId = Number(copy_id) || null;
+    let copy = null;
+    if (!resolvedCopyId && barcode) {
+      const [copyLookup] = await conn.query(
+        `
+          SELECT copy_id, status, item_id
+          FROM copy
+          WHERE barcode = ?
+          FOR UPDATE
+        `,
+        [barcode]
+      );
+      if (!copyLookup.length) {
+        throw createAppError("copy_not_found", "Copy barcode not found.", 404);
+      }
+      resolvedCopyId = Number(copyLookup[0].copy_id);
+      copy = copyLookup[0];
     }
-    const copy = copyRows[0];
+
+    if (!resolvedCopyId) {
+      throw createAppError("invalid_payload", "Copy identifier is required.", 400);
+    }
+
+    if (!copy) {
+      const [copyRows] = await conn.query(
+        `
+          SELECT c.copy_id, c.status, c.item_id
+          FROM copy c
+          WHERE c.copy_id = ?
+          FOR UPDATE
+        `,
+        [resolvedCopyId]
+      );
+      if (!copyRows.length) {
+        throw createAppError("copy_not_found", "Copy not found.", 404);
+      }
+      copy = copyRows[0];
+    }
     if (copy.status !== "available") {
       throw createAppError("copy_not_available", "Copy is not currently available for checkout.", 409);
     }
@@ -123,7 +167,7 @@ async function performCheckout({ user_id, copy_id, employee_id }) {
       `,
       [
         user_id,
-        copy_id,
+        resolvedCopyId,
         employee_id,
         policy?.policy_id ?? null,
         dueDate,
@@ -136,7 +180,7 @@ async function performCheckout({ user_id, copy_id, employee_id }) {
 
     await conn.execute(
       "UPDATE copy SET status='on_loan' WHERE copy_id=?",
-      [copy_id]
+      [resolvedCopyId]
     );
 
     await conn.commit();
