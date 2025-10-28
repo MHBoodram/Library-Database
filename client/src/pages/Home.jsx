@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
+import NavBar from '../components/NavBar';
 
 export default function Home() {
   const { user, token, logout } = useAuth();
@@ -24,24 +25,12 @@ export default function Home() {
 
   return (
     <div style={{ maxWidth: 800, margin: '2rem auto', padding: 24 }}>
+      <NavBar />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <div>
           <h1>Welcome, {user.name}!</h1>
           <p style={{ color: '#666' }}>Role: {user.role}</p>
         </div>
-        <button
-          onClick={handleLogout}
-          style={{
-            padding: '8px 16px',
-            backgroundColor: '#dc3545',
-            color: 'white',
-            border: 'none',
-            borderRadius: 4,
-            cursor: 'pointer',
-          }}
-        >
-          Logout
-        </button>
       </div>
 
       <div style={{ 
