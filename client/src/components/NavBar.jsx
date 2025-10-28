@@ -49,10 +49,10 @@ function NavBar() {
                     <NavLink to="/loans" className = {({ isActive }) => (isActive? 'sub-nav-link active' : 'sub-nav-link')}>
                         Loans
                     </NavLink>
-                        {/* Only show Reports to staff */}
+                        {/* Only show staff dashboard to staff */}
                         {user && user.role === 'staff' && (
-                            <NavLink to="/reports" className = {({ isActive }) => (isActive? 'sub-nav-link active' : 'sub-nav-link')}>
-                                Reports
+                            <NavLink to="/staff" className = {({ isActive }) => (isActive? 'sub-nav-link active' : 'sub-nav-link')}>
+                                Staff Dashboard
                             </NavLink>
                         )}
                 </div>
