@@ -44,6 +44,23 @@
             "name": "6",
             "database": "library_team2_2025_10_27",
             "username": "root"
+        },
+        {
+            "mysqlOptions": {
+                "authProtocol": "default",
+                "enableSsl": "Enabled",
+                "ssl": {
+                    "ca": "/etc/ssl/certs/DigiCert_Global_Root_G2.pem"
+                }
+            },
+            "ssh": "Disabled",
+            "previewLimit": 50,
+            "server": "library-db.mysql.database.azure.com",
+            "port": 3306,
+            "driver": "MySQL",
+            "name": "Azure Database",
+            "database": "mysql",
+            "username": "db2root"
         }
     ]
 }

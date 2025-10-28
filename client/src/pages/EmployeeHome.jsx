@@ -434,6 +434,14 @@ function AddItemPanel({ api }) {
     title: "",
     subject: "",
     classification: "",
+    item_type: "general",
+    isbn: "",
+    publisher: "",
+    publication_year: "",
+    model: "",
+    manufacturer: "",
+    media_type: "DVD",
+    length_minutes: "",
   });
   const [copies, setCopies] = useState([{ barcode: "", shelf_location: "" }]);
   const [submitting, setSubmitting] = useState(false);
@@ -472,6 +480,24 @@ function AddItemPanel({ api }) {
         subject: form.subject.trim() || undefined,
         classification: form.classification.trim() || undefined,
       };
+
+      const itemType = form.item_type;
+      if (itemType && itemType !== "general") {
+        itemPayload.item_type = itemType;
+        if (itemType === "book") {
+          if (form.isbn.trim()) itemPayload.isbn = form.isbn.trim();
+          if (form.publisher.trim()) itemPayload.publisher = form.publisher.trim();
+          if (form.publication_year.trim()) itemPayload.publication_year = form.publication_year.trim();
+        } else if (itemType === "device") {
+          if (form.model.trim()) itemPayload.model = form.model.trim();
+          if (form.manufacturer.trim()) itemPayload.manufacturer = form.manufacturer.trim();
+        } else if (itemType === "media") {
+          if (form.publisher.trim()) itemPayload.publisher = form.publisher.trim();
+          if (form.publication_year.trim()) itemPayload.publication_year = form.publication_year.trim();
+          if (form.length_minutes.trim()) itemPayload.length_minutes = form.length_minutes.trim();
+          if (form.media_type) itemPayload.media_type = form.media_type;
+        }
+      }
 
       let itemResponse;
       if (api) {
@@ -530,7 +556,19 @@ function AddItemPanel({ api }) {
       setMessage(
         `Item created${createdCopies ? ` with ${createdCopies} ${createdCopies === 1 ? "copy" : "copies"}` : ""} ✅`
       );
-      setForm({ title: "", subject: "", classification: "" });
+      setForm({
+        title: "",
+        subject: "",
+        classification: "",
+        item_type: "general",
+        isbn: "",
+        publisher: "",
+        publication_year: "",
+        model: "",
+        manufacturer: "",
+        media_type: "DVD",
+        length_minutes: "",
+      });
       setCopies([{ barcode: "", shelf_location: "" }]);
     } catch (err) {
       setMessage(`Failed: ${err.message}`);
@@ -556,6 +594,116 @@ function AddItemPanel({ api }) {
           <Field label="Classification / Call Number">
             <input className="w-full rounded-md border px-3 py-2" value={form.classification} onChange={(e) => update("classification", e.target.value)} placeholder="e.g., 813.52 FIT" />
           </Field>
+
+          <Field label="Item Type">
+            <select
+              className="w-full rounded-md border px-3 py-2 bg-white"
+              value={form.item_type}
+              onChange={(e) => update("item_type", e.target.value)}
+            >
+              <option value="general">General item (no subtype)</option>
+              <option value="book">Book</option>
+              <option value="device">Device</option>
+              <option value="media">Media</option>
+            </select>
+          </Field>
+
+          {form.item_type === "book" && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <Field label="ISBN">
+                <input
+                  className="w-full rounded-md border px-3 py-2"
+                  value={form.isbn}
+                  onChange={(e) => update("isbn", e.target.value)}
+                  placeholder="e.g., 9780142407332"
+                />
+              </Field>
+              <Field label="Publisher">
+                <input
+                  className="w-full rounded-md border px-3 py-2"
+                  value={form.publisher}
+                  onChange={(e) => update("publisher", e.target.value)}
+                  placeholder="e.g., Penguin"
+                />
+              </Field>
+              <Field label="Publication Year">
+                <input
+                  type="number"
+                  min="0"
+                  className="w-full rounded-md border px-3 py-2"
+                  value={form.publication_year}
+                  onChange={(e) => update("publication_year", e.target.value)}
+                  placeholder="e.g., 2006"
+                />
+              </Field>
+            </div>
+          )}
+
+          {form.item_type === "device" && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Field label="Model">
+                <input
+                  className="w-full rounded-md border px-3 py-2"
+                  value={form.model}
+                  onChange={(e) => update("model", e.target.value)}
+                  placeholder="e.g., iPad 10th Gen"
+                />
+              </Field>
+              <Field label="Manufacturer">
+                <input
+                  className="w-full rounded-md border px-3 py-2"
+                  value={form.manufacturer}
+                  onChange={(e) => update("manufacturer", e.target.value)}
+                  placeholder="e.g., Apple"
+                />
+              </Field>
+            </div>
+          )}
+
+          {form.item_type === "media" && (
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <Field label="Media Format">
+                <select
+                  className="w-full rounded-md border px-3 py-2 bg-white"
+                  value={form.media_type}
+                  onChange={(e) => update("media_type", e.target.value)}
+                >
+                  <option value="DVD">DVD</option>
+                  <option value="Blu-ray">Blu-ray</option>
+                  <option value="CD">CD</option>
+                  <option value="Other">Other</option>
+                </select>
+              </Field>
+              <Field label="Run Time (minutes)">
+                <input
+                  type="number"
+                  min="0"
+                  className="w-full rounded-md border px-3 py-2"
+                  value={form.length_minutes}
+                  onChange={(e) => update("length_minutes", e.target.value)}
+                  placeholder="e.g., 120"
+                />
+              </Field>
+              <Field label="Publisher">
+                <input
+                  className="w-full rounded-md border px-3 py-2"
+                  value={form.publisher}
+                  onChange={(e) => update("publisher", e.target.value)}
+                  placeholder="e.g., Paramount"
+                />
+              </Field>
+              <Field label="Release Year">
+                <input
+                  type="number"
+                  min="0"
+                  className="w-full rounded-md border px-3 py-2"
+                  value={form.publication_year}
+                  onChange={(e) => update("publication_year", e.target.value)}
+                  placeholder="e.g., 2023"
+                />
+              </Field>
+            </div>
+          )}
 
           <div className="space-y-2">
             <h3 className="text-sm font-semibold text-gray-700">Copies</h3>
@@ -621,10 +769,11 @@ function AddItemPanel({ api }) {
         <div className="rounded-xl border bg-white p-4 shadow-sm">
           <h3 className="font-medium mb-2">What this does</h3>
           <ul className="list-disc list-inside text-sm text-gray-700 space-y-1">
-            <li>Creates a library item via <code>POST /api/items</code> (fields: title, subject, classification).</li>
+            <li>Creates a library item via <code>POST /api/items</code> with title/subject/classification.</li>
+            <li>Supports subtype rows for books, devices, or media so cataloging data lands in the right table.</li>
             <li>Optionally creates one copy per barcode entered via <code>POST /api/copies</code>.</li>
             <li>Shelf location is stored on each copy so you can mix locations per barcode.</li>
-            <li>Need additional metadata? Extend the <code>item</code> table and update this form accordingly.</li>
+            <li>Need more metadata? Extend the schema (e.g., periodicals) and mirror those fields here.</li>
           </ul>
         </div>
 

@@ -39,11 +39,11 @@ async function api(path, { method = "GET", body, token, headers, signal } = {}) 
 export const getItems = (token) =>
   api("/items", { token }); // GET /api/items → array
 
-export const addItem = (token, { title, subject, classification }) =>
+export const addItem = (token, payload) =>
   api("/items", {
     method: "POST",
     token,
-    body: { title, subject, classification },
+    body: payload,
   });
 
 export const updateItem = (token, id, patch) =>
