@@ -29,7 +29,11 @@ export default function Books() {
   useEffect(() => {
     let active = true;
     async function run() {
-      if (!debounced) { setRows([]); setError(""); return; }
+      if (!debounced) {
+        setRows((prev) => (prev.length ? [] : prev));
+        setError((prev) => (prev ? "" : prev));
+        return;
+      }
       setLoading(true);
       setError("");
       try {
@@ -150,4 +154,3 @@ function Td({ children }) {
     <td style={{ padding: 10, borderRight: "1px solid #f1f5f9" }}>{children}</td>
   );
 }
-
