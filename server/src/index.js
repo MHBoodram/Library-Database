@@ -5,7 +5,7 @@ import { setCors, sendJSON } from "./lib/http.js";
 import { router } from "./lib/router.js";
 
 import { register, login } from "./api/auth.js";
-import { createItem, updateItem, deleteItem } from "./api/items.js";
+import { createItem, updateItem, deleteItem, listItems } from "./api/items.js";
 import { createCopy, updateCopy, deleteCopy } from "./api/copies.js";
 import { checkout, returnLoan } from "./api/loans.js";
 import { placeHold, cancelHold } from "./api/holds.js";
@@ -29,6 +29,7 @@ r.add("POST", "/api/auth/login",    login(JWT_SECRET));
 // (optional) r.add("GET", "/api/auth/me", me(JWT_SECRET));
 
 // items
+r.add("GET",    "/api/items",     listItems());
 r.add("POST",   "/api/items",     createItem(JWT_SECRET));
 r.add("PUT",    "/api/items/:id", updateItem(JWT_SECRET));
 r.add("DELETE", "/api/items/:id", deleteItem(JWT_SECRET));

@@ -1,6 +1,85 @@
 import { sendJSON, readJSONBody, requireAuth } from "../lib/http.js";
 import { pool } from "../lib/db.js";
 
+export const listItems = () => async (req, res) => {
+  try {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const q = (url.searchParams.get("q") || "").trim();
+    const idParam = (url.searchParams.get("id") || "").trim();
+    const title = (url.searchParams.get("title") || "").trim();
+    const author = (url.searchParams.get("author") || "").trim();
+
+    const where = [];
+    const params = [];
+
+    // If explicit id provided, use it
+    if (idParam) {
+      const idNum = Number(idParam);
+      if (Number.isFinite(idNum)) {
+        where.push("i.item_id = ?");
+        params.push(idNum);
+      } else {
+        return sendJSON(res, 400, { error: "invalid_id" });
+      }
+    }
+
+    if (title) {
+      where.push("i.title LIKE ?");
+      params.push(`%${title}%`);
+    }
+
+    if (author) {
+      // Match any author full_name
+      where.push("a.full_name LIKE ?");
+      params.push(`%${author}%`);
+    }
+
+    // Generic q: numeric → id match; otherwise title/author match
+    if (q) {
+      const qNum = Number(q);
+      if (Number.isFinite(qNum)) {
+        where.push("i.item_id = ?");
+        params.push(qNum);
+      } else {
+        where.push("(i.title LIKE ? OR a.full_name LIKE ?)");
+        params.push(`%${q}%`, `%${q}%`);
+      }
+    }
+
+    const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+    const sql = `
+      SELECT 
+        i.item_id,
+        i.title,
+        i.subject,
+        i.classification,
+        b.isbn,
+        b.publisher,
+        b.publication_year,
+        GROUP_CONCAT(DISTINCT a.full_name ORDER BY a.full_name SEPARATOR ', ') AS authors
+      FROM item i
+      LEFT JOIN book b ON b.item_id = i.item_id
+      LEFT JOIN item_author ia ON ia.item_id = i.item_id
+      LEFT JOIN author a ON a.author_id = ia.author_id
+      ${whereSql}
+      GROUP BY i.item_id
+      ORDER BY i.item_id ASC
+      LIMIT 200
+    `;
+
+    const [rows] = await pool.query(sql, params);
+    // normalize authors to array
+    const out = rows.map((r) => ({
+      ...r,
+      authors: typeof r.authors === "string" && r.authors.length ? r.authors.split(/\s*,\s*/) : [],
+    }));
+    return sendJSON(res, 200, out);
+  } catch (err) {
+    return sendJSON(res, 500, { error: "items_list_failed", details: err.message });
+  }
+};
+
 export const createItem = (JWT_SECRET) => async (req, res) => {
   const auth = requireAuth(req, res, JWT_SECRET); if (!auth) return;
   const b = await readJSONBody(req);

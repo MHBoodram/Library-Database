@@ -9,6 +9,8 @@ import Home from "./pages/Home.jsx";
 import Login from "./pages/Login.jsx";
 import Register from "./pages/Register.jsx";
 import EmployeeHome from "./pages/EmployeeHome.jsx";
+import Books from "./pages/Books.jsx";
+import Reports from "./pages/Reports.jsx";
 
 import "./index.css";
 
@@ -21,6 +23,8 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           <Route path="/login" element={<Login />} />
           <Route path="/Login" element={<Navigate to="/login" replace />} /> {/* optional redirect */}
           <Route path="/register" element={<Register />} />
+          <Route path="/books" element={<Books />} />
+          <Route path="/reports" element={<Reports />} />
 
           <Route
             path="/app"
