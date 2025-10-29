@@ -143,7 +143,7 @@ export default function Register() {
               checked={form.make_employee}
               onChange={onChange}
             />
-            <span>Register as staff (enable employee portal features)</span>
+            <span>Register as staff</span>
           </label>
         </div>
 

@@ -69,9 +69,6 @@ export default function Home() {
         borderLeft: '4px solid #0c5460',
         borderRadius: 4 
       }}>
-        <p style={{ margin: 0, color: '#0c5460' }}>
-          ℹ️ This is your library dashboard. Use the navigation above to access different features.
-        </p>
       </div>
     </div>
   );

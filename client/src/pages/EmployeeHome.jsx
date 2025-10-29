@@ -3,15 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
 
-/**
- * EmployeeDashboard.jsx
- *
- * Authenticated staff landing page that bundles:
- *  - Fines search UI backed by GET /api/staff/fines
- *  - Item ingestion form (POST /api/items + optional /api/copies)
- *
- * Assumes AuthProvider supplies useApi() wrapper that adds auth headers.
- */
 
 const API_BASE = import.meta.env.VITE_API_BASE?.replace(/\/$/, "") || ""; // e.g., http://localhost:3000/api
 
@@ -115,9 +106,6 @@ export default function EmployeeDashboard() {
   );
 }
 
-/** =============================
- * FINES PANEL
- * ==============================*/
 function FinesPanel({ api }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -265,9 +253,6 @@ function FinesPanel({ api }) {
   );
 }
 
-/** =============================
- * ACTIVE LOANS PANEL
- * ==============================*/
 function ActiveLoansPanel({ api }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -407,9 +392,6 @@ function ActiveLoansPanel({ api }) {
   );
 }
 
-/** =============================
- * CHECKOUT PANEL
- * ==============================*/
 function CheckoutPanel({ api, staffUser }) {
   const [form, setForm] = useState({ user_id: "", copy_value: "", mode: "copy_id" });
   const [submitting, setSubmitting] = useState(false);
@@ -478,7 +460,7 @@ function CheckoutPanel({ api, staffUser }) {
         <div>
           <h2 className="text-lg font-semibold">Checkout Item</h2>
           <p className="text-sm text-gray-600">
-            Scan or enter a patron ID and copy barcode. Trigger safety stops checkouts beyond the allowed loan limit.
+            Scan or enter a patron ID and copy barcode.
           </p>
         </div>
 
@@ -632,9 +614,6 @@ async function safeError(res) {
   }
 }
 
-/** =============================
- * ADD-ITEM PANEL (scaffold)
- * ==============================*/
 function AddItemPanel({ api }) {
   const [form, setForm] = useState({
     title: "",
@@ -970,48 +949,6 @@ function AddItemPanel({ api }) {
           </div>
         </form>
       </div>
-
-      <aside className="space-y-3">
-        <div className="rounded-xl border bg-white p-4 shadow-sm">
-          <h3 className="font-medium mb-2">What this does</h3>
-          <ul className="list-disc list-inside text-sm text-gray-700 space-y-1">
-            <li>Creates a library item via <code>POST /api/items</code> with title/subject/classification.</li>
-            <li>Supports subtype rows for books, devices, or media so cataloging data lands in the right table.</li>
-            <li>Optionally creates one copy per barcode entered via <code>POST /api/copies</code>.</li>
-            <li>Shelf location is stored on each copy so you can mix locations per barcode.</li>
-            <li>Need more metadata? Extend the schema (e.g., periodicals) and mirror those fields here.</li>
-          </ul>
-        </div>
-
-        <div className="rounded-xl border bg-white p-4 shadow-sm">
-          <h3 className="font-medium mb-2">Ideas to expand</h3>
-          <ol className="list-decimal list-inside text-sm text-gray-700 space-y-1">
-            <li>Capture media type so policies can pick the right loan rule.</li>
-            <li>Generate barcodes automatically (e.g., prefix + sequence) instead of hand entry.</li>
-            <li>Allow uploading cover art or importing bibliographic data from ISBN.</li>
-            <li>Add inline copy management (mark lost, transfer location, etc.).</li>
-          </ol>
-        </div>
-
-        <div className="rounded-xl border bg-white p-4 shadow-sm text-xs text-gray-600">
-          <h4 className="font-semibold mb-1">Sample fine lookup SQL</h4>
-          <pre className="whitespace-pre-wrap">
-{`SELECT u.first_name, u.last_name,
-       f.fine_id, f.status,
-       l.loan_id, l.due_date,
-       i.title
-FROM FINE f
-JOIN LOAN l   ON l.loan_id = f.loan_id
-JOIN USER u   ON u.user_id = l.user_id
-JOIN ITEM i   ON i.item_id = l.item_id
-/* Optional filters */
-/* WHERE (f.status = ? OR ? IS NULL) */
-/*   AND (l.due_date < CURDATE()) -- overdue */
-/* ORDER BY l.due_date DESC */
-/* LIMIT ? OFFSET ? */`}
-          </pre>
-        </div>
-      </aside>
     </section>
   );
 }
@@ -1025,9 +962,7 @@ function Field({ label, children }) {
   );
 }
 
-/** =============================
- * RESERVATIONS PANEL
- * ==============================*/
+
 function ReservationsPanel({ api, staffUser }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
