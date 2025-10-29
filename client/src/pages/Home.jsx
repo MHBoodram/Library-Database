@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import NavBar from '../components/NavBar';
+import './Home.css';
 
 export default function Home() {
   const { user, token, logout } = useAuth();
@@ -24,7 +25,7 @@ export default function Home() {
   }
 
   return (
-    <div style={{ maxWidth: 800, margin: '2rem auto', padding: 24 }}>
+    <div className="home-page" style={{ maxWidth: 800, margin: '2rem auto', padding: 24 }}>
       <NavBar />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <div>
