@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { api } from "../api";
+import NavBar from "../components/NavBar";
 
 export default function Register() {
   const nav = useNavigate();
@@ -55,8 +56,31 @@ export default function Register() {
   }
 
   return (
-    <div style={{ maxWidth: 400, margin: "4rem auto", padding: 24 }}>
-      <h1>Register</h1>
+    <div style={{ margin: 0, padding: 0, minHeight: '100vh' }}>
+      <NavBar />
+      <div style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '2rem',
+        paddingTop: '120px',
+        boxSizing: 'border-box'
+      }}>
+        <div style={{
+          width: '100%',
+          maxWidth: 420,
+          padding: 24,
+          background: '#fff',
+          border: '1px solid #eee',
+          borderRadius: 8,
+          boxShadow: '0 4px 14px rgba(0,0,0,0.06)'
+        }}>
+      <h1 style={{ marginTop: 0, textAlign: 'center' }}>Register</h1>
 
       {error && (
         <div
@@ -135,17 +159,7 @@ export default function Register() {
           />
         </div>
 
-        <div style={{ marginBottom: 24 }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <input
-              type="checkbox"
-              name="make_employee"
-              checked={form.make_employee}
-              onChange={onChange}
-            />
-            <span>Register as staff</span>
-          </label>
-        </div>
+
 
         <button
           type="submit"
@@ -165,9 +179,11 @@ export default function Register() {
         </button>
       </form>
 
-      <p style={{ marginTop: 16, textAlign: "center" }}>
-        Already have an account? <Link to="/login">Login here</Link>
-      </p>
+        <p style={{ marginTop: 16, textAlign: 'center' }}>
+          Already have an account? <Link to="/login">Login here</Link>
+        </p>
+        </div>
+      </div>
     </div>
   );
 }
