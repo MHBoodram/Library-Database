@@ -62,14 +62,6 @@ export default function Home() {
             )}
         </ul>
       </div>
-
-      <div style={{ 
-        padding: 16, 
-        backgroundColor: '#d1ecf1', 
-        borderLeft: '4px solid #0c5460',
-        borderRadius: 4 
-      }}>
-      </div>
     </div>
   );
 }
