@@ -1,0 +1,127 @@
+/* Lightweight dashboard layout overrides to improve Employee/Staff dashboard appearance.
+   This complements the existing Tailwind classes by providing a centered page container,
+   action-grid for the header buttons, and some table/empty-state niceties. */
+
+:root{
+  --nav-height: 60px;
+  --page-max-width: 1100px;
+  --page-gutter: 16px;
+  --brand: #243b55;
+  --muted: #6b7280;
+  --card-bg: #fafafa;
+  --border: #e6e9ee;
+}
+
+.staff-page {
+  box-sizing: border-box;
+  padding: calc(var(--nav-height) + 12px) var(--page-gutter) 40px;
+  background: #f8fafc;
+  min-height: calc(100vh - var(--nav-height));
+}
+
+.staff-page__inner {
+  width: 100%;
+  max-width: var(--page-max-width);
+  margin: 0 auto;
+}
+
+.staff-actions {
+  background: linear-gradient(180deg, var(--card-bg), #fff);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.action-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  align-items: center;
+}
+
+.action-btn {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px !important;
+  background: #111827;
+  color: #fff !important;
+  border-radius: 10px !important;
+  cursor: pointer;
+  text-decoration: none !important;
+  font-weight: 600;
+  min-height: 44px;
+}
+.action-btn.secondary { background: #1f2937; }
+.action-btn.active { background: var(--brand) !important; color: #fff !important; }
+.action-btn.ghost {
+  background: transparent !important;
+  color: var(--brand) !important;
+  border: 1px solid var(--border) !important;
+}
+.action-btn:hover{ transform: translateY(-2px); box-shadow: 0 6px 18px rgba(20,20,30,0.06); }
+.action-btn:focus{ outline: 3px solid rgba(36,59,85,0.12); outline-offset: 2px; }
+
+.results-info { margin-top: 8px; color: var(--muted); font-size: 14px; }
+
+.empty-state { padding: 18px; border-radius: 8px; background: #fff; color: #374151; }
+
+@media (max-width: 680px) {
+  .staff-page { padding-top: calc(var(--nav-height) + 8px); }
+  .staff-page__title { font-size: 20px; }
+}
+
+/* Controls (search + select + checkbox) */
+.controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.controls .search {
+  flex: 1 1 380px;
+  min-width: 180px;
+}
+.controls input[type="search"],
+.controls input[type="text"],
+.controls select {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: #111827;
+  font-size: 14px;
+  min-height: 40px;
+}
+
+/* Results table styling */
+.results-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+  background: transparent;
+}
+.results-table thead th {
+  text-align: left;
+  position: sticky;
+  top: calc(var(--nav-height) + 12px);
+  background: linear-gradient(180deg,#ffffff,#fbfbfd);
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 700;
+  font-size: 13px;
+  color: #374151;
+}
+.results-table tbody td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #f1f3f7;
+  font-size: 14px;
+  color: #111827;
+}
+.results-table tbody tr:nth-child(even) { background: #ffffff; }
+.results-table tbody tr:nth-child(odd) { background: #fcfdff; }
+.results-table .truncate { max-width: 24ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
