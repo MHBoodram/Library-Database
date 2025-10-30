@@ -5,7 +5,7 @@ import NavBar from '../components/NavBar';
 import './Home.css';
 
 export default function Home() {
-  const { user, token, logout } = useAuth();
+  const { user, token } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -15,10 +15,6 @@ export default function Home() {
     }
   }, [token, navigate]);
 
-  function handleLogout() {
-    logout();
-    navigate('/login');
-  }
 
   if (!user) {
     return <div style={{ padding: 16 }}>Loading...</div>;
@@ -30,9 +26,6 @@ export default function Home() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <div>
           <h1>Welcome, {user.first_name} {user.last_name}!</h1>
-          <p style={{ color: '#666', marginTop: 4 }}>
-            Role: {user.role} · User ID: <span style={{ fontFamily: 'monospace' }}>#{user.user_id}</span>
-          </p>
         </div>
       </div>
 

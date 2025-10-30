@@ -35,7 +35,7 @@ function NavBar() {
                         {user ? (
                             <>
                                 <span className='bar-link' style={{ cursor: 'default' }}>
-                                    {user.name} ({user.role})
+                                    {user.name}
                                 </span>
                                 <button 
                                     onClick={handleLogout}
