@@ -99,14 +99,18 @@ export default function Login() {
           type="submit"
           disabled={loading}
           style={{
-            width: '100%',
-            padding: 12,
+            display: 'block',
+            margin: '0 auto',
+            width: 'auto',
+            maxWidth: 260,
+            padding: '12px 28px',
             fontSize: 16,
             backgroundColor: '#007bff',
             color: 'white',
             border: 'none',
             borderRadius: 4,
             cursor: loading ? 'not-allowed' : 'pointer',
+            textAlign: 'center'
           }}
         >
           {loading ? 'Logging in...' : 'Login'}

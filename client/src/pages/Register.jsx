@@ -165,14 +165,18 @@ export default function Register() {
           type="submit"
           disabled={loading}
           style={{
-            width: "100%",
-            padding: 12,
+            display: 'block',
+            margin: '0 auto',
+            width: 'auto',
+            maxWidth: 260,
+            padding: '12px 28px',
             fontSize: 16,
-            backgroundColor: "#28a745",
-            color: "white",
-            border: "none",
+            backgroundColor: '#28a745',
+            color: 'white',
+            border: 'none',
             borderRadius: 4,
-            cursor: loading ? "not-allowed" : "pointer",
+            cursor: loading ? 'not-allowed' : 'pointer',
+            textAlign: 'center'
           }}
         >
           {loading ? "Registering..." : "Register"}

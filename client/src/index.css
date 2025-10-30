@@ -65,3 +65,35 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+/* Form input defaults: make inputs white with dark text and visible borders */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+textarea,
+select {
+  background: #ffffff;
+  color: #111827; /* near-black for readability */
+  border: 1px solid #d1d5db; /* light gray */
+  padding: 8px;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(99,102,241,0.12);
+  border-color: #6366f1; /* focus color */
+}
+
+/* Dark mode adjustments: keep inputs white but slightly muted text if needed */
+@media (prefers-color-scheme: dark) {
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  textarea,
+  select {
+    background: #f9fafb; /* off-white to contrast dark background */
+    color: #0b1220;
+  }
+}
