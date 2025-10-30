@@ -1,4 +1,4 @@
-/* Force light theme for Home page */
+
 :root {
   color-scheme: light;
 }
@@ -9,7 +9,7 @@
   color: #213547;
 }
 
-/* Ensure page background stays light even with global dark defaults */
+
 body {
   background-color: #ffffff;
   color: #213547;
@@ -29,7 +29,7 @@ body {
 }
 
 .home-subtle {
-  color: #666666;
+  color: #464545;
 }
 
 .btn-danger {
@@ -43,7 +43,7 @@ body {
 
 .quick-actions {
   padding: 24px;
-  background-color: #f8f9fa;
+  background-color: #f8f9fa3e;
   border-radius: 8px;
   margin-bottom: 16px;
 }

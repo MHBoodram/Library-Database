@@ -27,7 +27,8 @@ function formatDate(due) {
 
 export default function EmployeeDashboard() {
   const { useApi, user, logout } = useAuth();
-  const apiWithAuth = useApi();
+  // Memoize the API function so re-renders don't trigger ref changes
+  const apiWithAuth = useMemo(() => useApi(), [useApi]);
   const [tab, setTab] = useState("fines"); // "fines" | "checkout" | "activeLoans" | "reservations" | "addItem"
   const navigate = useNavigate();
 

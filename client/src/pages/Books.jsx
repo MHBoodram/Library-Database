@@ -5,7 +5,7 @@ import NavBar from "../components/NavBar";
 
 export default function Books() {
   const { token, useApi } = useAuth();
-  const apiWithAuth = useApi();
+  const apiWithAuth = useMemo(() => useApi(), [useApi]);
   const navigate = useNavigate();
 
   const [mode, setMode] = useState("title"); // "id" | "title" | "author"

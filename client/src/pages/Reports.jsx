@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 
@@ -10,7 +10,7 @@ export default function Reports() {
   const [topItems, setTopItems] = useState([]);
   const navigate = useNavigate();
   const { token, user, useApi } = useAuth();
-  const apiWithAuth = useApi();
+  const apiWithAuth = useMemo(() => useApi(), [useApi]);
 
   useEffect(() => {
     if (!token) {
