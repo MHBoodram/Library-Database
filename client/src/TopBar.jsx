@@ -15,7 +15,7 @@ export default function TopBar() {
 
   return (
     <div style={{ padding: 12, background: "#f4f4f4", display: "flex", gap: 12 }}>
-      <div>Signed in as <b>{user.name}</b> ({user.role})</div>
+      <div>Signed in as <b>{user.name}</b></div>
       <button onClick={onLogout}>Log out</button>
     </div>
   );
