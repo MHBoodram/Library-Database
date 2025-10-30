@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
-import "./StaffDashboard.css";
 
 
 const API_BASE = import.meta.env.VITE_API_BASE?.replace(/\/$/, "") || ""; // e.g., http://localhost:3000/api
@@ -28,8 +27,8 @@ function formatDate(due) {
 
 export default function EmployeeDashboard() {
   const { useApi, user, logout } = useAuth();
-  // Get the API helper from auth context
-  const apiWithAuth = useApi();
+  // Memoize the API function so re-renders don't trigger ref changes
+  const apiWithAuth = useMemo(() => useApi(), [useApi]);
   const [tab, setTab] = useState("fines"); // "fines" | "checkout" | "activeLoans" | "reservations" | "addItem"
   const navigate = useNavigate();
 
@@ -38,47 +37,57 @@ export default function EmployeeDashboard() {
     navigate("/login");
   }
   return (
-    <div className="staff-page">
+    <div className="min-h-screen bg-gray-50 text-gray-900">
       <NavBar />
-      <header className="border-b bg-white staff-actions">
-        <div className="mx-auto max-w-6xl px-4 py-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between staff-page__inner">
+      <header className="border-b bg-white">
+        <div className="mx-auto max-w-6xl px-4 py-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center justify-between gap-4">
-            <h1 className="text-2xl font-semibold tracking-tight staff-page__title">Employee Dashboard</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">Employee Dashboard</h1>
             <button
               onClick={handleLogout}
-              className="action-btn ghost"
+              className="inline-flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
             >
               <span role="img" aria-hidden="true">🚪</span>
               Logout
             </button>
           </div>
-          <nav className="action-grid">
+          <nav className="flex flex-wrap gap-2">
             <button
-              className={`action-btn ${tab === "fines" ? "active" : "ghost"}`}
+              className={`px-3 py-2 rounded-md text-sm font-medium ${
+                tab === "fines" ? "bg-gray-900 text-white" : "bg-gray-200 hover:bg-gray-300"
+              }`}
               onClick={() => setTab("fines")}
             >
               Check Fines
             </button>
             <button
-              className={`action-btn ${tab === "checkout" ? "active" : "ghost"}`}
+              className={`px-3 py-2 rounded-md text-sm font-medium ${
+                tab === "checkout" ? "bg-gray-900 text-white" : "bg-gray-200 hover:bg-gray-300"
+              }`}
               onClick={() => setTab("checkout")}
             >
               Checkout Loan
             </button>
             <button
-              className={`action-btn ${tab === "activeLoans" ? "active" : "ghost"}`}
+              className={`px-3 py-2 rounded-md text-sm font-medium ${
+                tab === "activeLoans" ? "bg-gray-900 text-white" : "bg-gray-200 hover:bg-gray-300"
+              }`}
               onClick={() => setTab("activeLoans")}
             >
               Active Loans
             </button>
             <button
-              className={`action-btn ${tab === "reservations" ? "active" : "ghost"}`}
+              className={`px-3 py-2 rounded-md text-sm font-medium ${
+                tab === "reservations" ? "bg-gray-900 text-white" : "bg-gray-200 hover:bg-gray-300"
+              }`}
               onClick={() => setTab("reservations")}
             >
               Room Reservations
             </button>
             <button
-              className={`action-btn ${tab === "addItem" ? "active secondary" : "ghost"}`}
+              className={`px-3 py-2 rounded-md text-sm font-medium ${
+                tab === "addItem" ? "bg-gray-900 text-white" : "bg-gray-200 hover:bg-gray-300"
+              }`}
               onClick={() => setTab("addItem")}
             >
               Add Item
@@ -183,12 +192,14 @@ function FinesPanel({ api }) {
 
       <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
         <div className="flex items-center justify-between border-b bg-gray-50 px-5 py-3 text-sm">
-          <span className="font-medium text-gray-700">Showing {filtered.length} of {rows.length} results</span>
+          <span className="font-medium text-gray-700">
+            Showing {filtered.length} of {rows.length} results
+          </span>
           <span className="text-gray-500">Active fines: {activeCount}</span>
         </div>
         <div className="overflow-x-auto">
-          <table className="results-table min-w-full text-sm">
-            <thead>
+          <table className="min-w-full text-sm">
+            <thead className="bg-gray-100 text-left">
               <tr>
                 <Th>First</Th>
                 <Th>Last</Th>
@@ -202,16 +213,20 @@ function FinesPanel({ api }) {
             <tbody>
               {loading ? (
                 <tr>
-                  <td className="p-4" colSpan={7}>Loading…</td>
+                  <td className="p-4" colSpan={7}>
+                    Loading…
+                  </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td className="p-4 text-red-600" colSpan={7}>{error}</td>
+                  <td className="p-4 text-red-600" colSpan={7}>
+                    {error}
+                  </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
                   <td className="p-4" colSpan={7}>
-                    <div className="empty-state">No fines match your search.</div>
+                    No fines match your search.
                   </td>
                 </tr>
               ) : (
@@ -225,7 +240,9 @@ function FinesPanel({ api }) {
                     </Td>
                     <Td>#{r.loan_id}</Td>
                     <Td>{formatDate(r.due_date)}</Td>
-                    <Td className="truncate" title={r.title}>{r.title}</Td>
+                    <Td className="max-w-[24ch] truncate" title={r.title}>
+                      {r.title}
+                    </Td>
                   </tr>
                 ))
               )}
@@ -316,7 +333,7 @@ function ActiveLoansPanel({ api }) {
           {debouncedQuery && <span className="text-gray-500">Filtered by “{debouncedQuery}”</span>}
         </div>
         <div className="overflow-x-auto">
-          <table className="results-table min-w-full text-sm">
+          <table className="min-w-full text-sm">
             <thead className="bg-gray-100 text-left">
               <tr>
                 <Th>Borrower</Th>
@@ -325,11 +342,11 @@ function ActiveLoansPanel({ api }) {
                 <Th>Copy ID</Th>
                 <Th>Loan ID</Th>
                 <Th>Due Date</Th>
-                    <Th>Status</Th>
-                    <Th>Checked Out By</Th>
-                  </tr>
-                </thead>
-                <tbody>
+                <Th>Status</Th>
+                <Th>Checked Out By</Th>
+              </tr>
+            </thead>
+            <tbody>
               {loading ? (
                 <tr>
                   <td className="p-4" colSpan={8}>
@@ -338,7 +355,9 @@ function ActiveLoansPanel({ api }) {
                 </tr>
               ) : error ? (
                 <tr>
-                  <td className="p-4 text-red-600" colSpan={8}>{error}</td>
+                  <td className="p-4 text-red-600" colSpan={8}>
+                    {error}
+                  </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
@@ -553,11 +572,11 @@ function StatusPill({ status }) {
 
 function FiltersBar({ q, setQ, status, setStatus, onlyOverdue, setOnlyOverdue }) {
   return (
-    <div className="controls">
+    <div className="flex flex-wrap items-end gap-3">
       <div className="flex-1 min-w-[240px]">
         <label className="block text-xs font-medium text-gray-600 mb-1">Search</label>
         <input
-          className="search w-full rounded-md border px-3 py-2"
+          className="w-full rounded-md border px-3 py-2"
           placeholder="Name, Fine ID, Loan ID, Title…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -591,7 +610,7 @@ async function safeError(res) {
   try {
     const data = await res.json();
     return data?.error || data?.message || "";
-  } catch {
+  } catch (_) {
     return "";
   }
 }
