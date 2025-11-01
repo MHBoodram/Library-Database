@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
-
+import { formatDate,formatDateTime } from "../utils";
 
 const API_BASE = import.meta.env.VITE_API_BASE?.replace(/\/$/, "") || ""; // e.g., http://localhost:3000/api
 
@@ -13,17 +13,6 @@ const STATUS_OPTIONS = [
   { value: "paid", label: "Paid" },
   { value: "waived", label: "Waived" },
 ];
-
-function formatDate(due) {
-  if (!due) return "—";
-  const d = new Date(due);
-  if (Number.isNaN(d.getTime())) return String(due);
-  return d.toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-  });
-}
 
 export default function EmployeeDashboard() {
   const { useApi, user, logout } = useAuth();
@@ -1209,9 +1198,3 @@ function ReservationsPanel({ api, staffUser }) {
   );
 }
 
-function formatDateTime(value) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return date.toLocaleString();
-}
