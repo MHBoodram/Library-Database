@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect,useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
@@ -6,7 +6,7 @@ import { formatDate } from "../utils";
 
 export default function Loans() {
   const { token, useApi } = useAuth();
-  const apiWithAuth = useApi();
+  const apiWithAuth = useMemo(()=>useApi(),[useApi]);
   const navigate = useNavigate();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);

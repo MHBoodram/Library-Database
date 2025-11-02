@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect,useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
 
 export default function Rooms() {
   const { token, useApi } = useAuth();
-  const apiWithAuth = useApi();
+  const apiWithAuth = useMemo(()=>useApi(),[useApi]);
   const navigate = useNavigate();
 
   const [rooms, setRooms] = useState([]);
