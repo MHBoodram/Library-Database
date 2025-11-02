@@ -11,6 +11,8 @@ import Register from "./pages/Register.jsx";
 import EmployeeHome from "./pages/EmployeeHome.jsx";
 import Books from "./pages/Books.jsx";
 import Reports from "./pages/Reports.jsx";
+import Loans from "./pages/Loans.jsx";
+import Rooms from "./pages/Rooms.jsx";
 
 import "./index.css";
 
@@ -24,6 +26,8 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           <Route path="/Login" element={<Navigate to="/login" replace />} /> {/* optional redirect */}
           <Route path="/register" element={<Register />} />
           <Route path="/books" element={<Books />} />
+          <Route path="/loans" element={<Loans />} />
+          <Route path="/rooms" element={<Rooms />} />
           <Route path="/reports" element={<Reports />} />
 
           <Route

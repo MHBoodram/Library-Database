@@ -22,6 +22,9 @@ function NavBar() {
                         <NavLink to="/loans" className = {({ isActive }) => (isActive? 'sub-nav-link active' : 'sub-nav-link')}>
                             Loans
                         </NavLink>
+                        <NavLink to="/rooms" className = {({ isActive }) => (isActive? 'sub-nav-link active' : 'sub-nav-link')}>
+                            Rooms
+                        </NavLink>
                             {/* Only show staff dashboard to staff */}
                             {user && user.role === 'staff' && (
                                 <NavLink to="/staff" className = {({ isActive }) => (isActive? 'sub-nav-link active' : 'sub-nav-link')}>

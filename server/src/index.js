@@ -5,14 +5,14 @@ import { setCors, sendJSON } from "./lib/http.js";
 import { router } from "./lib/router.js";
 
 import { register, login } from "./api/auth.js";
-import { createItem, updateItem, deleteItem, listItems } from "./api/items.js";
+import { createItem, updateItem, deleteItem, listItems, listItemCopies } from "./api/items.js";
 import { createCopy, updateCopy, deleteCopy } from "./api/copies.js";
-import { checkout, returnLoan } from "./api/loans.js";
+import { checkout, returnLoan, listMyLoans } from "./api/loans.js";
 import { placeHold, cancelHold } from "./api/holds.js";
 import { overdue, balances, topItems } from "./api/reports.js";
 import { listFines, listActiveLoans } from "./api/staff.js";
-import { createReservation, listReservations } from "./api/reservations.js";
-import { createRoom } from "./api/rooms.js";
+import { createReservation, listReservations, createReservationSelf, listMyReservations } from "./api/reservations.js";
+import { createRoom, listRooms } from "./api/rooms.js";
 
 const PORT = Number(process.env.PORT) || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || "devsecret";
@@ -30,6 +30,7 @@ r.add("POST", "/api/auth/login",    login(JWT_SECRET));
 
 // items
 r.add("GET",    "/api/items",     listItems());
+r.add("GET",    "/api/items/:id/copies", listItemCopies());
 r.add("POST",   "/api/items",     createItem(JWT_SECRET));
 r.add("PUT",    "/api/items/:id", updateItem(JWT_SECRET));
 r.add("DELETE", "/api/items/:id", deleteItem(JWT_SECRET));
@@ -42,6 +43,7 @@ r.add("DELETE", "/api/copies/:id", deleteCopy(JWT_SECRET));
 // loans 
 r.add("POST", "/api/loans/checkout", checkout(JWT_SECRET));
 r.add("POST", "/api/loans/return",   returnLoan(JWT_SECRET));
+r.add("GET",  "/api/loans/my",      listMyLoans(JWT_SECRET));
 
 // holds
 r.add("POST",   "/api/holds/place",  placeHold(JWT_SECRET));
@@ -58,6 +60,13 @@ r.add("GET", "/api/staff/loans/active", listActiveLoans(JWT_SECRET));
 r.add("GET", "/api/staff/reservations", listReservations(JWT_SECRET));
 r.add("POST", "/api/staff/reservations", createReservation(JWT_SECRET));
 r.add("POST", "/api/staff/rooms", createRoom(JWT_SECRET));
+
+// student reservations
+r.add("POST", "/api/reservations", createReservationSelf(JWT_SECRET));
+r.add("GET",  "/api/reservations/my", listMyReservations(JWT_SECRET));
+
+// rooms directory (open)
+r.add("GET", "/api/rooms", listRooms());
 
 // server
 const server = http.createServer(async (req, res) => {

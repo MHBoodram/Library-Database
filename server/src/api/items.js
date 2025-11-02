@@ -80,6 +80,25 @@ export const listItems = () => async (req, res) => {
   }
 };
 
+// List copies for a given item_id for browse/checkout flows
+export const listItemCopies = () => async (_req, res, params) => {
+  const itemId = Number(params.id);
+  if (!itemId) return sendJSON(res, 400, { error: "invalid_item_id" });
+  try {
+    const [rows] = await pool.query(
+      `SELECT c.copy_id, c.barcode, c.status, c.shelf_location, c.acquired_at
+       FROM copy c
+       WHERE c.item_id = ?
+       ORDER BY (c.status = 'available') DESC, c.copy_id ASC
+       LIMIT 500`,
+      [itemId]
+    );
+    return sendJSON(res, 200, rows);
+  } catch (err) {
+    return sendJSON(res, 500, { error: "copies_list_failed", details: err.message });
+  }
+};
+
 export const createItem = (JWT_SECRET) => async (req, res) => {
   const auth = requireAuth(req, res, JWT_SECRET); if (!auth) return;
   const b = await readJSONBody(req);

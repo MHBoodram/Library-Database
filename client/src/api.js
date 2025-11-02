@@ -23,7 +23,7 @@ async function api(path, { method = "GET", body, token, headers, signal } = {}) 
   });
 
   let data = {};
-  try { data = await res.json(); } catch {}
+  try { data = await res.json(); } catch { /* ignore non-JSON responses */ }
   if (!res.ok) {
     const err = new Error(data?.error || res.statusText || "Request failed");
     err.status = res.status;
@@ -74,6 +74,13 @@ export const listReservations = (token, params = {}) => {
 
 export const createRoom = (token, payload) =>
   api("/staff/rooms", { method: "POST", token, body: payload });
+
+// copies per item
+export const getItemCopies = (token, item_id) =>
+  api(`/items/${item_id}/copies`, { token });
+
+// my loans
+export const getMyLoans = (token) => api("/loans/my", { token });
 
 export default api;
 export { api, API_BASE };

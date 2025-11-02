@@ -57,6 +57,53 @@ export const returnLoan = (JWT_SECRET) => async (req, res) => {
   return sendJSON(res, 200, { ok:true });
 };
 
+// List loans for the current authenticated user (student or staff viewing their own)
+export const listMyLoans = (JWT_SECRET) => async (req, res) => {
+  const auth = requireAuth(req, res, JWT_SECRET); if (!auth) return;
+  const userId = Number(auth.uid || auth.user_id || auth.userId || 0);
+  if (!userId) return sendJSON(res, 400, { error: "invalid_user" });
+
+  try {
+    const sql = `
+      SELECT
+        l.loan_id,
+        l.user_id,
+        l.copy_id,
+        l.checkout_date,
+        l.due_date,
+        l.status,
+        i.title AS item_title,
+        c.barcode AS copy_barcode,
+        COALESCE(l.daily_fine_rate_snapshot, fp.daily_rate) AS daily_rate,
+        COALESCE(l.grace_days_snapshot, fp.grace_days) AS grace_days,
+        COALESCE(l.max_fine_snapshot, fp.max_fine) AS max_fine,
+        CASE
+          WHEN d.item_id IS NOT NULL THEN 'device'
+          WHEN m.item_id IS NOT NULL THEN LOWER(m.media_type)
+          ELSE 'book'
+        END AS media_type
+      FROM loan l
+      JOIN copy c ON c.copy_id = l.copy_id
+      JOIN item i ON i.item_id = c.item_id
+      LEFT JOIN device d ON d.item_id = i.item_id
+      LEFT JOIN media m ON m.item_id = i.item_id
+      LEFT JOIN fine_policy fp ON fp.media_type = (
+          CASE WHEN d.item_id IS NOT NULL THEN 'device'
+               WHEN m.item_id IS NOT NULL THEN LOWER(m.media_type)
+               ELSE 'book' END
+        ) AND fp.user_category = (SELECT CASE WHEN EXISTS(SELECT 1 FROM account a WHERE a.user_id = l.user_id AND a.role = 'faculty') THEN 'faculty' ELSE 'student' END)
+      WHERE l.user_id = ?
+      ORDER BY l.status ASC, l.due_date ASC, l.loan_id DESC
+      LIMIT 500
+    `;
+    const [rows] = await pool.query(sql, [userId]);
+    return sendJSON(res, 200, { rows });
+  } catch (err) {
+    console.error("Failed to list my loans:", err.message);
+    return sendJSON(res, 500, { error: "my_loans_query_failed" });
+  }
+};
+
 async function performCheckout({ user_id, copy_id, barcode, employee_id }) {
   const conn = await pool.getConnection();
   try {

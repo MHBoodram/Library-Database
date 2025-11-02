@@ -5,22 +5,40 @@ export const createCopy = (JWT_SECRET) => async (req, res) => {
   const auth = requireAuth(req, res, JWT_SECRET); if (!auth) return;
   const b = await readJSONBody(req);
   const item_id = Number(b.item_id);
-  const barcode = (b.barcode||"").trim();
-  if (!item_id || !barcode) return sendJSON(res, 400, { error: "invalid_payload" });
+  let barcode = (b.barcode||"").trim();
+  if (!item_id) return sendJSON(res, 400, { error: "invalid_payload", message: "item_id is required" });
+
+  // If barcode not provided, auto-generate a unique one to reduce friction
+  const generateBarcode = () => {
+    const ts = Date.now().toString(36).toUpperCase();
+    const rand = Math.floor(100 + Math.random()*900);
+    return `BC-${ts}-${rand}`;
+  };
+  if (!barcode) barcode = generateBarcode();
 
   try {
-    const [r] = await pool.execute(
-      "INSERT INTO copy(item_id, barcode, status, shelf_location, acquired_at) VALUES(?,?,?,?,CURDATE())",
-      [item_id, barcode, b.status||'available', b.shelf_location||null]
-    );
-    return sendJSON(res, 201, { copy_id: r.insertId });
-  } catch (err) {
-    if (err && err.code === "ER_DUP_ENTRY") {
-      return sendJSON(res, 409, {
-        error: "Barcode already in use",
-        code: "barcode_in_use",
-      });
+    let attempts = 0;
+    while (true) {
+      try {
+        const [r] = await pool.execute(
+          "INSERT INTO copy(item_id, barcode, status, shelf_location, acquired_at) VALUES(?,?,?,?,CURDATE())",
+          [item_id, barcode, b.status||'available', (b.shelf_location||'').trim() || null]
+        );
+        return sendJSON(res, 201, { copy_id: r.insertId, barcode });
+      } catch (err) {
+        if (err && err.code === "ER_DUP_ENTRY") {
+          // regenerate a barcode and retry a couple of times
+          attempts += 1;
+          if (attempts >= 3 || (b.barcode||"").trim()) {
+            return sendJSON(res, 409, { error: "barcode_in_use", message: "Barcode already in use." });
+          }
+          barcode = generateBarcode();
+          continue;
+        }
+        throw err;
+      }
     }
+  } catch (err) {
     console.error("Create copy failed:", err?.message || err);
     return sendJSON(res, 500, { error: "copy_create_failed" });
   }

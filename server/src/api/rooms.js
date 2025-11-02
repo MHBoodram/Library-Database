@@ -28,3 +28,16 @@ export const createRoom = (JWT_SECRET) => async (req, res) => {
     return sendJSON(res, 500, { error: "room_create_failed", details: err.message });
   }
 };
+
+// Public list of rooms for selection (auth can be added later if needed)
+export const listRooms = () => async (_req, res) => {
+  try {
+    const [rows] = await pool.query(
+      "SELECT room_id, room_number, capacity, features FROM room ORDER BY room_number ASC LIMIT 500"
+    );
+    return sendJSON(res, 200, rows);
+  } catch (err) {
+    console.error("List rooms failed:", err);
+    return sendJSON(res, 500, { error: "rooms_fetch_failed" });
+  }
+};

@@ -1,4 +1,4 @@
-import { sendJSON, readJSONBody, requireRole } from "../lib/http.js";
+import { sendJSON, readJSONBody, requireRole, requireAuth } from "../lib/http.js";
 import { pool } from "../lib/db.js";
 
 function normalizeDateInput(value) {
@@ -26,6 +26,19 @@ export const createReservation = (JWT_SECRET) => async (req, res) => {
   }
 
   try {
+    // Server-side overlap prevention in case DB trigger isn't installed
+    const [conflicts] = await pool.query(
+      `SELECT COUNT(*) AS cnt
+       FROM reservation r
+       WHERE r.room_id = ?
+         AND r.status = 'active'
+         AND NOT (r.end_time <= ? OR r.start_time >= ?)`,
+      [room_id, toMySQLDateTime(start), toMySQLDateTime(end)]
+    );
+    if (Number(conflicts[0]?.cnt || 0) > 0) {
+      return sendJSON(res, 409, { error: "reservation_conflict", message: "Room already booked for that timeslot." });
+    }
+
     const [result] = await pool.execute(
       `INSERT INTO reservation (user_id, room_id, employee_id, start_time, end_time, status)
        VALUES (?, ?, ?, ?, ?, 'active')`,
@@ -77,3 +90,60 @@ function toMySQLDateTime(date) {
   const pad = (n) => String(n).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
+
+// Student self-service: create a reservation for the authenticated user
+export const createReservationSelf = (JWT_SECRET) => async (req, res) => {
+  const auth = requireAuth(req, res, JWT_SECRET); if (!auth) return;
+  const body = await readJSONBody(req);
+  const user_id = Number(auth.uid || auth.user_id);
+  const room_id = Number(body.room_id);
+  const start = normalizeDateInput(body.start_time);
+  const end = normalizeDateInput(body.end_time);
+  if (!user_id || !room_id || !start || !end) {
+    return sendJSON(res, 400, { error: "invalid_payload", message: "room_id, start_time, end_time are required." });
+  }
+  if (end <= start) {
+    return sendJSON(res, 400, { error: "invalid_timespan", message: "end_time must be after start_time." });
+  }
+  try {
+    const [conflicts] = await pool.query(
+      `SELECT COUNT(*) AS cnt FROM reservation r
+       WHERE r.room_id = ? AND r.status = 'active'
+         AND NOT (r.end_time <= ? OR r.start_time >= ?)`,
+      [room_id, toMySQLDateTime(start), toMySQLDateTime(end)]
+    );
+    if (Number(conflicts[0]?.cnt || 0) > 0) {
+      return sendJSON(res, 409, { error: "reservation_conflict", message: "Room already booked for that timeslot." });
+    }
+    const [result] = await pool.execute(
+      `INSERT INTO reservation (user_id, room_id, start_time, end_time, status)
+       VALUES (?, ?, ?, ?, 'active')`,
+      [user_id, room_id, toMySQLDateTime(start), toMySQLDateTime(end)]
+    );
+    return sendJSON(res, 201, { reservation_id: result.insertId, ok: true });
+  } catch (err) {
+    console.error("Create self reservation failed:", err);
+    return sendJSON(res, 500, { error: "reservation_failed", details: err.message });
+  }
+};
+
+// Student: list my reservations
+export const listMyReservations = (JWT_SECRET) => async (req, res) => {
+  const auth = requireAuth(req, res, JWT_SECRET); if (!auth) return;
+  const userId = Number(auth.uid || auth.user_id);
+  try {
+    const [rows] = await pool.query(
+      `SELECT r.reservation_id, r.room_id, rm.room_number, r.start_time, r.end_time, r.status
+       FROM reservation r
+       JOIN room rm ON rm.room_id = r.room_id
+       WHERE r.user_id = ?
+       ORDER BY r.start_time DESC
+       LIMIT 200`,
+      [userId]
+    );
+    return sendJSON(res, 200, rows);
+  } catch (err) {
+    console.error("List my reservations failed:", err);
+    return sendJSON(res, 500, { error: "reservations_fetch_failed", details: err.message });
+  }
+};
