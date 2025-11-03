@@ -4,7 +4,7 @@ import { pool } from "../lib/db.js";
 export const checkout = (JWT_SECRET) => async (req, res) => {
   const auth = requireAuth(req, res, JWT_SECRET); if (!auth) return;
   const b = await readJSONBody(req);
-  const user_id = Number(b.user_id || auth.user_id || auth.uid || auth.userId);
+  const user_id = Number(b.user_id || auth.user_id);
   const identifierType = (b.identifier_type || "").toString().trim().toLowerCase();
   const explicitMode = identifierType === "barcode" ? "barcode" : identifierType === "copy_id" ? "copy_id" : null;
   const copyIdInput = Number(b.copy_id);
