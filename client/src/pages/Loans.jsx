@@ -53,8 +53,8 @@ export default function Loans() {
             <thead style={{ background: "#f1f5f9" }}>
               <tr>
                 <Th>Title</Th>
-                <Th>Copy</Th>
                 <Th>Due Date</Th>
+                <Th>Return Date</Th>
                 <Th>Status</Th>
               </tr>
             </thead>
@@ -65,8 +65,8 @@ export default function Loans() {
                 rows.map((r) => (
                   <tr key={r.loan_id} style={{ borderTop: "1px solid #e5e7eb" }}>
                     <Td title={r.item_title}>{r.item_title}</Td>
-                    <Td>{r.copy_barcode ? `#${r.copy_id} (${r.copy_barcode})` : `#${r.copy_id}`}</Td>
                     <Td>{formatDate(r.due_date)}</Td>
+                    <Td>{formatDate(r.return_date)}</Td>
                     <Td style={{ textTransform: "capitalize" }}>{r.status}</Td>
                   </tr>
                 ))

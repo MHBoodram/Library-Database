@@ -334,3 +334,33 @@ function defaultLoanDays(role) {
   if (normalized === "faculty") return 21;
   return 14;
 }
+
+export const fetchUserLoans = (JWT_SECRET) => async (req, res) => {
+  const auth = requireAuth(req, res, JWT_SECRET); if (!auth) return;
+  const userId = Number(auth.uid || auth.user_id || auth.userId || 0);
+  if (!userId) return sendJSON(res, 400, { error: "invalid_user" });
+
+  try {
+    const sql = `
+    SELECT i.title AS item_title , l.due_date, l.return_date, l.status
+    FROM user u
+    INNER JOIN loan l ON l.user_id = u.user_id
+    INNER JOIN copy c ON c.copy_id = l.copy_id
+    INNER JOIN item i ON i.item_id = c.item_id
+    WHERE u.user_id = ?
+    ORDER BY
+      CASE
+        WHEN l.return_date IS NULL and l.due_date < NOW() THEN 1
+        WHEN l.return_date IS NULL and l.due_date >= NOW() THEN 2
+        WHEN l.return_date IS NOT NULL THEN 3
+      END,
+      l.due_date ASC
+    LIMIT 50
+    `
+    const [rows] = await pool.query(sql, [userId]);
+    return sendJSON(res, 200, { rows });
+    }catch (err) {
+      console.error("Failed to list user loans:", err.message);
+      return sendJSON(res, 500, { error: "user_loans_query_failed" });
+  }
+};

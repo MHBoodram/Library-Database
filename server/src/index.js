@@ -7,7 +7,8 @@ import { router } from "./lib/router.js";
 import { register, login } from "./api/auth.js";
 import { createItem, updateItem, deleteItem, listItems, listItemCopies } from "./api/items.js";
 import { createCopy, updateCopy, deleteCopy } from "./api/copies.js";
-import { checkout, returnLoan, listMyLoans } from "./api/loans.js";
+//import { checkout, returnLoan, listMyLoans } from "./api/loans.js";
+import { checkout, returnLoan, fetchUserLoans } from "./api/loans.js";
 import { placeHold, cancelHold } from "./api/holds.js";
 import { overdue, balances, topItems } from "./api/reports.js";
 import { listFines, listActiveLoans } from "./api/staff.js";
@@ -43,7 +44,7 @@ r.add("DELETE", "/api/copies/:id", deleteCopy(JWT_SECRET));
 // loans 
 r.add("POST", "/api/loans/checkout", checkout(JWT_SECRET));
 r.add("POST", "/api/loans/return",   returnLoan(JWT_SECRET));
-r.add("GET",  "/api/loans/my",      listMyLoans(JWT_SECRET));
+r.add("GET",  "/api/loans/my",      fetchUserLoans(JWT_SECRET));
 
 // holds
 r.add("POST",   "/api/holds/place",  placeHold(JWT_SECRET));
