@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
+import "./EmployeeHome.css";
 import { formatDate,formatDateTime } from "../utils";
 
 const API_BASE = import.meta.env.VITE_API_BASE?.replace(/\/$/, "") || ""; // e.g., http://localhost:3000/api
@@ -16,65 +17,137 @@ const STATUS_OPTIONS = [
 
 export default function EmployeeDashboard() {
   const { useApi, user, logout } = useAuth();
-  // Memoize the API function so re-renders don't trigger ref changes
-  const apiWithAuth = useMemo(() => useApi(), [useApi]);
+  // obtain the api helper from context
+  const apiWithAuth = useApi();
   const [tab, setTab] = useState("fines"); // "fines" | "checkout" | "activeLoans" | "reservations" | "addItem"
   const navigate = useNavigate();
+  const [counts, setCounts] = useState({ fines: 0, activeLoans: 0, reservations: 0 });
+  const [countsLoading, setCountsLoading] = useState(false);
+  const [countsLoaded, setCountsLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!apiWithAuth || countsLoaded) return;
+    
+    let alive = true;
+    async function loadCounts() {
+      setCountsLoading(true);
+      try {
+        const [finesRes, loansRes, resvRes] = await Promise.all([
+          apiWithAuth('staff/fines?&pageSize=1000'),
+          apiWithAuth('staff/loans/active?&pageSize=1000'),
+          apiWithAuth('staff/reservations?&pageSize=1000'),
+        ]);
+        if (!alive) return;
+        const finesList = Array.isArray(finesRes?.rows) ? finesRes.rows : Array.isArray(finesRes) ? finesRes : [];
+        const loansList = Array.isArray(loansRes?.rows) ? loansRes.rows : Array.isArray(loansRes) ? loansRes : [];
+        const resvList = Array.isArray(resvRes?.rows) ? resvRes.rows : Array.isArray(resvRes) ? resvRes : [];
+        setCounts({ fines: finesList.length, activeLoans: loansList.length, reservations: resvList.length });
+        setCountsLoaded(true);
+      } catch (err) {
+        if (typeof console !== 'undefined') console.debug(err);
+      } finally {
+        if (alive) setCountsLoading(false);
+      }
+    }
+    loadCounts();
+    return () => { alive = false; };
+  }, [apiWithAuth, countsLoaded]);
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900">
+    <div style={{ minHeight: '100vh', background: '#f9fafb', paddingTop: 'var(--nav-height, 60px)' }}>
       <NavBar />
-      <header className="border-b bg-white">
-        <div className="mx-auto max-w-6xl px-4 py-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center justify-between gap-4">
-            <h1 className="text-2xl font-semibold tracking-tight">Employee Dashboard</h1>
+      <header className="employee-dashboard-header">
+        <div className="header-inner" style={{ maxWidth: 1200, margin: '0 auto', padding: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+            <h1 style={{ fontSize: '1.5rem', fontWeight: 600, margin: 0 }}>Employee Dashboard</h1>
+            <div className="eh-widgets">
+              <button
+                type="button"
+                onClick={() => setTab('fines')}
+                aria-label="View fines"
+              >
+                <span className="emoji">💸</span>
+                <div>
+                  <div className="count-label">Fines</div>
+                  <div className="count-num">{countsLoading ? '…' : counts.fines}</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setTab('activeLoans')}
+                aria-label="View active loans"
+              >
+                <span className="emoji">📚</span>
+                <div>
+                  <div className="count-label">Active Loans</div>
+                  <div className="count-num">{countsLoading ? '…' : counts.activeLoans}</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setTab('reservations')}
+                aria-label="View reservations"
+              >
+                <span className="emoji">🪑</span>
+                <div>
+                  <div className="count-label">Reservations</div>
+                  <div className="count-num">{countsLoading ? '…' : counts.reservations}</div>
+                </div>
+              </button>
+            </div>
           </div>
-          <nav className="flex flex-wrap gap-2">
+          <nav className="employee-tabs">
             <button
-              className={`px-3 py-2 rounded-md text-sm font-medium ${
-                tab === "fines" ? "bg-gray-900 text-white" : "bg-gray-200 hover:bg-gray-300"
-              }`}
+              className={`tab-btn ${tab === "fines" ? "active" : ""}`}
               onClick={() => setTab("fines")}
             >
               Check Fines
             </button>
             <button
-              className={`px-3 py-2 rounded-md text-sm font-medium ${
-                tab === "checkout" ? "bg-gray-900 text-white" : "bg-gray-200 hover:bg-gray-300"
-              }`}
+              className={`tab-btn ${tab === "checkout" ? "active" : ""}`}
               onClick={() => setTab("checkout")}
             >
               Checkout Loan
             </button>
             <button
-              className={`px-3 py-2 rounded-md text-sm font-medium ${
-                tab === "activeLoans" ? "bg-gray-900 text-white" : "bg-gray-200 hover:bg-gray-300"
-              }`}
+              className={`tab-btn ${tab === "activeLoans" ? "active" : ""}`}
               onClick={() => setTab("activeLoans")}
             >
               Active Loans
             </button>
             <button
-              className={`px-3 py-2 rounded-md text-sm font-medium ${
-                tab === "reservations" ? "bg-gray-900 text-white" : "bg-gray-200 hover:bg-gray-300"
-              }`}
+              className={`tab-btn ${tab === "reservations" ? "active" : ""}`}
               onClick={() => setTab("reservations")}
             >
               Room Reservations
             </button>
             <button
-              className={`px-3 py-2 rounded-md text-sm font-medium ${
-                tab === "addItem" ? "bg-gray-900 text-white" : "bg-gray-200 hover:bg-gray-300"
-              }`}
+              className={`tab-btn ${tab === "addItem" ? "active" : ""}`}
               onClick={() => setTab("addItem")}
             >
               Add Item
+            </button>
+            <button
+              type="button"
+              className="eh-logout"
+              onClick={() => {
+                try {
+                  logout?.();
+                } catch (e) {
+                  console.debug && console.debug('logout error', e);
+                }
+                navigate('/login');
+              }}
+            >
+              Logout
             </button>
           </nav>
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-6">
+      <main style={{ maxWidth: 1200, margin: '0 auto', padding: '1.5rem' }}>
         {tab === "fines" && <FinesPanel api={apiWithAuth} />}
         {tab === "checkout" && <CheckoutPanel api={apiWithAuth} staffUser={user} />}
         {tab === "activeLoans" && <ActiveLoansPanel api={apiWithAuth} />}
@@ -505,22 +578,8 @@ function CheckoutPanel({ api, staffUser }) {
         >
           {submitting ? "Processing…" : "Checkout"}
         </button>
-
-        <p className="text-xs text-gray-500">
-          Loan limit enforcement is powered by the <code>loan_limit</code> trigger. If MySQL signals the custom error,
-          the API returns <code>loan_limit_exceeded</code> and we surface it here.
-        </p>
       </form>
 
-      <div className="rounded-xl border bg-white p-4 shadow-sm space-y-3 text-sm text-gray-700">
-        <h3 className="font-medium">Tip</h3>
-        <p>
-          Leave the employee field blank to let the API capture your staff ID automatically ({staffUser?.employee_id ?? "N/A"}).
-        </p>
-        <p>
-          Patron IDs correspond to <code>user.user_id</code>. Use the toggle to switch between entering a <code>copy.copy_id</code> or the copy’s barcode.
-        </p>
-      </div>
     </section>
   );
 }
@@ -588,7 +647,9 @@ async function safeError(res) {
   try {
     const data = await res.json();
     return data?.error || data?.message || "";
-  } catch (_) {
+  } catch (e) {
+    // best-effort: log then return empty message
+    if (typeof console !== "undefined" && console.debug) console.debug('safeError parse error', e);
     return "";
   }
 }
