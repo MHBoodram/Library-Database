@@ -59,7 +59,7 @@ export default function EmployeeDashboard() {
       <header className="employee-dashboard-header">
         <div className="header-inner" style={{ maxWidth: 1200, margin: '0 auto', padding: '1rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-            <h1 style={{ fontSize: '1.5rem', fontWeight: 600, margin: 0 }}>Employee Dashboard</h1>
+            <h1 style={{ fontSize: '1.5rem', fontWeight: 600, margin: 0 }}>Staff Dashboard</h1>
             <div className="eh-widgets">
               <button
                 type="button"
