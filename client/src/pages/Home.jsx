@@ -1,57 +1,194 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import NavBar from '../components/NavBar';
 import './Home.css';
 
-// Featured books data with placeholder covers
+// Featured books data with placeholder covers, descriptions, and reviews
 const featuredBooks = [
   {
     id: 1,
     title: "To Kill a Mockingbird",
     author: "Harper Lee",
     cover: "https://images.penguinrandomhouse.com/cover/9780061120084",
-    genre: "Classic Literature"
+    genre: "Classic Literature",
+    description: "A gripping tale of racial injustice and childhood innocence in the American South. Scout Finch narrates her father's courageous defense of a Black man falsely accused of assault.",
+    isbn: "9780061120084",
+    available: 5,
+    total: 8
   },
   {
     id: 2,
     title: "1984",
     author: "George Orwell",
     cover: "https://images.penguinrandomhouse.com/cover/9780452284234",
-    genre: "Dystopian Fiction"
+    genre: "Dystopian Fiction",
+    description: "George Orwell's chilling prophecy about the future. In a totalitarian regime where Big Brother watches everything, Winston Smith struggles to maintain his humanity and independent thought.",
+    isbn: "9780452284234",
+    available: 3,
+    total: 6
   },
   {
     id: 3,
     title: "The Great Gatsby",
     author: "F. Scott Fitzgerald",
     cover: "https://images.penguinrandomhouse.com/cover/9780743273565",
-    genre: "Classic Literature"
+    genre: "Classic Literature",
+    description: "A portrait of the Jazz Age in all its decadence and excess. Jay Gatsby's obsessive quest for his lost love Daisy Buchanan reveals the corruption beneath the American Dream.",
+    isbn: "9780743273565",
+    available: 4,
+    total: 7
   },
   {
     id: 4,
     title: "Pride and Prejudice",
     author: "Jane Austen",
     cover: "https://images.penguinrandomhouse.com/cover/9780141439518",
-    genre: "Romance"
+    genre: "Romance",
+    description: "The classic romance that explores love, class, and personal growth in Regency England. Elizabeth Bennet must overcome her pride while Mr. Darcy confronts his prejudice.",
+    isbn: "9780141439518",
+    available: 6,
+    total: 10
   },
   {
     id: 5,
     title: "The Catcher in the Rye",
     author: "J.D. Salinger",
     cover: "https://images.penguinrandomhouse.com/cover/9780316769174",
-    genre: "Coming of Age"
+    genre: "Coming of Age",
+    description: "Holden Caulfield's odyssey through New York City after being expelled from prep school. A raw and honest portrayal of teenage angst, alienation, and the search for authenticity.",
+    isbn: "9780316769174",
+    available: 2,
+    total: 5
   },
   {
     id: 6,
     title: "Animal Farm",
     author: "George Orwell",
     cover: "https://images.penguinrandomhouse.com/cover/9780452284241",
-    genre: "Political Satire"
+    genre: "Political Satire",
+    description: "A brilliant satire of totalitarianism where farm animals rebel against their human farmer. This allegorical novella reveals how power corrupts and revolutionaries become oppressors.",
+    isbn: "9780452284241",
+    available: 7,
+    total: 9
+  },
+  {
+    id: 7,
+    title: "The Hobbit",
+    author: "J.R.R. Tolkien",
+    cover: "https://images.penguinrandomhouse.com/cover/9780547928227",
+    genre: "Fantasy",
+    description: "Bilbo Baggins' unexpected journey from his comfortable hobbit-hole to the Lonely Mountain. A classic adventure tale filled with dragons, dwarves, and the discovery of courage.",
+    isbn: "9780547928227",
+    available: 8,
+    total: 12
+  },
+  {
+    id: 8,
+    title: "Harry Potter and the Sorcerer's Stone",
+    author: "J.K. Rowling",
+    cover: "https://images.penguinrandomhouse.com/cover/9780590353427",
+    genre: "Fantasy",
+    description: "The Boy Who Lived begins his magical education at Hogwarts. Harry Potter discovers his true heritage and faces the dark wizard who killed his parents in this beloved fantasy adventure.",
+    isbn: "9780590353427",
+    available: 10,
+    total: 15
+  },
+  {
+    id: 9,
+    title: "The Lord of the Rings",
+    author: "J.R.R. Tolkien",
+    cover: "https://images.penguinrandomhouse.com/cover/9780544003415",
+    genre: "Fantasy",
+    description: "The epic quest to destroy the One Ring and defeat the Dark Lord Sauron. Frodo and the Fellowship journey through Middle-earth in this masterwork of fantasy literature.",
+    isbn: "9780544003415",
+    available: 4,
+    total: 8
+  },
+  {
+    id: 10,
+    title: "Brave New World",
+    author: "Aldous Huxley",
+    cover: "https://images.penguinrandomhouse.com/cover/9780060850524",
+    genre: "Dystopian Fiction",
+    description: "A disturbing vision of a future where humans are genetically engineered and conditioned for a rigid caste system. Huxley explores the cost of stability and the loss of individuality.",
+    isbn: "9780060850524",
+    available: 3,
+    total: 6
   }
 ];
 
 export default function Home() {
-  const { user } = useAuth();
+  const { user, token, useApi } = useAuth();
+  const apiWithAuth = useApi();
   const navigate = useNavigate();
+  const [selectedBook, setSelectedBook] = useState(null);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const handleBookClick = (book) => {
+    setSelectedBook(book);
+  };
+
+  const closeModal = () => {
+    setSelectedBook(null);
+  };
+
+  const handleCheckout = async () => {
+    if (!user) {
+      alert('Please sign in to checkout books.');
+      navigate('/login');
+      return;
+    }
+
+    if (!selectedBook) return;
+
+    setCheckoutLoading(true);
+    try {
+      // Simulate finding a copy
+      const params = new URLSearchParams({ q: selectedBook.title });
+      const items = await apiWithAuth(`items?${params.toString()}`);
+      const item = Array.isArray(items) ? items[0] : null;
+
+      if (!item) {
+        alert('Book not found in catalog. Please use the Browse Collection page.');
+        return;
+      }
+
+      // Get available copies
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/items/${item.item_id}/copies`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const copies = await response.json();
+      const availableCopy = copies.find(c => c.status === 'available');
+
+      if (!availableCopy) {
+        alert('No copies available right now. Please try again later.');
+        return;
+      }
+
+      // Checkout the copy
+      await apiWithAuth('loans/checkout', {
+        method: 'POST',
+        body: { copy_id: availableCopy.copy_id }
+      });
+
+      alert(`Successfully checked out "${selectedBook.title}"! View it in My Loans.`);
+      closeModal();
+    } catch (err) {
+      const msg = err?.data?.message || err?.message || 'Checkout failed';
+      alert(msg);
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
+  const handleSearch = (e) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      navigate(`/books?q=${encodeURIComponent(searchQuery.trim())}`);
+    }
+  };
 
   return (
     <div className="home-page">
@@ -68,6 +205,21 @@ export default function Home() {
             Explore thousands of books, journals, and digital resources. 
             Your gateway to knowledge and imagination.
           </p>
+          
+          {/* Search Bar */}
+          <form onSubmit={handleSearch} className="hero-search">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search for books, authors, subjects..."
+              className="search-input"
+            />
+            <button type="submit" className="search-button">
+              🔍 Search
+            </button>
+          </form>
+
           <div className="hero-buttons">
             <button className="btn-primary" onClick={() => navigate('/books')}>
               Browse Collection
@@ -93,7 +245,12 @@ export default function Home() {
           
           <div className="books-grid">
             {featuredBooks.map((book) => (
-              <div key={book.id} className="book-card">
+              <div 
+                key={book.id} 
+                className="book-card"
+                onClick={() => handleBookClick(book)}
+                style={{ cursor: 'pointer' }}
+              >
                 <div className="book-cover-wrapper">
                   <img 
                     src={book.cover} 
@@ -161,29 +318,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Stats Section */}
-      <div className="stats-section">
-        <div className="container">
-          <div className="stats-grid">
-            <div className="stat-item">
-              <div className="stat-number">10,000+</div>
-              <div className="stat-label">Books Available</div>
-            </div>
-            <div className="stat-item">
-              <div className="stat-number">500+</div>
-              <div className="stat-label">Active Members</div>
-            </div>
-            <div className="stat-item">
-              <div className="stat-number">24/7</div>
-              <div className="stat-label">Online Access</div>
-            </div>
-            <div className="stat-item">
-              <div className="stat-number">15+</div>
-              <div className="stat-label">Study Rooms</div>
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* Footer */}
       <footer className="footer">
@@ -197,9 +331,9 @@ export default function Home() {
             </div>
             <div className="footer-section">
               <h4>Contact Us</h4>
-              <p>Email: library@school.edu</p>
-              <p>Phone: (555) 123-4567</p>
-              <p>Location: Main Campus, Building A</p>
+              <p>Email: libraryTeam2@school.edu</p>
+              <p>Phone: (555) 555-5555</p>
+              <p>Location: Main Campus, Building SEC 104</p>
             </div>
             <div className="footer-section">
               <h4>Quick Links</h4>
@@ -209,10 +343,76 @@ export default function Home() {
             </div>
           </div>
           <div className="footer-bottom">
-            <p>© 2025 School Library. All rights reserved.</p>
+            <p>© 2025 School Library Team2. All rights reserved.</p>
           </div>
         </div>
       </footer>
+
+      {/* Book Detail Modal */}
+      {selectedBook && (
+        <div className="modal-overlay" onClick={closeModal}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close" onClick={closeModal}>×</button>
+            
+            <div className="modal-body">
+              <div className="modal-left">
+                <img 
+                  src={selectedBook.cover} 
+                  alt={selectedBook.title}
+                  className="modal-book-cover"
+                  onError={(e) => {
+                    e.target.src = 'https://via.placeholder.com/300x450/4a5568/ffffff?text=' + encodeURIComponent(selectedBook.title);
+                  }}
+                />
+                <div className="availability-box">
+                  <h4>Availability</h4>
+                  <div className="availability-status">
+                    <span className={selectedBook.available > 0 ? 'status-available' : 'status-unavailable'}>
+                      {selectedBook.available > 0 ? '✓ Available' : '✗ Unavailable'}
+                    </span>
+                    <p>{selectedBook.available} of {selectedBook.total} copies available</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="modal-right">
+                <h2 className="modal-title">{selectedBook.title}</h2>
+                <p className="modal-author">by {selectedBook.author}</p>
+                <span className="modal-genre">{selectedBook.genre}</span>
+                
+                <div className="modal-section">
+                  <h3>Description</h3>
+                  <p className="book-description">{selectedBook.description}</p>
+                </div>
+
+                <div className="modal-section">
+                  <h3>Details</h3>
+                  <p><strong>ISBN:</strong> {selectedBook.isbn}</p>
+                </div>
+
+                <div className="modal-actions">
+                  {selectedBook.available > 0 ? (
+                    <button 
+                      className="btn-checkout" 
+                      onClick={handleCheckout}
+                      disabled={checkoutLoading}
+                    >
+                      {checkoutLoading ? 'Processing...' : 'Check Out'}
+                    </button>
+                  ) : (
+                    <button className="btn-checkout" disabled>
+                      Currently Unavailable
+                    </button>
+                  )}
+                  <button className="btn-browse" onClick={() => navigate('/books')}>
+                    Browse All Copies
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
