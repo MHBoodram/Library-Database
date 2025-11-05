@@ -129,20 +129,6 @@ export default function EmployeeDashboard() {
             >
               Add Item
             </button>
-            <button
-              type="button"
-              className="eh-logout"
-              onClick={() => {
-                try {
-                  logout?.();
-                } catch (e) {
-                  console.debug && console.debug('logout error', e);
-                }
-                navigate('/login');
-              }}
-            >
-              Logout
-            </button>
           </nav>
         </div>
       </header>
