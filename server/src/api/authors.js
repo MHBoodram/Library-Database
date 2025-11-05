@@ -74,3 +74,69 @@ export function createAuthor(JWT_SECRET) {
     }
   };
 }
+
+  /**
+   * Get all authors for a specific item
+   * GET /api/items/:id/authors
+   */
+  export function getItemAuthors() {
+    return async (req, res, params) => {
+      try {
+        const itemId = Number(params.id);
+        if (!itemId || isNaN(itemId)) {
+          return sendJSON(res, 400, { error: "invalid_item_id" });
+        }
+
+        // Query authors linked to this item
+        const [authors] = await pool.query(
+          `SELECT a.author_id, a.full_name as author_name
+           FROM author a
+           JOIN item_author ia ON a.author_id = ia.author_id
+           WHERE ia.item_id = ?
+           ORDER BY a.full_name ASC`,
+          [itemId]
+        );
+
+        return sendJSON(res, 200, authors);
+      } catch (error) {
+        console.error("Error fetching item authors:", error);
+        return sendJSON(res, 500, { error: "server_error" });
+      }
+    };
+  }
+
+  /**
+   * Delete an author link from an item
+   * DELETE /api/items/:id/authors/:author_id
+   */
+  export function deleteItemAuthor(JWT_SECRET) {
+    return async (req, res, params) => {
+      try {
+        // Require staff role
+        const auth = requireRole(req, res, JWT_SECRET, "staff");
+        if (!auth) return;
+
+        const itemId = Number(params.id);
+        const authorId = Number(params.author_id);
+
+        if (!itemId || isNaN(itemId) || !authorId || isNaN(authorId)) {
+          return sendJSON(res, 400, { error: "invalid_ids" });
+        }
+
+        // Delete the link from item_author table
+        const [result] = await pool.query(
+          "DELETE FROM item_author WHERE item_id = ? AND author_id = ?",
+          [itemId, authorId]
+        );
+
+        if (result.affectedRows === 0) {
+          return sendJSON(res, 404, { error: "link_not_found" });
+        }
+
+        return sendJSON(res, 200, { ok: true, message: "Author link deleted successfully" });
+      } catch (error) {
+        console.error("Error deleting item author:", error);
+        return sendJSON(res, 500, { error: "server_error" });
+      }
+    };
+  }

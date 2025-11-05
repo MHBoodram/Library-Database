@@ -128,6 +128,12 @@ export default function EmployeeDashboard() {
               Add Item
             </button>
             <button
+              className={`tab-btn ${tab === "editItem" ? "active" : ""}`}
+              onClick={() => setTab("editItem")}
+            >
+              Edit Item
+            </button>
+            <button
               className={`tab-btn ${tab === "removeItem" ? "active" : ""}`}
               onClick={() => setTab("removeItem")}
             >
@@ -143,6 +149,7 @@ export default function EmployeeDashboard() {
         {tab === "activeLoans" && <ActiveLoansPanel api={apiWithAuth} />}
         {tab === "reservations" && <ReservationsPanel api={apiWithAuth} staffUser={user} />}
         {tab === "addItem" && <AddItemPanel api={apiWithAuth} />}
+        {tab === "editItem" && <EditItemPanel api={apiWithAuth} />}
         {tab === "removeItem" && <RemoveItemPanel api={apiWithAuth} />}
       </main>
     </div>
@@ -706,13 +713,21 @@ function AddItemPanel({ api }) {
         throw new Error("Title is required");
       }
 
+      // Validate authors for books
+      const itemType = form.item_type;
+      if (itemType === "book") {
+        const authorNames = authors.map(a => a.name.trim()).filter(Boolean);
+        if (authorNames.length === 0) {
+          throw new Error("At least one author is required for books");
+        }
+      }
+
       const itemPayload = {
         title,
         subject: form.subject.trim() || undefined,
         classification: form.classification.trim() || undefined,
       };
 
-      const itemType = form.item_type;
       if (itemType && itemType !== "general") {
         itemPayload.item_type = itemType;
         if (itemType === "book") {
@@ -868,34 +883,79 @@ function AddItemPanel({ api }) {
           </Field>
 
           {form.item_type === "book" && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <Field label="ISBN">
-                <input
-                  className="w-full rounded-md border px-3 py-2"
-                  value={form.isbn}
-                  onChange={(e) => update("isbn", e.target.value)}
-                  placeholder="e.g., 9780142407332"
-                />
-              </Field>
-              <Field label="Publisher">
-                <input
-                  className="w-full rounded-md border px-3 py-2"
-                  value={form.publisher}
-                  onChange={(e) => update("publisher", e.target.value)}
-                  placeholder="e.g., Penguin"
-                />
-              </Field>
-              <Field label="Publication Year">
-                <input
-                  type="number"
-                  min="0"
-                  className="w-full rounded-md border px-3 py-2"
-                  value={form.publication_year}
-                  onChange={(e) => update("publication_year", e.target.value)}
-                  placeholder="e.g., 2006"
-                />
-              </Field>
-            </div>
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <Field label="ISBN">
+                  <input
+                    className="w-full rounded-md border px-3 py-2"
+                    value={form.isbn}
+                    onChange={(e) => update("isbn", e.target.value)}
+                    placeholder="e.g., 9780142407332"
+                  />
+                </Field>
+                <Field label="Publisher">
+                  <input
+                    className="w-full rounded-md border px-3 py-2"
+                    value={form.publisher}
+                    onChange={(e) => update("publisher", e.target.value)}
+                    placeholder="e.g., Penguin"
+                  />
+                </Field>
+                <Field label="Publication Year">
+                  <input
+                    type="number"
+                    min="0"
+                    className="w-full rounded-md border px-3 py-2"
+                    value={form.publication_year}
+                    onChange={(e) => update("publication_year", e.target.value)}
+                    placeholder="e.g., 2006"
+                  />
+                </Field>
+              </div>
+
+              {/* Authors section for books */}
+              <div className="space-y-2 pt-2">
+                <h3 className="text-sm font-semibold text-gray-700">
+                  Authors <span className="text-red-600">*</span>
+                </h3>
+                <p className="text-xs text-gray-500">
+                  At least one author is required for books.
+                </p>
+
+                {authors.map((author, index) => (
+                  <div key={index} className="grid grid-cols-1 md:grid-cols-[1fr,auto] gap-3 items-end">
+                    <Field label={`Author ${authors.length > 1 ? `#${index + 1}` : ""}`}>
+                      <input
+                        className="w-full rounded-md border px-3 py-2"
+                        value={author.name}
+                        onChange={(e) => updateAuthor(index, e.target.value)}
+                        placeholder="e.g., F. Scott Fitzgerald"
+                        required={form.item_type === "book"}
+                      />
+                    </Field>
+                    <div className="pb-2">
+                      {authors.length > 1 && (
+                        <button
+                          type="button"
+                          className="mt-6 text-xs text-red-600 hover:underline"
+                          onClick={() => removeAuthorRow(index)}
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                <button
+                  type="button"
+                  className="text-xs font-medium text-gray-700 hover:underline"
+                  onClick={addAuthorRow}
+                >
+                  + Add another author
+                </button>
+              </div>
+            </>
           )}
 
           {form.item_type === "device" && (
@@ -1008,45 +1068,6 @@ function AddItemPanel({ api }) {
               onClick={addCopyRow}
             >
               + Add another copy
-            </button>
-          </div>
-
-          <div className="space-y-2">
-            <h3 className="text-sm font-semibold text-gray-700">Authors (Optional)</h3>
-            <p className="text-xs text-gray-500">
-              Add one or more authors for this item. Leave blank if not applicable.
-            </p>
-
-            {authors.map((author, index) => (
-              <div key={index} className="grid grid-cols-1 md:grid-cols-[1fr,auto] gap-3 items-end">
-                <Field label={`Author ${authors.length > 1 ? `#${index + 1}` : ""}`}>
-                  <input
-                    className="w-full rounded-md border px-3 py-2"
-                    value={author.name}
-                    onChange={(e) => updateAuthor(index, e.target.value)}
-                    placeholder="e.g., F. Scott Fitzgerald"
-                  />
-                </Field>
-                <div className="pb-2">
-                  {authors.length > 1 && (
-                    <button
-                      type="button"
-                      className="mt-6 text-xs text-red-600 hover:underline"
-                      onClick={() => removeAuthorRow(index)}
-                    >
-                      Remove
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-
-            <button
-              type="button"
-              className="text-xs font-medium text-gray-700 hover:underline"
-              onClick={addAuthorRow}
-            >
-              + Add another author
             </button>
           </div>
 
@@ -1378,6 +1399,377 @@ function ReservationsPanel({ api, staffUser }) {
           </table>
         </div>
       </div>
+    </section>
+  );
+}
+
+function EditItemPanel({ api }) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [existingAuthors, setExistingAuthors] = useState([]);
+  const [form, setForm] = useState({
+    title: "",
+    subject: "",
+    classification: "",
+    item_type: "book",
+    isbn: "",
+    publisher: "",
+    publication_year: "",
+  });
+  const [authors, setAuthors] = useState([{ name: "" }]);
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState("");
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(searchQuery), 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Search items
+  useEffect(() => {
+    if (!debouncedQuery.trim()) {
+      setItems([]);
+      return;
+    }
+    (async () => {
+      setLoading(true);
+      try {
+        const data = await api(`items?q=${encodeURIComponent(debouncedQuery)}`);
+        setItems(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error("Search error:", err);
+        setItems([]);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [debouncedQuery, api]);
+
+  async function selectItem(item) {
+    setSelectedItem(item);
+    setForm({
+      title: item.title || "",
+      subject: item.subject || "",
+      classification: item.classification || "",
+      item_type: item.item_type || "book",
+      isbn: item.isbn || "",
+      publisher: item.publisher || "",
+      publication_year: item.publication_year || "",
+    });
+
+    // Fetch existing authors for this item
+    if (item.item_type === "book") {
+      try {
+        const authorsData = await api(`items/${item.item_id}/authors`);
+        if (authorsData && authorsData.length > 0) {
+          setExistingAuthors(authorsData);
+          setAuthors(authorsData.map(a => ({ name: a.author_name || a.full_name })));
+        } else {
+          setExistingAuthors([]);
+          setAuthors([{ name: "" }]);
+        }
+      } catch (err) {
+        console.error("Error fetching authors:", err);
+        setExistingAuthors([]);
+        setAuthors([{ name: "" }]);
+      }
+    } else {
+      setExistingAuthors([]);
+      setAuthors([{ name: "" }]);
+    }
+    setMessage("");
+  }
+
+  function update(field, value) {
+    setForm(prev => ({ ...prev, [field]: value }));
+  }
+
+  function updateAuthor(index, value) {
+    setAuthors(list => list.map((author, i) => (i === index ? { name: value } : author)));
+  }
+
+  function addAuthorRow() {
+    setAuthors(list => [...list, { name: "" }]);
+  }
+
+  function removeAuthorRow(index) {
+    setAuthors(list => (list.length <= 1 ? list : list.filter((_, i) => i !== index)));
+  }
+
+  async function onSubmit(e) {
+    e.preventDefault();
+    if (!selectedItem) return;
+
+    setSubmitting(true);
+    setMessage("");
+
+    try {
+      const title = form.title.trim();
+      if (!title) {
+        throw new Error("Title is required");
+      }
+
+      // Validate authors for books
+      if (form.item_type === "book") {
+        const authorNames = authors.map(a => a.name.trim()).filter(Boolean);
+        if (authorNames.length === 0) {
+          throw new Error("At least one author is required for books");
+        }
+      }
+
+      const itemPayload = {
+        title,
+        subject: form.subject.trim() || undefined,
+        classification: form.classification.trim() || undefined,
+      };
+
+      if (form.item_type === "book") {
+        if (form.isbn.trim()) itemPayload.isbn = form.isbn.trim();
+        if (form.publisher.trim()) itemPayload.publisher = form.publisher.trim();
+        if (form.publication_year) itemPayload.publication_year = Number(form.publication_year);
+      }
+
+      // Update item
+      await api(`items/${selectedItem.item_id}`, {
+        method: "PUT",
+        body: itemPayload,
+      });
+
+      // Update authors if book
+      if (form.item_type === "book") {
+        // Delete existing authors
+        for (const existingAuthor of existingAuthors) {
+          try {
+            await api(`items/${selectedItem.item_id}/authors/${existingAuthor.author_id}`, {
+              method: "DELETE",
+            });
+          } catch (err) {
+            console.error("Error deleting author:", err);
+          }
+        }
+
+        // Add new authors
+        const authorNames = authors.map(a => a.name.trim()).filter(Boolean);
+        for (const authorName of authorNames) {
+          try {
+            await api("authors", {
+              method: "POST",
+              body: { item_id: selectedItem.item_id, author_name: authorName },
+            });
+          } catch (err) {
+            console.error("Error adding author:", err);
+          }
+        }
+      }
+
+      setMessage(`✓ Item "${title}" updated successfully.`);
+      setSelectedItem(null);
+      setSearchQuery("");
+      setItems([]);
+    } catch (err) {
+      const msg = err?.data?.message || err.message || "Failed to update item";
+      setMessage(`Failed: ${msg}`);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <section className="space-y-4">
+      {!selectedItem ? (
+        <div className="rounded-xl border bg-white p-4 shadow-sm">
+          <h2 className="text-lg font-semibold mb-4">Edit Item</h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Search for an item by title, ISBN, or ID to edit its details.
+          </p>
+
+          <input
+            type="text"
+            className="w-full rounded-md border px-3 py-2 mb-4"
+            placeholder="Search by title, ISBN, or ID..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+
+          {loading && <div className="text-sm text-gray-600">Searching...</div>}
+          
+          {!loading && items.length > 0 && (
+            <div className="border rounded-md overflow-hidden">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="text-left p-3">ID</th>
+                    <th className="text-left p-3">Title</th>
+                    <th className="text-left p-3">Type</th>
+                    <th className="text-left p-3">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item) => (
+                    <tr key={item.item_id} className="border-t">
+                      <td className="p-3">#{item.item_id}</td>
+                      <td className="p-3">{item.title}</td>
+                      <td className="p-3 capitalize">{item.item_type || "general"}</td>
+                      <td className="p-3">
+                        <button
+                          onClick={() => selectItem(item)}
+                          className="text-xs px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
+                        >
+                          Edit
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {!loading && debouncedQuery && items.length === 0 && (
+            <div className="text-sm text-gray-600">No items found.</div>
+          )}
+        </div>
+      ) : (
+        <div className="rounded-xl border bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold">Edit Item: {selectedItem.title}</h2>
+            <button
+              onClick={() => {
+                setSelectedItem(null);
+                setSearchQuery("");
+                setMessage("");
+              }}
+              className="text-sm text-gray-600 hover:underline"
+            >
+              ← Back to search
+            </button>
+          </div>
+
+          <form onSubmit={onSubmit} className="space-y-4">
+            <Field label="Title">
+              <input
+                className="w-full rounded-md border px-3 py-2"
+                value={form.title}
+                onChange={(e) => update("title", e.target.value)}
+                required
+              />
+            </Field>
+
+            <Field label="Subject">
+              <input
+                className="w-full rounded-md border px-3 py-2"
+                value={form.subject}
+                onChange={(e) => update("subject", e.target.value)}
+                placeholder="e.g., Literature"
+              />
+            </Field>
+
+            <Field label="Classification / Call Number">
+              <input
+                className="w-full rounded-md border px-3 py-2"
+                value={form.classification}
+                onChange={(e) => update("classification", e.target.value)}
+                placeholder="e.g., 813.52 FIT"
+              />
+            </Field>
+
+            {form.item_type === "book" && (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <Field label="ISBN">
+                    <input
+                      className="w-full rounded-md border px-3 py-2"
+                      value={form.isbn}
+                      onChange={(e) => update("isbn", e.target.value)}
+                      placeholder="e.g., 9780142407332"
+                    />
+                  </Field>
+                  <Field label="Publisher">
+                    <input
+                      className="w-full rounded-md border px-3 py-2"
+                      value={form.publisher}
+                      onChange={(e) => update("publisher", e.target.value)}
+                      placeholder="e.g., Penguin"
+                    />
+                  </Field>
+                  <Field label="Publication Year">
+                    <input
+                      type="number"
+                      min="0"
+                      className="w-full rounded-md border px-3 py-2"
+                      value={form.publication_year}
+                      onChange={(e) => update("publication_year", e.target.value)}
+                      placeholder="e.g., 2006"
+                    />
+                  </Field>
+                </div>
+
+                {/* Authors section for books */}
+                <div className="space-y-2 pt-2">
+                  <h3 className="text-sm font-semibold text-gray-700">
+                    Authors <span className="text-red-600">*</span>
+                  </h3>
+                  <p className="text-xs text-gray-500">
+                    At least one author is required for books.
+                  </p>
+
+                  {authors.map((author, index) => (
+                    <div key={index} className="grid grid-cols-1 md:grid-cols-[1fr,auto] gap-3 items-end">
+                      <Field label={`Author ${authors.length > 1 ? `#${index + 1}` : ""}`}>
+                        <input
+                          className="w-full rounded-md border px-3 py-2"
+                          value={author.name}
+                          onChange={(e) => updateAuthor(index, e.target.value)}
+                          placeholder="e.g., F. Scott Fitzgerald"
+                          required
+                        />
+                      </Field>
+                      <div className="pb-2">
+                        {authors.length > 1 && (
+                          <button
+                            type="button"
+                            className="mt-6 text-xs text-red-600 hover:underline"
+                            onClick={() => removeAuthorRow(index)}
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+
+                  <button
+                    type="button"
+                    className="text-xs font-medium text-gray-700 hover:underline"
+                    onClick={addAuthorRow}
+                  >
+                    + Add another author
+                  </button>
+                </div>
+              </>
+            )}
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="submit"
+                disabled={submitting}
+                className="rounded-md bg-gray-900 text-white px-4 py-2 disabled:opacity-50"
+              >
+                {submitting ? "Saving…" : "Update Item"}
+              </button>
+              {message && (
+                <p className={`text-sm ${message.startsWith("Failed") ? "text-red-600" : "text-green-700"}`}>
+                  {message}
+                </p>
+              )}
+            </div>
+          </form>
+        </div>
+      )}
     </section>
   );
 }

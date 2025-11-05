@@ -14,7 +14,7 @@ import { overdue, balances, topItems } from "./api/reports.js";
 import { listFines, listActiveLoans } from "./api/staff.js";
 import { createReservation, listReservations, createReservationSelf, listMyReservations, cancelReservation, deleteReservation } from "./api/reservations.js";
 import { createRoom, listRooms } from "./api/rooms.js";
-import { createAuthor } from "./api/authors.js";
+import { createAuthor, getItemAuthors, deleteItemAuthor } from "./api/authors.js";
 
 const PORT = Number(process.env.PORT) || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || "devsecret";
@@ -39,6 +39,8 @@ r.add("DELETE", "/api/items/:id", deleteItem(JWT_SECRET));
 
 // authors
 r.add("POST", "/api/authors", createAuthor(JWT_SECRET));
+r.add("GET", "/api/items/:id/authors", getItemAuthors());
+r.add("DELETE", "/api/items/:id/authors/:author_id", deleteItemAuthor(JWT_SECRET));
 
 // copies
 r.add("POST",   "/api/copies",     createCopy(JWT_SECRET));
