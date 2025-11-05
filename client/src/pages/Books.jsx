@@ -107,7 +107,7 @@ export default function Books() {
       <NavBar />
       <h1>Find Books</h1>
       <p style={{ color: "#666", marginBottom: 16 }}>
-        Browse by Title or Author. We never require you to know internal IDs.
+        Browse by Title or Author
       </p>
 
       <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap", marginBottom: 16 }}>
