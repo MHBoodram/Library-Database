@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
 import "./EmployeeHome.css";
@@ -16,11 +15,10 @@ const STATUS_OPTIONS = [
 ];
 
 export default function EmployeeDashboard() {
-  const { useApi, user, logout } = useAuth();
+  const { useApi, user } = useAuth();
   // obtain the api helper from context
   const apiWithAuth = useApi();
-  const [tab, setTab] = useState("fines"); // "fines" | "checkout" | "activeLoans" | "reservations" | "addItem"
-  const navigate = useNavigate();
+  const [tab, setTab] = useState("fines"); // "fines" | "checkout" | "activeLoans" | "reservations" | "addItem" | "removeItem"
   const [counts, setCounts] = useState({ fines: 0, activeLoans: 0, reservations: 0 });
   const [countsLoading, setCountsLoading] = useState(false);
   const [countsLoaded, setCountsLoaded] = useState(false);
@@ -129,6 +127,12 @@ export default function EmployeeDashboard() {
             >
               Add Item
             </button>
+            <button
+              className={`tab-btn ${tab === "removeItem" ? "active" : ""}`}
+              onClick={() => setTab("removeItem")}
+            >
+              Remove Item
+            </button>
           </nav>
         </div>
       </header>
@@ -139,6 +143,7 @@ export default function EmployeeDashboard() {
         {tab === "activeLoans" && <ActiveLoansPanel api={apiWithAuth} />}
         {tab === "reservations" && <ReservationsPanel api={apiWithAuth} staffUser={user} />}
         {tab === "addItem" && <AddItemPanel api={apiWithAuth} />}
+        {tab === "removeItem" && <RemoveItemPanel api={apiWithAuth} />}
       </main>
     </div>
   );
@@ -1230,6 +1235,197 @@ function ReservationsPanel({ api, staffUser }) {
           </table>
         </div>
       </div>
+    </section>
+  );
+}
+
+function RemoveItemPanel({ api }) {
+  const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [deleteStatus, setDeleteStatus] = useState({});
+
+  useEffect(() => {
+    const handle = setTimeout(() => setDebouncedQuery(query.trim()), 300);
+    return () => clearTimeout(handle);
+  }, [query]);
+
+  const searchItems = useCallback(
+    async (signal) => {
+      if (!api || !debouncedQuery) {
+        setItems([]);
+        return;
+      }
+      setLoading(true);
+      setError("");
+      try {
+        const params = new URLSearchParams({ q: debouncedQuery, pageSize: "50" });
+        const data = await api(`items?${params.toString()}`, { signal });
+        const list = Array.isArray(data?.rows) ? data.rows : Array.isArray(data) ? data : [];
+        setItems(list);
+      } catch (err) {
+        if (signal?.aborted) return;
+        setError(err.message || "Failed to search items");
+      } finally {
+        if (!signal?.aborted) setLoading(false);
+      }
+    },
+    [api, debouncedQuery]
+  );
+
+  useEffect(() => {
+    const controller = new AbortController();
+    searchItems(controller.signal);
+    return () => controller.abort();
+  }, [searchItems]);
+
+  async function handleDelete(itemId, title) {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete:\n\n"${title}" (ID: ${itemId})?\n\nThis action cannot be undone and will also delete all copies and related data.`
+    );
+    if (!confirmed) return;
+
+    setDeleteStatus((prev) => ({ ...prev, [itemId]: "deleting" }));
+    try {
+      const result = await api(`items/${itemId}`, { method: "DELETE" });
+      setDeleteStatus((prev) => ({ ...prev, [itemId]: "success" }));
+      setItems((prev) => prev.filter((item) => item.item_id !== itemId));
+      
+      // Show success message
+      const successMsg = result?.message || "Item deleted successfully";
+      alert(`✓ ${successMsg}`);
+      
+      setTimeout(() => {
+        setDeleteStatus((prev) => {
+          const next = { ...prev };
+          delete next[itemId];
+          return next;
+        });
+      }, 2000);
+    } catch (err) {
+      setDeleteStatus((prev) => ({ ...prev, [itemId]: "error" }));
+      
+      // Extract detailed error message
+      const errorCode = err?.data?.error || err?.error;
+      const errorMessage = err?.data?.message || err?.message;
+      
+      let userMessage = "Failed to delete item";
+      if (errorCode === "has_active_loans") {
+        userMessage = `❌ Cannot delete: ${errorMessage}`;
+      } else if (errorCode === "not_found") {
+        userMessage = "❌ Item not found. It may have already been deleted.";
+      } else if (errorMessage) {
+        userMessage = `❌ ${errorMessage}`;
+      } else {
+        userMessage = `❌ Failed to delete item: ${errorCode || "Unknown error"}`;
+      }
+      
+      alert(userMessage);
+      setTimeout(() => {
+        setDeleteStatus((prev) => {
+          const next = { ...prev };
+          delete next[itemId];
+          return next;
+        });
+      }, 3000);
+    }
+  }
+
+  return (
+    <section className="space-y-4">
+      <div className="rounded-xl border bg-white shadow-sm p-5">
+        <h2 className="text-lg font-semibold mb-3">Remove Item</h2>
+        <p className="text-sm text-gray-600 mb-4">
+          Search for items by title, ISBN, or ID. Be careful — deleting an item will permanently remove it and all its copies.
+        </p>
+
+        <div className="mb-4">
+          <label className="block text-xs font-medium text-gray-600 mb-1">Search Items</label>
+          <input
+            className="w-full rounded-md border px-3 py-2"
+            placeholder="Enter title, ISBN, or item ID..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+
+        {error && (
+          <div className="rounded-md bg-red-100 px-3 py-2 text-sm text-red-700 mb-4">
+            {error}
+          </div>
+        )}
+      </div>
+
+      {debouncedQuery && (
+        <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between border-b bg-gray-50 px-5 py-3 text-sm">
+            <span className="font-medium text-gray-700">
+              {loading ? "Searching..." : `Found ${items.length} item(s)`}
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-100 text-left">
+                <tr>
+                  <Th>ID</Th>
+                  <Th>Title</Th>
+                  <Th>Type</Th>
+                  <Th>ISBN</Th>
+                  <Th>Subject</Th>
+                  <Th>Actions</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td className="p-4 text-center" colSpan={6}>
+                      Loading...
+                    </td>
+                  </tr>
+                ) : items.length === 0 ? (
+                  <tr>
+                    <td className="p-4 text-center text-gray-600" colSpan={6}>
+                      No items found matching "{debouncedQuery}"
+                    </td>
+                  </tr>
+                ) : (
+                  items.map((item) => {
+                    const status = deleteStatus[item.item_id];
+                    return (
+                      <tr key={item.item_id} className="border-t">
+                        <Td>#{item.item_id}</Td>
+                        <Td className="max-w-[30ch] truncate" title={item.title}>
+                          {item.title}
+                        </Td>
+                        <Td className="capitalize">{item.item_type || "—"}</Td>
+                        <Td>{item.isbn || "—"}</Td>
+                        <Td>{item.subject || "—"}</Td>
+                        <Td>
+                          {status === "success" ? (
+                            <span className="text-green-600 text-xs font-medium">✓ Deleted</span>
+                          ) : status === "error" ? (
+                            <span className="text-red-600 text-xs font-medium">✗ Error</span>
+                          ) : (
+                            <button
+                              onClick={() => handleDelete(item.item_id, item.title)}
+                              disabled={status === "deleting"}
+                              className="px-3 py-1 text-xs font-medium rounded-md bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                            >
+                              {status === "deleting" ? "Deleting..." : "Delete"}
+                            </button>
+                          )}
+                        </Td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
