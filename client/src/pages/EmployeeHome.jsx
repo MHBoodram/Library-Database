@@ -660,6 +660,7 @@ function AddItemPanel({ api }) {
     length_minutes: "",
   });
   const [copies, setCopies] = useState([{ barcode: "", shelf_location: "" }]);
+  const [authors, setAuthors] = useState([{ name: "" }]);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -679,6 +680,20 @@ function AddItemPanel({ api }) {
 
   function removeCopyRow(index) {
     setCopies((list) => (list.length <= 1 ? list : list.filter((_, i) => i !== index)));
+  }
+
+  function updateAuthor(index, value) {
+    setAuthors((list) =>
+      list.map((author, i) => (i === index ? { name: value } : author))
+    );
+  }
+
+  function addAuthorRow() {
+    setAuthors((list) => [...list, { name: "" }]);
+  }
+
+  function removeAuthorRow(index) {
+    setAuthors((list) => (list.length <= 1 ? list : list.filter((_, i) => i !== index)));
   }
 
   async function onSubmit(e) {
@@ -769,8 +784,35 @@ function AddItemPanel({ api }) {
         }
       }
 
+      // Create authors if any
+      const authorNames = authors.map(a => a.name.trim()).filter(Boolean);
+      if (item_id && authorNames.length) {
+        for (const authorName of authorNames) {
+          try {
+            if (api) {
+              await api("authors", { method: "POST", body: { item_id, author_name: authorName } });
+            } else {
+              const res = await fetch(`${API_BASE}/authors`, {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ item_id, author_name: authorName }),
+              });
+              if (!res.ok && res.status !== 409) {
+                // 409 means author already exists, which is fine
+                const msg = await safeError(res);
+                console.warn(`Author creation warning: ${msg}`);
+              }
+            }
+          } catch (err) {
+            // Non-fatal: log but continue
+            console.warn("Author creation warning:", err);
+          }
+        }
+      }
+
       setMessage(
-        `Item created${createdCopies ? ` with ${createdCopies} ${createdCopies === 1 ? "copy" : "copies"}` : ""} ✅`
+        `Item created${createdCopies ? ` with ${createdCopies} ${createdCopies === 1 ? "copy" : "copies"}` : ""}${authorNames.length ? ` and ${authorNames.length} ${authorNames.length === 1 ? "author" : "authors"}` : ""} ✅`
       );
       setForm({
         title: "",
@@ -786,6 +828,7 @@ function AddItemPanel({ api }) {
         length_minutes: "",
       });
       setCopies([{ barcode: "", shelf_location: "" }]);
+      setAuthors([{ name: "" }]);
     } catch (err) {
       setMessage(`Failed: ${err.message}`);
     } finally {
@@ -968,6 +1011,45 @@ function AddItemPanel({ api }) {
             </button>
           </div>
 
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-gray-700">Authors (Optional)</h3>
+            <p className="text-xs text-gray-500">
+              Add one or more authors for this item. Leave blank if not applicable.
+            </p>
+
+            {authors.map((author, index) => (
+              <div key={index} className="grid grid-cols-1 md:grid-cols-[1fr,auto] gap-3 items-end">
+                <Field label={`Author ${authors.length > 1 ? `#${index + 1}` : ""}`}>
+                  <input
+                    className="w-full rounded-md border px-3 py-2"
+                    value={author.name}
+                    onChange={(e) => updateAuthor(index, e.target.value)}
+                    placeholder="e.g., F. Scott Fitzgerald"
+                  />
+                </Field>
+                <div className="pb-2">
+                  {authors.length > 1 && (
+                    <button
+                      type="button"
+                      className="mt-6 text-xs text-red-600 hover:underline"
+                      onClick={() => removeAuthorRow(index)}
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            <button
+              type="button"
+              className="text-xs font-medium text-gray-700 hover:underline"
+              onClick={addAuthorRow}
+            >
+              + Add another author
+            </button>
+          </div>
+
           <div className="flex items-center gap-3 pt-2">
             <button
               type="submit"
@@ -1051,6 +1133,8 @@ function ReservationsPanel({ api, staffUser }) {
         setSubmitError(msg || "That room is already booked for the selected time.");
       } else if (code === "invalid_payload" || code === "invalid_timespan") {
         setSubmitError(msg || "Please check the form inputs.");
+      } else if (code === "outside_library_hours") {
+        setSubmitError(msg || "Reservation is outside library operating hours.");
       } else {
         setSubmitError(msg || "Failed to create reservation.");
       }
@@ -1061,9 +1145,15 @@ function ReservationsPanel({ api, staffUser }) {
     <section className="space-y-4">
       <div className="rounded-xl border bg-white p-4 shadow-sm">
         <h2 className="text-lg font-semibold">Create Room Reservation</h2>
-        <p className="text-sm text-gray-600 mb-4">
-          Submitting overlapping times for the same room will surface the <code>prevent_overlap</code> trigger as a conflict.
-        </p>
+        <div className="mb-4 p-3 bg-blue-50 rounded-md text-sm">
+          <strong>Library Hours:</strong>
+          <div className="mt-1 text-blue-900">
+            Mon-Fri: 7:00 AM - 10:00 PM | Sat: 9:00 AM - 8:00 PM | Sun: 10:00 AM - 6:00 PM
+          </div>
+          <div className="mt-1 text-xs text-gray-600">
+            Reservations must be within operating hours and cannot span multiple days.
+          </div>
+        </div>
         <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="Patron ID">
             <input
@@ -1202,34 +1292,81 @@ function ReservationsPanel({ api, staffUser }) {
                 <Th>Start</Th>
                 <Th>End</Th>
                 <Th>Status</Th>
+                <Th>Actions</Th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="p-4 text-center">Loading reservations…</td>
+                  <td colSpan={7} className="p-4 text-center">Loading reservations…</td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan={6} className="p-4 text-center text-red-600">{error}</td>
+                  <td colSpan={7} className="p-4 text-center text-red-600">{error}</td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="p-4 text-center text-gray-600">No reservations yet.</td>
+                  <td colSpan={7} className="p-4 text-center text-gray-600">No reservations yet.</td>
                 </tr>
               ) : (
-                rows.map((r) => (
-                  <tr key={r.reservation_id} className="border-t">
-                    <Td>#{r.reservation_id}</Td>
-                    <Td>Room {r.room_number || r.room_id}</Td>
-                    <Td>
-                      {r.first_name} {r.last_name}
-                    </Td>
-                    <Td>{formatDateTime(r.start_time)}</Td>
-                    <Td>{formatDateTime(r.end_time)}</Td>
-                    <Td className="capitalize">{r.status}</Td>
-                  </tr>
-                ))
+                rows.map((r) => {
+                  const displayStatus = r.computed_status || r.status;
+                  return (
+                    <tr key={r.reservation_id} className="border-t">
+                      <Td>#{r.reservation_id}</Td>
+                      <Td>Room {r.room_number || r.room_id}</Td>
+                      <Td>
+                        {r.first_name} {r.last_name}
+                      </Td>
+                      <Td>{formatDateTime(r.start_time)}</Td>
+                      <Td>{formatDateTime(r.end_time)}</Td>
+                      <Td>
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium capitalize ${
+                            displayStatus === 'completed' || displayStatus === 'cancelled'
+                              ? 'bg-gray-100 text-gray-700'
+                              : 'bg-green-100 text-green-700'
+                          }`}
+                        >
+                          {displayStatus}
+                        </span>
+                      </Td>
+                      <Td>
+                        {displayStatus === 'active' && (
+                          <button
+                            onClick={async () => {
+                              if (!window.confirm(`Cancel reservation #${r.reservation_id}?`)) return;
+                              try {
+                                await api(`reservations/${r.reservation_id}/cancel`, { method: 'PATCH' });
+                                setRefreshFlag((f) => f + 1);
+                              } catch (err) {
+                                alert(`Failed to cancel: ${err.data?.message || err.message || 'Unknown error'}`);
+                              }
+                            }}
+                            className="text-xs px-2 py-1 rounded bg-yellow-600 text-white hover:bg-yellow-700"
+                          >
+                            Cancel
+                          </button>
+                        )}
+                        {' '}
+                        <button
+                          onClick={async () => {
+                            if (!window.confirm(`Permanently delete reservation #${r.reservation_id}?`)) return;
+                            try {
+                              await api(`staff/reservations/${r.reservation_id}`, { method: 'DELETE' });
+                              setRefreshFlag((f) => f + 1);
+                            } catch (err) {
+                              alert(`Failed to delete: ${err.data?.message || err.message || 'Unknown error'}`);
+                            }
+                          }}
+                          className="text-xs px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700"
+                        >
+                          Delete
+                        </button>
+                      </Td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
