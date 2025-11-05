@@ -1340,7 +1340,10 @@ function ReservationsPanel({ api, staffUser }) {
                                 await api(`reservations/${r.reservation_id}/cancel`, { method: 'PATCH' });
                                 setRefreshFlag((f) => f + 1);
                               } catch (err) {
-                                alert(`Failed to cancel: ${err.data?.message || err.message || 'Unknown error'}`);
+                                console.error("Cancel error:", err);
+                                const errCode = err.data?.error || err.error;
+                                const errMsg = err.data?.message || err.message || 'Unknown error';
+                                alert(`Failed to cancel (${errCode}): ${errMsg}`);
                               }
                             }}
                             className="text-xs px-2 py-1 rounded bg-yellow-600 text-white hover:bg-yellow-700"
@@ -1356,7 +1359,10 @@ function ReservationsPanel({ api, staffUser }) {
                               await api(`staff/reservations/${r.reservation_id}`, { method: 'DELETE' });
                               setRefreshFlag((f) => f + 1);
                             } catch (err) {
-                              alert(`Failed to delete: ${err.data?.message || err.message || 'Unknown error'}`);
+                              console.error("Delete error:", err);
+                              const errCode = err.data?.error || err.error;
+                              const errMsg = err.data?.message || err.message || 'Unknown error';
+                              alert(`Failed to delete (${errCode}): ${errMsg}`);
                             }
                           }}
                           className="text-xs px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700"

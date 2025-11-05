@@ -239,8 +239,11 @@ export const cancelReservation = (JWT_SECRET) => async (req, res, params) => {
   const auth = requireAuth(req, res, JWT_SECRET);
   if (!auth) return;
   
-  const reservationId = Number(params.id);
+  console.log("Cancel reservation - params:", params);
+  
+  const reservationId = Number(params?.id);
   if (!reservationId || isNaN(reservationId)) {
+    console.log("Invalid reservation ID:", params?.id, "->", reservationId);
     return sendJSON(res, 400, { error: "invalid_id", message: "Invalid reservation ID" });
   }
 
@@ -250,6 +253,8 @@ export const cancelReservation = (JWT_SECRET) => async (req, res, params) => {
       "SELECT reservation_id, user_id, status FROM reservation WHERE reservation_id = ?",
       [reservationId]
     );
+
+    console.log("Found reservations:", reservations.length, reservations);
 
     if (reservations.length === 0) {
       return sendJSON(res, 404, { error: "not_found", message: "Reservation not found" });
@@ -287,8 +292,11 @@ export const deleteReservation = (JWT_SECRET) => async (req, res, params) => {
   const auth = requireRole(req, res, JWT_SECRET, "staff");
   if (!auth) return;
   
-  const reservationId = Number(params.id);
+  console.log("Delete reservation - params:", params);
+  
+  const reservationId = Number(params?.id);
   if (!reservationId || isNaN(reservationId)) {
+    console.log("Invalid reservation ID:", params?.id, "->", reservationId);
     return sendJSON(res, 400, { error: "invalid_id", message: "Invalid reservation ID" });
   }
 
@@ -297,6 +305,8 @@ export const deleteReservation = (JWT_SECRET) => async (req, res, params) => {
       "DELETE FROM reservation WHERE reservation_id = ?",
       [reservationId]
     );
+
+    console.log("Delete result:", result);
 
     if (result.affectedRows === 0) {
       return sendJSON(res, 404, { error: "not_found", message: "Reservation not found" });
