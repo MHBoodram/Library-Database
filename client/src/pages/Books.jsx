@@ -172,7 +172,7 @@ export default function Books() {
                       <Td>{r.subject || "—"}</Td>
                       <Td>{r.classification || "—"}</Td>
                       <Td>
-                        <button onClick={() => toggleCopies(r.item_id)} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #ccc", background: "#f3f4f6" }}>
+                        <button onClick={() => toggleCopies(r.item_id)} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #222", background: "#222", color: "#fff" }}>
                           {openItemId === r.item_id ? "Hide" : "View"}
                         </button>
                       </Td>

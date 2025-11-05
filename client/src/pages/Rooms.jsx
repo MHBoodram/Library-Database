@@ -63,7 +63,7 @@ export default function Rooms() {
     <div style={{ maxWidth: 720, margin: "2rem auto", padding: 24 }}>
       <NavBar />
       <h1>Reserve a Study Room</h1>
-      <p style={{ color: "#666", marginBottom: 16 }}>Pick a room and choose a time window. Overlaps are prevented automatically.</p>
+      <p style={{ color: "#666", marginBottom: 16 }}>Pick a room and choose a time window</p>
 
       {loading ? (
         <div>Loading…</div>
