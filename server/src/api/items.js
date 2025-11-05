@@ -176,7 +176,74 @@ export const updateItem = (JWT_SECRET) => async (req, res, params) => {
 };
 
 export const deleteItem = (JWT_SECRET) => async (req, res, params) => {
-  const auth = requireAuth(req, res, JWT_SECRET); if (!auth) return;
-  await pool.execute("DELETE FROM item WHERE item_id=?", [Number(params.id)]);
-  return sendJSON(res, 200, { ok:true });
+  const auth = requireAuth(req, res, JWT_SECRET); 
+  if (!auth) return;
+  
+  const itemId = Number(params.id);
+  if (!itemId || isNaN(itemId)) {
+    return sendJSON(res, 400, { error: "invalid_id", message: "Invalid item ID" });
+  }
+
+  try {
+    // Check if item exists
+    const [items] = await pool.execute("SELECT item_id, title FROM item WHERE item_id = ?", [itemId]);
+    if (items.length === 0) {
+      return sendJSON(res, 404, { error: "not_found", message: "Item not found" });
+    }
+
+    // Check for active loans on any copies of this item
+    const [activeLoans] = await pool.execute(
+      `SELECT COUNT(*) as count FROM loan l 
+       JOIN copy c ON l.copy_id = c.copy_id 
+       WHERE c.item_id = ? AND l.status = 'active'`,
+      [itemId]
+    );
+
+    if (activeLoans[0].count > 0) {
+      return sendJSON(res, 409, { 
+        error: "has_active_loans", 
+        message: `Cannot delete item: ${activeLoans[0].count} active loan(s) exist. Return all copies before deleting.` 
+      });
+    }
+
+    // Delete in order to respect foreign key constraints:
+    // 1. Delete from item_author junction table
+    await pool.execute("DELETE FROM item_author WHERE item_id = ?", [itemId]);
+    
+    // 2. Delete type-specific records (book, device, media)
+    await pool.execute("DELETE FROM book WHERE item_id = ?", [itemId]);
+    await pool.execute("DELETE FROM device WHERE item_id = ?", [itemId]);
+    await pool.execute("DELETE FROM media WHERE item_id = ?", [itemId]);
+    
+    // 3. Delete fines associated with loans of copies of this item
+    await pool.execute(
+      `DELETE f FROM fine f 
+       JOIN loan l ON f.loan_id = l.loan_id 
+       JOIN copy c ON l.copy_id = c.copy_id 
+       WHERE c.item_id = ?`,
+      [itemId]
+    );
+    
+    // 4. Delete loans associated with copies of this item
+    await pool.execute(
+      `DELETE l FROM loan l 
+       JOIN copy c ON l.copy_id = c.copy_id 
+       WHERE c.item_id = ?`,
+      [itemId]
+    );
+    
+    // 5. Delete all copies
+    await pool.execute("DELETE FROM copy WHERE item_id = ?", [itemId]);
+    
+    // 6. Finally delete the item itself
+    await pool.execute("DELETE FROM item WHERE item_id = ?", [itemId]);
+
+    return sendJSON(res, 200, { ok: true, message: "Item deleted successfully" });
+  } catch (err) {
+    console.error("Delete item error:", err);
+    return sendJSON(res, 500, { 
+      error: "server_error", 
+      message: err.message || "Failed to delete item" 
+    });
+  }
 };

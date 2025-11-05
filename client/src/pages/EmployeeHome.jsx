@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
+import "./EmployeeHome.css";
 import { formatDate,formatDateTime } from "../utils";
 
 const API_BASE = import.meta.env.VITE_API_BASE?.replace(/\/$/, "") || ""; // e.g., http://localhost:3000/api
@@ -15,82 +15,135 @@ const STATUS_OPTIONS = [
 ];
 
 export default function EmployeeDashboard() {
-  const { useApi, user, logout } = useAuth();
-  // Memoize the API function so re-renders don't trigger ref changes
-  const apiWithAuth = useMemo(() => useApi(), [useApi]);
-  const [tab, setTab] = useState("fines"); // "fines" | "checkout" | "activeLoans" | "reservations" | "addItem"
-  const navigate = useNavigate();
+  const { useApi, user } = useAuth();
+  // obtain the api helper from context
+  const apiWithAuth = useApi();
+  const [tab, setTab] = useState("fines"); // "fines" | "checkout" | "activeLoans" | "reservations" | "addItem" | "removeItem"
+  const [counts, setCounts] = useState({ fines: 0, activeLoans: 0, reservations: 0 });
+  const [countsLoading, setCountsLoading] = useState(false);
+  const [countsLoaded, setCountsLoaded] = useState(false);
 
-  async function handleLogout() {
-    await logout();
-    navigate("/login");
-  }
+  useEffect(() => {
+    if (!apiWithAuth || countsLoaded) return;
+    
+    let alive = true;
+    async function loadCounts() {
+      setCountsLoading(true);
+      try {
+        const [finesRes, loansRes, resvRes] = await Promise.all([
+          apiWithAuth('staff/fines?&pageSize=1000'),
+          apiWithAuth('staff/loans/active?&pageSize=1000'),
+          apiWithAuth('staff/reservations?&pageSize=1000'),
+        ]);
+        if (!alive) return;
+        const finesList = Array.isArray(finesRes?.rows) ? finesRes.rows : Array.isArray(finesRes) ? finesRes : [];
+        const loansList = Array.isArray(loansRes?.rows) ? loansRes.rows : Array.isArray(loansRes) ? loansRes : [];
+        const resvList = Array.isArray(resvRes?.rows) ? resvRes.rows : Array.isArray(resvRes) ? resvRes : [];
+        setCounts({ fines: finesList.length, activeLoans: loansList.length, reservations: resvList.length });
+        setCountsLoaded(true);
+      } catch (err) {
+        if (typeof console !== 'undefined') console.debug(err);
+      } finally {
+        if (alive) setCountsLoading(false);
+      }
+    }
+    loadCounts();
+    return () => { alive = false; };
+  }, [apiWithAuth, countsLoaded]);
+
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900">
+    <div style={{ minHeight: '100vh', background: '#f9fafb', paddingTop: 'var(--nav-height, 60px)' }}>
       <NavBar />
-      <header className="border-b bg-white">
-        <div className="mx-auto max-w-6xl px-4 py-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center justify-between gap-4">
-            <h1 className="text-2xl font-semibold tracking-tight">Employee Dashboard</h1>
-            <button
-              onClick={handleLogout}
-              className="inline-flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
-            >
-              <span role="img" aria-hidden="true">🚪</span>
-              Logout
-            </button>
+      <header className="employee-dashboard-header">
+        <div className="header-inner" style={{ maxWidth: 1200, margin: '0 auto', padding: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+            <h1 style={{ fontSize: '1.5rem', fontWeight: 600, margin: 0 }}>Staff Dashboard</h1>
+            <div className="eh-widgets">
+              <button
+                type="button"
+                onClick={() => setTab('fines')}
+                aria-label="View fines"
+              >
+                <span className="emoji">💸</span>
+                <div>
+                  <div className="count-label">Fines</div>
+                  <div className="count-num">{countsLoading ? '…' : counts.fines}</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setTab('activeLoans')}
+                aria-label="View active loans"
+              >
+                <span className="emoji">📚</span>
+                <div>
+                  <div className="count-label">Active Loans</div>
+                  <div className="count-num">{countsLoading ? '…' : counts.activeLoans}</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setTab('reservations')}
+                aria-label="View reservations"
+              >
+                <span className="emoji">🪑</span>
+                <div>
+                  <div className="count-label">Reservations</div>
+                  <div className="count-num">{countsLoading ? '…' : counts.reservations}</div>
+                </div>
+              </button>
+            </div>
           </div>
-          <nav className="flex flex-wrap gap-2">
+          <nav className="employee-tabs">
             <button
-              className={`px-3 py-2 rounded-md text-sm font-medium ${
-                tab === "fines" ? "bg-gray-900 text-white" : "bg-gray-200 hover:bg-gray-300"
-              }`}
+              className={`tab-btn ${tab === "fines" ? "active" : ""}`}
               onClick={() => setTab("fines")}
             >
               Check Fines
             </button>
             <button
-              className={`px-3 py-2 rounded-md text-sm font-medium ${
-                tab === "checkout" ? "bg-gray-900 text-white" : "bg-gray-200 hover:bg-gray-300"
-              }`}
+              className={`tab-btn ${tab === "checkout" ? "active" : ""}`}
               onClick={() => setTab("checkout")}
             >
               Checkout Loan
             </button>
             <button
-              className={`px-3 py-2 rounded-md text-sm font-medium ${
-                tab === "activeLoans" ? "bg-gray-900 text-white" : "bg-gray-200 hover:bg-gray-300"
-              }`}
+              className={`tab-btn ${tab === "activeLoans" ? "active" : ""}`}
               onClick={() => setTab("activeLoans")}
             >
               Active Loans
             </button>
             <button
-              className={`px-3 py-2 rounded-md text-sm font-medium ${
-                tab === "reservations" ? "bg-gray-900 text-white" : "bg-gray-200 hover:bg-gray-300"
-              }`}
+              className={`tab-btn ${tab === "reservations" ? "active" : ""}`}
               onClick={() => setTab("reservations")}
             >
               Room Reservations
             </button>
             <button
-              className={`px-3 py-2 rounded-md text-sm font-medium ${
-                tab === "addItem" ? "bg-gray-900 text-white" : "bg-gray-200 hover:bg-gray-300"
-              }`}
+              className={`tab-btn ${tab === "addItem" ? "active" : ""}`}
               onClick={() => setTab("addItem")}
             >
               Add Item
+            </button>
+            <button
+              className={`tab-btn ${tab === "removeItem" ? "active" : ""}`}
+              onClick={() => setTab("removeItem")}
+            >
+              Remove Item
             </button>
           </nav>
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-6">
+      <main style={{ maxWidth: 1200, margin: '0 auto', padding: '1.5rem' }}>
         {tab === "fines" && <FinesPanel api={apiWithAuth} />}
         {tab === "checkout" && <CheckoutPanel api={apiWithAuth} staffUser={user} />}
         {tab === "activeLoans" && <ActiveLoansPanel api={apiWithAuth} />}
         {tab === "reservations" && <ReservationsPanel api={apiWithAuth} staffUser={user} />}
         {tab === "addItem" && <AddItemPanel api={apiWithAuth} />}
+        {tab === "removeItem" && <RemoveItemPanel api={apiWithAuth} />}
       </main>
     </div>
   );
@@ -516,22 +569,8 @@ function CheckoutPanel({ api, staffUser }) {
         >
           {submitting ? "Processing…" : "Checkout"}
         </button>
-
-        <p className="text-xs text-gray-500">
-          Loan limit enforcement is powered by the <code>loan_limit</code> trigger. If MySQL signals the custom error,
-          the API returns <code>loan_limit_exceeded</code> and we surface it here.
-        </p>
       </form>
 
-      <div className="rounded-xl border bg-white p-4 shadow-sm space-y-3 text-sm text-gray-700">
-        <h3 className="font-medium">Tip</h3>
-        <p>
-          Leave the employee field blank to let the API capture your staff ID automatically ({staffUser?.employee_id ?? "N/A"}).
-        </p>
-        <p>
-          Patron IDs correspond to <code>user.user_id</code>. Use the toggle to switch between entering a <code>copy.copy_id</code> or the copy’s barcode.
-        </p>
-      </div>
     </section>
   );
 }
@@ -599,7 +638,9 @@ async function safeError(res) {
   try {
     const data = await res.json();
     return data?.error || data?.message || "";
-  } catch (_) {
+  } catch (e) {
+    // best-effort: log then return empty message
+    if (typeof console !== "undefined" && console.debug) console.debug('safeError parse error', e);
     return "";
   }
 }
@@ -1194,6 +1235,197 @@ function ReservationsPanel({ api, staffUser }) {
           </table>
         </div>
       </div>
+    </section>
+  );
+}
+
+function RemoveItemPanel({ api }) {
+  const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [deleteStatus, setDeleteStatus] = useState({});
+
+  useEffect(() => {
+    const handle = setTimeout(() => setDebouncedQuery(query.trim()), 300);
+    return () => clearTimeout(handle);
+  }, [query]);
+
+  const searchItems = useCallback(
+    async (signal) => {
+      if (!api || !debouncedQuery) {
+        setItems([]);
+        return;
+      }
+      setLoading(true);
+      setError("");
+      try {
+        const params = new URLSearchParams({ q: debouncedQuery, pageSize: "50" });
+        const data = await api(`items?${params.toString()}`, { signal });
+        const list = Array.isArray(data?.rows) ? data.rows : Array.isArray(data) ? data : [];
+        setItems(list);
+      } catch (err) {
+        if (signal?.aborted) return;
+        setError(err.message || "Failed to search items");
+      } finally {
+        if (!signal?.aborted) setLoading(false);
+      }
+    },
+    [api, debouncedQuery]
+  );
+
+  useEffect(() => {
+    const controller = new AbortController();
+    searchItems(controller.signal);
+    return () => controller.abort();
+  }, [searchItems]);
+
+  async function handleDelete(itemId, title) {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete:\n\n"${title}" (ID: ${itemId})?\n\nThis action cannot be undone and will also delete all copies and related data.`
+    );
+    if (!confirmed) return;
+
+    setDeleteStatus((prev) => ({ ...prev, [itemId]: "deleting" }));
+    try {
+      const result = await api(`items/${itemId}`, { method: "DELETE" });
+      setDeleteStatus((prev) => ({ ...prev, [itemId]: "success" }));
+      setItems((prev) => prev.filter((item) => item.item_id !== itemId));
+      
+      // Show success message
+      const successMsg = result?.message || "Item deleted successfully";
+      alert(`✓ ${successMsg}`);
+      
+      setTimeout(() => {
+        setDeleteStatus((prev) => {
+          const next = { ...prev };
+          delete next[itemId];
+          return next;
+        });
+      }, 2000);
+    } catch (err) {
+      setDeleteStatus((prev) => ({ ...prev, [itemId]: "error" }));
+      
+      // Extract detailed error message
+      const errorCode = err?.data?.error || err?.error;
+      const errorMessage = err?.data?.message || err?.message;
+      
+      let userMessage = "Failed to delete item";
+      if (errorCode === "has_active_loans") {
+        userMessage = `❌ Cannot delete: ${errorMessage}`;
+      } else if (errorCode === "not_found") {
+        userMessage = "❌ Item not found. It may have already been deleted.";
+      } else if (errorMessage) {
+        userMessage = `❌ ${errorMessage}`;
+      } else {
+        userMessage = `❌ Failed to delete item: ${errorCode || "Unknown error"}`;
+      }
+      
+      alert(userMessage);
+      setTimeout(() => {
+        setDeleteStatus((prev) => {
+          const next = { ...prev };
+          delete next[itemId];
+          return next;
+        });
+      }, 3000);
+    }
+  }
+
+  return (
+    <section className="space-y-4">
+      <div className="rounded-xl border bg-white shadow-sm p-5">
+        <h2 className="text-lg font-semibold mb-3">Remove Item</h2>
+        <p className="text-sm text-gray-600 mb-4">
+          Search for items by title, ISBN, or ID. Be careful — deleting an item will permanently remove it and all its copies.
+        </p>
+
+        <div className="mb-4">
+          <label className="block text-xs font-medium text-gray-600 mb-1">Search Items</label>
+          <input
+            className="w-full rounded-md border px-3 py-2"
+            placeholder="Enter title, ISBN, or item ID..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+
+        {error && (
+          <div className="rounded-md bg-red-100 px-3 py-2 text-sm text-red-700 mb-4">
+            {error}
+          </div>
+        )}
+      </div>
+
+      {debouncedQuery && (
+        <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between border-b bg-gray-50 px-5 py-3 text-sm">
+            <span className="font-medium text-gray-700">
+              {loading ? "Searching..." : `Found ${items.length} item(s)`}
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-100 text-left">
+                <tr>
+                  <Th>ID</Th>
+                  <Th>Title</Th>
+                  <Th>Type</Th>
+                  <Th>ISBN</Th>
+                  <Th>Subject</Th>
+                  <Th>Actions</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td className="p-4 text-center" colSpan={6}>
+                      Loading...
+                    </td>
+                  </tr>
+                ) : items.length === 0 ? (
+                  <tr>
+                    <td className="p-4 text-center text-gray-600" colSpan={6}>
+                      No items found matching "{debouncedQuery}"
+                    </td>
+                  </tr>
+                ) : (
+                  items.map((item) => {
+                    const status = deleteStatus[item.item_id];
+                    return (
+                      <tr key={item.item_id} className="border-t">
+                        <Td>#{item.item_id}</Td>
+                        <Td className="max-w-[30ch] truncate" title={item.title}>
+                          {item.title}
+                        </Td>
+                        <Td className="capitalize">{item.item_type || "—"}</Td>
+                        <Td>{item.isbn || "—"}</Td>
+                        <Td>{item.subject || "—"}</Td>
+                        <Td>
+                          {status === "success" ? (
+                            <span className="text-green-600 text-xs font-medium">✓ Deleted</span>
+                          ) : status === "error" ? (
+                            <span className="text-red-600 text-xs font-medium">✗ Error</span>
+                          ) : (
+                            <button
+                              onClick={() => handleDelete(item.item_id, item.title)}
+                              disabled={status === "deleting"}
+                              className="px-3 py-1 text-xs font-medium rounded-md bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                            >
+                              {status === "deleting" ? "Deleting..." : "Delete"}
+                            </button>
+                          )}
+                        </Td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
