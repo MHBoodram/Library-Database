@@ -122,7 +122,6 @@ export default function Books() {
               onClick={() => setMode("author")}
               style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #ccc", background: mode === "author" ? "#222" : "#f3f4f6", color: mode === "author" ? "#fff" : "#111" }}
             >Author</button>
-            {/* Removed ID search per requirements */}
           </div>
         </div>
         <div style={{ flex: 1, minWidth: 280 }}>

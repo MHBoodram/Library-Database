@@ -210,6 +210,7 @@ export default function Home() {
           <form onSubmit={handleSearch} className="hero-search">
             <input
               type="text"
+              style = {{border:'none', borderRadius: '20px'}}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search for books, authors, subjects..."
