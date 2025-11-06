@@ -110,6 +110,12 @@ export default function EmployeeDashboard() {
               Checkout Loan
             </button>
             <button
+              className={`tab-btn ${tab === "return" ? "active" : ""}`}
+              onClick={() => setTab("return")}
+            >
+              Return Loan
+            </button>
+            <button
               className={`tab-btn ${tab === "activeLoans" ? "active" : ""}`}
               onClick={() => setTab("activeLoans")}
             >
@@ -146,6 +152,7 @@ export default function EmployeeDashboard() {
       <main style={{ maxWidth: 1200, margin: '0 auto', padding: '1.5rem' }}>
         {tab === "fines" && <FinesPanel api={apiWithAuth} />}
         {tab === "checkout" && <CheckoutPanel api={apiWithAuth} staffUser={user} />}
+        {tab === "return" && <ReturnLoanPanel api={apiWithAuth} staffUser={user} />}
         {tab === "activeLoans" && <ActiveLoansPanel api={apiWithAuth} />}
         {tab === "reservations" && <ReservationsPanel api={apiWithAuth} staffUser={user} />}
         {tab === "addItem" && <AddItemPanel api={apiWithAuth} />}
@@ -385,6 +392,7 @@ function ActiveLoansPanel({ api }) {
           <table className="min-w-full text-sm">
             <thead className="bg-gray-100 text-left">
               <tr>
+                <Th>Patron ID</Th>
                 <Th>Borrower</Th>
                 <Th>Email</Th>
                 <Th>Item Title</Th>
@@ -398,19 +406,19 @@ function ActiveLoansPanel({ api }) {
             <tbody>
               {loading ? (
                 <tr>
-                  <td className="p-4" colSpan={8}>
+                  <td className="p-4" colSpan={9}>
                     Loading…
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td className="p-4 text-red-600" colSpan={8}>
+                  <td className="p-4 text-red-600" colSpan={9}>
                     {error}
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td className="p-4" colSpan={8}>
+                  <td className="p-4" colSpan={9}>
                     No active loans found.
                   </td>
                 </tr>
@@ -420,6 +428,7 @@ function ActiveLoansPanel({ api }) {
                   const staff = [r.employee_first_name, r.employee_last_name].filter(Boolean).join(" ").trim();
                   return (
                     <tr key={r.loan_id} className="border-t">
+                      <Td>{r.user_id ? `#${r.user_id}` : "—"}</Td>
                       <Td>{borrower || "—"}</Td>
                       <Td>{r.user_email || "—"}</Td>
                       <Td className="max-w-[24ch] truncate" title={r.item_title}>
@@ -588,6 +597,197 @@ function Th({ children }) {
 }
 function Td({ children, className = "" }) {
   return <td className={`px-4 py-3 align-top ${className}`}>{children}</td>;
+}
+
+function ReturnLoanPanel({ api, staffUser }) {
+  const [form, setForm] = useState({ loan_id: "" });
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+
+  function update(field, value) {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  async function handleSearch() {
+    if (!searchQuery.trim()) {
+      setError("Please enter a loan ID, patron name, or item title to search");
+      return;
+    }
+
+    setSearching(true);
+    setError("");
+    setSearchResults([]);
+
+    try {
+      const params = new URLSearchParams({ q: searchQuery.trim() });
+      const data = await api(`staff/loans/active?${params.toString()}`);
+      const list = Array.isArray(data?.rows) ? data.rows : Array.isArray(data) ? data : [];
+      setSearchResults(list);
+      if (list.length === 0) {
+        setError("No active loans found matching your search");
+      }
+    } catch (err) {
+      setError(err.message || "Failed to search loans");
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  async function onSubmit(e) {
+    e.preventDefault();
+    setSubmitting(true);
+    setMessage("");
+    setError("");
+    try {
+      const loan_id = Number(form.loan_id);
+      if (!loan_id || loan_id <= 0) {
+        throw new Error("Valid Loan ID is required.");
+      }
+
+      const body = {
+        loan_id,
+        ...(staffUser?.employee_id ? { employee_id: staffUser.employee_id } : {}),
+      };
+
+      await api("loans/return", { method: "POST", body });
+      setMessage(`Successfully returned loan #${loan_id}.`);
+      setForm({ loan_id: "" });
+      setSearchResults([]);
+      setSearchQuery("");
+    } catch (err) {
+      const code = err?.data?.error;
+      const serverMessage = err?.data?.message;
+      if (code === "loan_not_found") {
+        setError(serverMessage || "Loan not found.");
+      } else if (code === "already_returned") {
+        setError(serverMessage || "This loan has already been returned.");
+      } else if (err?.message) {
+        setError(serverMessage || err.message);
+      } else {
+        setError("Return failed. Please try again.");
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function selectLoan(loan) {
+    setForm({ loan_id: String(loan.loan_id) });
+    setError("");
+    setMessage("");
+  }
+
+  return (
+    <section className="space-y-6">
+      <div className="rounded-xl border bg-white p-6 shadow-sm space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold">Return Loan</h2>
+          <p className="text-sm text-gray-600">
+            Search for an active loan and process the return.
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          <Field label="Search Active Loans">
+            <div className="flex gap-2">
+              <input
+                className="flex-1 rounded-md border px-3 py-2"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Loan ID, patron name, or item title"
+                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              />
+              <button
+                type="button"
+                onClick={handleSearch}
+                disabled={searching}
+                className="rounded-md bg-gray-700 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+              >
+                {searching ? "Searching..." : "Search"}
+              </button>
+            </div>
+          </Field>
+
+          {searchResults.length > 0 && (
+            <div className="rounded-lg border bg-gray-50 p-3 max-h-96 overflow-y-auto">
+              <p className="text-xs font-medium text-gray-600 mb-2">
+                Found {searchResults.length} active loan(s) - Click to select:
+              </p>
+              <div className="space-y-2">
+                {searchResults.map((loan) => {
+                  const borrower = [loan.user_first_name, loan.user_last_name]
+                    .filter(Boolean)
+                    .join(" ")
+                    .trim();
+                  return (
+                    <button
+                      key={loan.loan_id}
+                      type="button"
+                      onClick={() => selectLoan(loan)}
+                      className="w-full text-left rounded-md border bg-white p-3 hover:bg-blue-50 hover:border-blue-300 transition-colors"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1">
+                          <div className="font-medium text-sm">
+                            Loan #{loan.loan_id} - {loan.item_title}
+                          </div>
+                          <div className="text-xs text-gray-600 mt-1">
+                            Borrower: {borrower || "Unknown"} (#{loan.user_id})
+                          </div>
+                          <div className="text-xs text-gray-600">
+                            Copy #{loan.copy_id} • Due: {formatDate(loan.due_date)}
+                          </div>
+                        </div>
+                        <div className="text-xs text-blue-600 font-medium">Select →</div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <form onSubmit={onSubmit} className="space-y-4">
+          <Field label="Loan ID">
+            <input
+              className="w-full rounded-md border px-3 py-2"
+              value={form.loan_id}
+              onChange={(e) => update("loan_id", e.target.value)}
+              placeholder="e.g., 123"
+              required
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Enter the loan ID manually or select from search results above
+            </p>
+          </Field>
+
+          {message && (
+            <div className="rounded-md bg-green-50 border border-green-200 p-3 text-sm text-green-800">
+              {message}
+            </div>
+          )}
+          {error && (
+            <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-800">
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full rounded-md bg-blue-600 px-4 py-2.5 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {submitting ? "Processing Return..." : "Return Loan"}
+          </button>
+        </form>
+      </div>
+    </section>
+  );
 }
 
 function StatusPill({ status }) {
