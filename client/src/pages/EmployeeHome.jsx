@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
+import "./EmployeeHome.css";
 import { formatDate,formatDateTime } from "../utils";
 
 const API_BASE = import.meta.env.VITE_API_BASE?.replace(/\/$/, "") || ""; // e.g., http://localhost:3000/api
@@ -15,71 +15,142 @@ const STATUS_OPTIONS = [
 ];
 
 export default function EmployeeDashboard() {
-  const { useApi, user, logout } = useAuth();
-  // Memoize the API function so re-renders don't trigger ref changes
-  const apiWithAuth = useMemo(() => useApi(), [useApi]);
-  const [tab, setTab] = useState("fines"); // "fines" | "checkout" | "activeLoans" | "reservations" | "addItem"
-  const navigate = useNavigate();
+  const { useApi, user } = useAuth();
+  // obtain the api helper from context
+  const apiWithAuth = useApi();
+  const [tab, setTab] = useState("fines"); // "fines" | "checkout" | "activeLoans" | "reservations" | "addItem" | "removeItem"
+  const [counts, setCounts] = useState({ fines: 0, activeLoans: 0, reservations: 0 });
+  const [countsLoading, setCountsLoading] = useState(false);
+  const [countsLoaded, setCountsLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!apiWithAuth || countsLoaded) return;
+    
+    let alive = true;
+    async function loadCounts() {
+      setCountsLoading(true);
+      try {
+        const [finesRes, loansRes, resvRes] = await Promise.all([
+          apiWithAuth('staff/fines?&pageSize=1000'),
+          apiWithAuth('staff/loans/active?&pageSize=1000'),
+          apiWithAuth('staff/reservations?&pageSize=1000'),
+        ]);
+        if (!alive) return;
+        const finesList = Array.isArray(finesRes?.rows) ? finesRes.rows : Array.isArray(finesRes) ? finesRes : [];
+        const loansList = Array.isArray(loansRes?.rows) ? loansRes.rows : Array.isArray(loansRes) ? loansRes : [];
+        const resvList = Array.isArray(resvRes?.rows) ? resvRes.rows : Array.isArray(resvRes) ? resvRes : [];
+        setCounts({ fines: finesList.length, activeLoans: loansList.length, reservations: resvList.length });
+        setCountsLoaded(true);
+      } catch (err) {
+        if (typeof console !== 'undefined') console.debug(err);
+      } finally {
+        if (alive) setCountsLoading(false);
+      }
+    }
+    loadCounts();
+    return () => { alive = false; };
+  }, [apiWithAuth, countsLoaded]);
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900">
+    <div style={{ minHeight: '100vh', background: '#f9fafb', paddingTop: 'var(--nav-height, 60px)' }}>
       <NavBar />
-      <header className="border-b bg-white">
-        <div className="mx-auto max-w-6xl px-4 py-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center justify-between gap-4">
-            <h1 className="text-2xl font-semibold tracking-tight">Employee Dashboard</h1>
+      <header className="employee-dashboard-header">
+        <div className="header-inner" style={{ maxWidth: 1200, margin: '0 auto', padding: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+            <h1 style={{ fontSize: '1.5rem', fontWeight: 600, margin: 0 }}>Staff Dashboard</h1>
+            <div className="eh-widgets">
+              <button
+                type="button"
+                onClick={() => setTab('fines')}
+                aria-label="View fines"
+              >
+                <span className="emoji">💸</span>
+                <div>
+                  <div className="count-label">Fines</div>
+                  <div className="count-num">{countsLoading ? '…' : counts.fines}</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setTab('activeLoans')}
+                aria-label="View active loans"
+              >
+                <span className="emoji">📚</span>
+                <div>
+                  <div className="count-label">Active Loans</div>
+                  <div className="count-num">{countsLoading ? '…' : counts.activeLoans}</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setTab('reservations')}
+                aria-label="View reservations"
+              >
+                <span className="emoji">🪑</span>
+                <div>
+                  <div className="count-label">Reservations</div>
+                  <div className="count-num">{countsLoading ? '…' : counts.reservations}</div>
+                </div>
+              </button>
+            </div>
           </div>
-          <nav className="flex flex-wrap gap-2">
+          <nav className="employee-tabs">
             <button
-              className={`px-3 py-2 rounded-md text-sm font-medium ${
-                tab === "fines" ? "bg-gray-900 text-white" : "bg-gray-200 hover:bg-gray-300"
-              }`}
+              className={`tab-btn ${tab === "fines" ? "active" : ""}`}
               onClick={() => setTab("fines")}
             >
               Check Fines
             </button>
             <button
-              className={`px-3 py-2 rounded-md text-sm font-medium ${
-                tab === "checkout" ? "bg-gray-900 text-white" : "bg-gray-200 hover:bg-gray-300"
-              }`}
+              className={`tab-btn ${tab === "checkout" ? "active" : ""}`}
               onClick={() => setTab("checkout")}
             >
               Checkout Loan
             </button>
             <button
-              className={`px-3 py-2 rounded-md text-sm font-medium ${
-                tab === "activeLoans" ? "bg-gray-900 text-white" : "bg-gray-200 hover:bg-gray-300"
-              }`}
+              className={`tab-btn ${tab === "activeLoans" ? "active" : ""}`}
               onClick={() => setTab("activeLoans")}
             >
               Active Loans
             </button>
             <button
-              className={`px-3 py-2 rounded-md text-sm font-medium ${
-                tab === "reservations" ? "bg-gray-900 text-white" : "bg-gray-200 hover:bg-gray-300"
-              }`}
+              className={`tab-btn ${tab === "reservations" ? "active" : ""}`}
               onClick={() => setTab("reservations")}
             >
               Room Reservations
             </button>
             <button
-              className={`px-3 py-2 rounded-md text-sm font-medium ${
-                tab === "addItem" ? "bg-gray-900 text-white" : "bg-gray-200 hover:bg-gray-300"
-              }`}
+              className={`tab-btn ${tab === "addItem" ? "active" : ""}`}
               onClick={() => setTab("addItem")}
             >
               Add Item
+            </button>
+            <button
+              className={`tab-btn ${tab === "editItem" ? "active" : ""}`}
+              onClick={() => setTab("editItem")}
+            >
+              Edit Item
+            </button>
+            <button
+              className={`tab-btn ${tab === "removeItem" ? "active" : ""}`}
+              onClick={() => setTab("removeItem")}
+            >
+              Remove Item
             </button>
           </nav>
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-6">
+      <main style={{ maxWidth: 1200, margin: '0 auto', padding: '1.5rem' }}>
         {tab === "fines" && <FinesPanel api={apiWithAuth} />}
         {tab === "checkout" && <CheckoutPanel api={apiWithAuth} staffUser={user} />}
         {tab === "activeLoans" && <ActiveLoansPanel api={apiWithAuth} />}
         {tab === "reservations" && <ReservationsPanel api={apiWithAuth} staffUser={user} />}
         {tab === "addItem" && <AddItemPanel api={apiWithAuth} />}
+        {tab === "editItem" && <EditItemPanel api={apiWithAuth} />}
+        {tab === "removeItem" && <RemoveItemPanel api={apiWithAuth} />}
       </main>
     </div>
   );
@@ -505,22 +576,8 @@ function CheckoutPanel({ api, staffUser }) {
         >
           {submitting ? "Processing…" : "Checkout"}
         </button>
-
-        <p className="text-xs text-gray-500">
-          Loan limit enforcement is powered by the <code>loan_limit</code> trigger. If MySQL signals the custom error,
-          the API returns <code>loan_limit_exceeded</code> and we surface it here.
-        </p>
       </form>
 
-      <div className="rounded-xl border bg-white p-4 shadow-sm space-y-3 text-sm text-gray-700">
-        <h3 className="font-medium">Tip</h3>
-        <p>
-          Leave the employee field blank to let the API capture your staff ID automatically ({staffUser?.employee_id ?? "N/A"}).
-        </p>
-        <p>
-          Patron IDs correspond to <code>user.user_id</code>. Use the toggle to switch between entering a <code>copy.copy_id</code> or the copy’s barcode.
-        </p>
-      </div>
     </section>
   );
 }
@@ -588,7 +645,9 @@ async function safeError(res) {
   try {
     const data = await res.json();
     return data?.error || data?.message || "";
-  } catch (_) {
+  } catch (e) {
+    // best-effort: log then return empty message
+    if (typeof console !== "undefined" && console.debug) console.debug('safeError parse error', e);
     return "";
   }
 }
@@ -608,6 +667,7 @@ function AddItemPanel({ api }) {
     length_minutes: "",
   });
   const [copies, setCopies] = useState([{ barcode: "", shelf_location: "" }]);
+  const [authors, setAuthors] = useState([{ name: "" }]);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -629,6 +689,20 @@ function AddItemPanel({ api }) {
     setCopies((list) => (list.length <= 1 ? list : list.filter((_, i) => i !== index)));
   }
 
+  function updateAuthor(index, value) {
+    setAuthors((list) =>
+      list.map((author, i) => (i === index ? { name: value } : author))
+    );
+  }
+
+  function addAuthorRow() {
+    setAuthors((list) => [...list, { name: "" }]);
+  }
+
+  function removeAuthorRow(index) {
+    setAuthors((list) => (list.length <= 1 ? list : list.filter((_, i) => i !== index)));
+  }
+
   async function onSubmit(e) {
     e.preventDefault();
     setSubmitting(true);
@@ -639,13 +713,21 @@ function AddItemPanel({ api }) {
         throw new Error("Title is required");
       }
 
+      // Validate authors for books
+      const itemType = form.item_type;
+      if (itemType === "book") {
+        const authorNames = authors.map(a => a.name.trim()).filter(Boolean);
+        if (authorNames.length === 0) {
+          throw new Error("At least one author is required for books");
+        }
+      }
+
       const itemPayload = {
         title,
         subject: form.subject.trim() || undefined,
         classification: form.classification.trim() || undefined,
       };
 
-      const itemType = form.item_type;
       if (itemType && itemType !== "general") {
         itemPayload.item_type = itemType;
         if (itemType === "book") {
@@ -717,8 +799,35 @@ function AddItemPanel({ api }) {
         }
       }
 
+      // Create authors if any
+      const authorNames = authors.map(a => a.name.trim()).filter(Boolean);
+      if (item_id && authorNames.length) {
+        for (const authorName of authorNames) {
+          try {
+            if (api) {
+              await api("authors", { method: "POST", body: { item_id, author_name: authorName } });
+            } else {
+              const res = await fetch(`${API_BASE}/authors`, {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ item_id, author_name: authorName }),
+              });
+              if (!res.ok && res.status !== 409) {
+                // 409 means author already exists, which is fine
+                const msg = await safeError(res);
+                console.warn(`Author creation warning: ${msg}`);
+              }
+            }
+          } catch (err) {
+            // Non-fatal: log but continue
+            console.warn("Author creation warning:", err);
+          }
+        }
+      }
+
       setMessage(
-        `Item created${createdCopies ? ` with ${createdCopies} ${createdCopies === 1 ? "copy" : "copies"}` : ""} ✅`
+        `Item created${createdCopies ? ` with ${createdCopies} ${createdCopies === 1 ? "copy" : "copies"}` : ""}${authorNames.length ? ` and ${authorNames.length} ${authorNames.length === 1 ? "author" : "authors"}` : ""} ✅`
       );
       setForm({
         title: "",
@@ -734,6 +843,7 @@ function AddItemPanel({ api }) {
         length_minutes: "",
       });
       setCopies([{ barcode: "", shelf_location: "" }]);
+      setAuthors([{ name: "" }]);
     } catch (err) {
       setMessage(`Failed: ${err.message}`);
     } finally {
@@ -773,34 +883,79 @@ function AddItemPanel({ api }) {
           </Field>
 
           {form.item_type === "book" && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <Field label="ISBN">
-                <input
-                  className="w-full rounded-md border px-3 py-2"
-                  value={form.isbn}
-                  onChange={(e) => update("isbn", e.target.value)}
-                  placeholder="e.g., 9780142407332"
-                />
-              </Field>
-              <Field label="Publisher">
-                <input
-                  className="w-full rounded-md border px-3 py-2"
-                  value={form.publisher}
-                  onChange={(e) => update("publisher", e.target.value)}
-                  placeholder="e.g., Penguin"
-                />
-              </Field>
-              <Field label="Publication Year">
-                <input
-                  type="number"
-                  min="0"
-                  className="w-full rounded-md border px-3 py-2"
-                  value={form.publication_year}
-                  onChange={(e) => update("publication_year", e.target.value)}
-                  placeholder="e.g., 2006"
-                />
-              </Field>
-            </div>
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <Field label="ISBN">
+                  <input
+                    className="w-full rounded-md border px-3 py-2"
+                    value={form.isbn}
+                    onChange={(e) => update("isbn", e.target.value)}
+                    placeholder="e.g., 9780142407332"
+                  />
+                </Field>
+                <Field label="Publisher">
+                  <input
+                    className="w-full rounded-md border px-3 py-2"
+                    value={form.publisher}
+                    onChange={(e) => update("publisher", e.target.value)}
+                    placeholder="e.g., Penguin"
+                  />
+                </Field>
+                <Field label="Publication Year">
+                  <input
+                    type="number"
+                    min="0"
+                    className="w-full rounded-md border px-3 py-2"
+                    value={form.publication_year}
+                    onChange={(e) => update("publication_year", e.target.value)}
+                    placeholder="e.g., 2006"
+                  />
+                </Field>
+              </div>
+
+              {/* Authors section for books */}
+              <div className="space-y-2 pt-2">
+                <h3 className="text-sm font-semibold text-gray-700">
+                  Authors <span className="text-red-600">*</span>
+                </h3>
+                <p className="text-xs text-gray-500">
+                  At least one author is required for books.
+                </p>
+
+                {authors.map((author, index) => (
+                  <div key={index} className="grid grid-cols-1 md:grid-cols-[1fr,auto] gap-3 items-end">
+                    <Field label={`Author ${authors.length > 1 ? `#${index + 1}` : ""}`}>
+                      <input
+                        className="w-full rounded-md border px-3 py-2"
+                        value={author.name}
+                        onChange={(e) => updateAuthor(index, e.target.value)}
+                        placeholder="e.g., F. Scott Fitzgerald"
+                        required={form.item_type === "book"}
+                      />
+                    </Field>
+                    <div className="pb-2">
+                      {authors.length > 1 && (
+                        <button
+                          type="button"
+                          className="mt-6 text-xs text-red-600 hover:underline"
+                          onClick={() => removeAuthorRow(index)}
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                <button
+                  type="button"
+                  className="text-xs font-medium text-gray-700 hover:underline"
+                  onClick={addAuthorRow}
+                >
+                  + Add another author
+                </button>
+              </div>
+            </>
           )}
 
           {form.item_type === "device" && (
@@ -999,6 +1154,8 @@ function ReservationsPanel({ api, staffUser }) {
         setSubmitError(msg || "That room is already booked for the selected time.");
       } else if (code === "invalid_payload" || code === "invalid_timespan") {
         setSubmitError(msg || "Please check the form inputs.");
+      } else if (code === "outside_library_hours") {
+        setSubmitError(msg || "Reservation is outside library operating hours.");
       } else {
         setSubmitError(msg || "Failed to create reservation.");
       }
@@ -1009,9 +1166,15 @@ function ReservationsPanel({ api, staffUser }) {
     <section className="space-y-4">
       <div className="rounded-xl border bg-white p-4 shadow-sm">
         <h2 className="text-lg font-semibold">Create Room Reservation</h2>
-        <p className="text-sm text-gray-600 mb-4">
-          Submitting overlapping times for the same room will surface the <code>prevent_overlap</code> trigger as a conflict.
-        </p>
+        <div className="mb-4 p-3 bg-blue-50 rounded-md text-sm">
+          <strong>Library Hours:</strong>
+          <div className="mt-1 text-blue-900">
+            Mon-Fri: 7:00 AM - 10:00 PM | Sat: 9:00 AM - 8:00 PM | Sun: 10:00 AM - 6:00 PM
+          </div>
+          <div className="mt-1 text-xs text-gray-600">
+            Reservations must be within operating hours and cannot span multiple days.
+          </div>
+        </div>
         <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="Patron ID">
             <input
@@ -1150,39 +1313,654 @@ function ReservationsPanel({ api, staffUser }) {
                 <Th>Start</Th>
                 <Th>End</Th>
                 <Th>Status</Th>
+                <Th>Actions</Th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="p-4 text-center">Loading reservations…</td>
+                  <td colSpan={7} className="p-4 text-center">Loading reservations…</td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan={6} className="p-4 text-center text-red-600">{error}</td>
+                  <td colSpan={7} className="p-4 text-center text-red-600">{error}</td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="p-4 text-center text-gray-600">No reservations yet.</td>
+                  <td colSpan={7} className="p-4 text-center text-gray-600">No reservations yet.</td>
                 </tr>
               ) : (
-                rows.map((r) => (
-                  <tr key={r.reservation_id} className="border-t">
-                    <Td>#{r.reservation_id}</Td>
-                    <Td>Room {r.room_number || r.room_id}</Td>
-                    <Td>
-                      {r.first_name} {r.last_name}
-                    </Td>
-                    <Td>{formatDateTime(r.start_time)}</Td>
-                    <Td>{formatDateTime(r.end_time)}</Td>
-                    <Td className="capitalize">{r.status}</Td>
-                  </tr>
-                ))
+                rows.map((r) => {
+                  const displayStatus = r.computed_status || r.status;
+                  return (
+                    <tr key={r.reservation_id} className="border-t">
+                      <Td>#{r.reservation_id}</Td>
+                      <Td>Room {r.room_number || r.room_id}</Td>
+                      <Td>
+                        {r.first_name} {r.last_name}
+                      </Td>
+                      <Td>{formatDateTime(r.start_time)}</Td>
+                      <Td>{formatDateTime(r.end_time)}</Td>
+                      <Td>
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium capitalize ${
+                            displayStatus === 'completed' || displayStatus === 'cancelled'
+                              ? 'bg-gray-100 text-gray-700'
+                              : 'bg-green-100 text-green-700'
+                          }`}
+                        >
+                          {displayStatus}
+                        </span>
+                      </Td>
+                      <Td>
+                        {displayStatus === 'active' && (
+                          <button
+                            onClick={async () => {
+                              if (!window.confirm(`Cancel reservation #${r.reservation_id}?`)) return;
+                              try {
+                                await api(`reservations/${r.reservation_id}/cancel`, { method: 'PATCH' });
+                                setRefreshFlag((f) => f + 1);
+                              } catch (err) {
+                                console.error("Cancel error:", err);
+                                const errCode = err.data?.error || err.error;
+                                const errMsg = err.data?.message || err.message || 'Unknown error';
+                                alert(`Failed to cancel (${errCode}): ${errMsg}`);
+                              }
+                            }}
+                            className="text-xs px-2 py-1 rounded bg-yellow-600 text-white hover:bg-yellow-700"
+                          >
+                            Cancel
+                          </button>
+                        )}
+                        {' '}
+                        <button
+                          onClick={async () => {
+                            if (!window.confirm(`Permanently delete reservation #${r.reservation_id}?`)) return;
+                            try {
+                              await api(`staff/reservations/${r.reservation_id}`, { method: 'DELETE' });
+                              setRefreshFlag((f) => f + 1);
+                            } catch (err) {
+                              console.error("Delete error:", err);
+                              const errCode = err.data?.error || err.error;
+                              const errMsg = err.data?.message || err.message || 'Unknown error';
+                              alert(`Failed to delete (${errCode}): ${errMsg}`);
+                            }
+                          }}
+                          className="text-xs px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700"
+                        >
+                          Delete
+                        </button>
+                      </Td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
       </div>
+    </section>
+  );
+}
+
+function EditItemPanel({ api }) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [existingAuthors, setExistingAuthors] = useState([]);
+  const [form, setForm] = useState({
+    title: "",
+    subject: "",
+    classification: "",
+    item_type: "book",
+    isbn: "",
+    publisher: "",
+    publication_year: "",
+  });
+  const [authors, setAuthors] = useState([{ name: "" }]);
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState("");
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(searchQuery), 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Search items
+  useEffect(() => {
+    if (!debouncedQuery.trim()) {
+      setItems([]);
+      return;
+    }
+    (async () => {
+      setLoading(true);
+      try {
+        const data = await api(`items?q=${encodeURIComponent(debouncedQuery)}`);
+        setItems(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error("Search error:", err);
+        setItems([]);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [debouncedQuery, api]);
+
+  async function selectItem(item) {
+    setSelectedItem(item);
+    setForm({
+      title: item.title || "",
+      subject: item.subject || "",
+      classification: item.classification || "",
+      item_type: item.item_type || "book",
+      isbn: item.isbn || "",
+      publisher: item.publisher || "",
+      publication_year: item.publication_year || "",
+    });
+
+    // Fetch existing authors for this item
+    if (item.item_type === "book") {
+      try {
+        const authorsData = await api(`items/${item.item_id}/authors`);
+        if (authorsData && authorsData.length > 0) {
+          setExistingAuthors(authorsData);
+          setAuthors(authorsData.map(a => ({ name: a.author_name || a.full_name })));
+        } else {
+          setExistingAuthors([]);
+          setAuthors([{ name: "" }]);
+        }
+      } catch (err) {
+        console.error("Error fetching authors:", err);
+        setExistingAuthors([]);
+        setAuthors([{ name: "" }]);
+      }
+    } else {
+      setExistingAuthors([]);
+      setAuthors([{ name: "" }]);
+    }
+    setMessage("");
+  }
+
+  function update(field, value) {
+    setForm(prev => ({ ...prev, [field]: value }));
+  }
+
+  function updateAuthor(index, value) {
+    setAuthors(list => list.map((author, i) => (i === index ? { name: value } : author)));
+  }
+
+  function addAuthorRow() {
+    setAuthors(list => [...list, { name: "" }]);
+  }
+
+  function removeAuthorRow(index) {
+    setAuthors(list => (list.length <= 1 ? list : list.filter((_, i) => i !== index)));
+  }
+
+  async function onSubmit(e) {
+    e.preventDefault();
+    if (!selectedItem) return;
+
+    setSubmitting(true);
+    setMessage("");
+
+    try {
+      const title = form.title.trim();
+      if (!title) {
+        throw new Error("Title is required");
+      }
+
+      // Validate authors for books
+      if (form.item_type === "book") {
+        const authorNames = authors.map(a => a.name.trim()).filter(Boolean);
+        if (authorNames.length === 0) {
+          throw new Error("At least one author is required for books");
+        }
+      }
+
+      const itemPayload = {
+        title,
+        subject: form.subject.trim() || undefined,
+        classification: form.classification.trim() || undefined,
+      };
+
+      if (form.item_type === "book") {
+        if (form.isbn.trim()) itemPayload.isbn = form.isbn.trim();
+        if (form.publisher.trim()) itemPayload.publisher = form.publisher.trim();
+        if (form.publication_year) itemPayload.publication_year = Number(form.publication_year);
+      }
+
+      // Update item
+      await api(`items/${selectedItem.item_id}`, {
+        method: "PUT",
+        body: itemPayload,
+      });
+
+      // Update authors if book
+      if (form.item_type === "book") {
+        // Delete existing authors
+        for (const existingAuthor of existingAuthors) {
+          try {
+            await api(`items/${selectedItem.item_id}/authors/${existingAuthor.author_id}`, {
+              method: "DELETE",
+            });
+          } catch (err) {
+            console.error("Error deleting author:", err);
+          }
+        }
+
+        // Add new authors
+        const authorNames = authors.map(a => a.name.trim()).filter(Boolean);
+        for (const authorName of authorNames) {
+          try {
+            await api("authors", {
+              method: "POST",
+              body: { item_id: selectedItem.item_id, author_name: authorName },
+            });
+          } catch (err) {
+            console.error("Error adding author:", err);
+          }
+        }
+      }
+
+      setMessage(`✓ Item "${title}" updated successfully.`);
+      setSelectedItem(null);
+      setSearchQuery("");
+      setItems([]);
+    } catch (err) {
+      const msg = err?.data?.message || err.message || "Failed to update item";
+      setMessage(`Failed: ${msg}`);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <section className="space-y-4">
+      {!selectedItem ? (
+        <div className="rounded-xl border bg-white p-4 shadow-sm">
+          <h2 className="text-lg font-semibold mb-4">Edit Item</h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Search for an item by title, ISBN, or ID to edit its details.
+          </p>
+
+          <input
+            type="text"
+            className="w-full rounded-md border px-3 py-2 mb-4"
+            placeholder="Search by title, ISBN, or ID..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+
+          {loading && <div className="text-sm text-gray-600">Searching...</div>}
+          
+          {!loading && items.length > 0 && (
+            <div className="border rounded-md overflow-hidden">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="text-left p-3">ID</th>
+                    <th className="text-left p-3">Title</th>
+                    <th className="text-left p-3">Type</th>
+                    <th className="text-left p-3">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item) => (
+                    <tr key={item.item_id} className="border-t">
+                      <td className="p-3">#{item.item_id}</td>
+                      <td className="p-3">{item.title}</td>
+                      <td className="p-3 capitalize">{item.item_type || "general"}</td>
+                      <td className="p-3">
+                        <button
+                          onClick={() => selectItem(item)}
+                          className="text-xs px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
+                        >
+                          Edit
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {!loading && debouncedQuery && items.length === 0 && (
+            <div className="text-sm text-gray-600">No items found.</div>
+          )}
+        </div>
+      ) : (
+        <div className="rounded-xl border bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold">Edit Item: {selectedItem.title}</h2>
+            <button
+              onClick={() => {
+                setSelectedItem(null);
+                setSearchQuery("");
+                setMessage("");
+              }}
+              className="text-sm text-gray-600 hover:underline"
+            >
+              ← Back to search
+            </button>
+          </div>
+
+          <form onSubmit={onSubmit} className="space-y-4">
+            <Field label="Title">
+              <input
+                className="w-full rounded-md border px-3 py-2"
+                value={form.title}
+                onChange={(e) => update("title", e.target.value)}
+                required
+              />
+            </Field>
+
+            <Field label="Subject">
+              <input
+                className="w-full rounded-md border px-3 py-2"
+                value={form.subject}
+                onChange={(e) => update("subject", e.target.value)}
+                placeholder="e.g., Literature"
+              />
+            </Field>
+
+            <Field label="Classification / Call Number">
+              <input
+                className="w-full rounded-md border px-3 py-2"
+                value={form.classification}
+                onChange={(e) => update("classification", e.target.value)}
+                placeholder="e.g., 813.52 FIT"
+              />
+            </Field>
+
+            {form.item_type === "book" && (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <Field label="ISBN">
+                    <input
+                      className="w-full rounded-md border px-3 py-2"
+                      value={form.isbn}
+                      onChange={(e) => update("isbn", e.target.value)}
+                      placeholder="e.g., 9780142407332"
+                    />
+                  </Field>
+                  <Field label="Publisher">
+                    <input
+                      className="w-full rounded-md border px-3 py-2"
+                      value={form.publisher}
+                      onChange={(e) => update("publisher", e.target.value)}
+                      placeholder="e.g., Penguin"
+                    />
+                  </Field>
+                  <Field label="Publication Year">
+                    <input
+                      type="number"
+                      min="0"
+                      className="w-full rounded-md border px-3 py-2"
+                      value={form.publication_year}
+                      onChange={(e) => update("publication_year", e.target.value)}
+                      placeholder="e.g., 2006"
+                    />
+                  </Field>
+                </div>
+
+                {/* Authors section for books */}
+                <div className="space-y-2 pt-2">
+                  <h3 className="text-sm font-semibold text-gray-700">
+                    Authors <span className="text-red-600">*</span>
+                  </h3>
+                  <p className="text-xs text-gray-500">
+                    At least one author is required for books.
+                  </p>
+
+                  {authors.map((author, index) => (
+                    <div key={index} className="grid grid-cols-1 md:grid-cols-[1fr,auto] gap-3 items-end">
+                      <Field label={`Author ${authors.length > 1 ? `#${index + 1}` : ""}`}>
+                        <input
+                          className="w-full rounded-md border px-3 py-2"
+                          value={author.name}
+                          onChange={(e) => updateAuthor(index, e.target.value)}
+                          placeholder="e.g., F. Scott Fitzgerald"
+                          required
+                        />
+                      </Field>
+                      <div className="pb-2">
+                        {authors.length > 1 && (
+                          <button
+                            type="button"
+                            className="mt-6 text-xs text-red-600 hover:underline"
+                            onClick={() => removeAuthorRow(index)}
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+
+                  <button
+                    type="button"
+                    className="text-xs font-medium text-gray-700 hover:underline"
+                    onClick={addAuthorRow}
+                  >
+                    + Add another author
+                  </button>
+                </div>
+              </>
+            )}
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="submit"
+                disabled={submitting}
+                className="rounded-md bg-gray-900 text-white px-4 py-2 disabled:opacity-50"
+              >
+                {submitting ? "Saving…" : "Update Item"}
+              </button>
+              {message && (
+                <p className={`text-sm ${message.startsWith("Failed") ? "text-red-600" : "text-green-700"}`}>
+                  {message}
+                </p>
+              )}
+            </div>
+          </form>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function RemoveItemPanel({ api }) {
+  const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [deleteStatus, setDeleteStatus] = useState({});
+
+  useEffect(() => {
+    const handle = setTimeout(() => setDebouncedQuery(query.trim()), 300);
+    return () => clearTimeout(handle);
+  }, [query]);
+
+  const searchItems = useCallback(
+    async (signal) => {
+      if (!api || !debouncedQuery) {
+        setItems([]);
+        return;
+      }
+      setLoading(true);
+      setError("");
+      try {
+        const params = new URLSearchParams({ q: debouncedQuery, pageSize: "50" });
+        const data = await api(`items?${params.toString()}`, { signal });
+        const list = Array.isArray(data?.rows) ? data.rows : Array.isArray(data) ? data : [];
+        setItems(list);
+      } catch (err) {
+        if (signal?.aborted) return;
+        setError(err.message || "Failed to search items");
+      } finally {
+        if (!signal?.aborted) setLoading(false);
+      }
+    },
+    [api, debouncedQuery]
+  );
+
+  useEffect(() => {
+    const controller = new AbortController();
+    searchItems(controller.signal);
+    return () => controller.abort();
+  }, [searchItems]);
+
+  async function handleDelete(itemId, title) {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete:\n\n"${title}" (ID: ${itemId})?\n\nThis action cannot be undone and will also delete all copies and related data.`
+    );
+    if (!confirmed) return;
+
+    setDeleteStatus((prev) => ({ ...prev, [itemId]: "deleting" }));
+    try {
+      const result = await api(`items/${itemId}`, { method: "DELETE" });
+      setDeleteStatus((prev) => ({ ...prev, [itemId]: "success" }));
+      setItems((prev) => prev.filter((item) => item.item_id !== itemId));
+      
+      // Show success message
+      const successMsg = result?.message || "Item deleted successfully";
+      alert(`✓ ${successMsg}`);
+      
+      setTimeout(() => {
+        setDeleteStatus((prev) => {
+          const next = { ...prev };
+          delete next[itemId];
+          return next;
+        });
+      }, 2000);
+    } catch (err) {
+      setDeleteStatus((prev) => ({ ...prev, [itemId]: "error" }));
+      
+      // Extract detailed error message
+      const errorCode = err?.data?.error || err?.error;
+      const errorMessage = err?.data?.message || err?.message;
+      
+      let userMessage = "Failed to delete item";
+      if (errorCode === "has_active_loans") {
+        userMessage = `❌ Cannot delete: ${errorMessage}`;
+      } else if (errorCode === "not_found") {
+        userMessage = "❌ Item not found. It may have already been deleted.";
+      } else if (errorMessage) {
+        userMessage = `❌ ${errorMessage}`;
+      } else {
+        userMessage = `❌ Failed to delete item: ${errorCode || "Unknown error"}`;
+      }
+      
+      alert(userMessage);
+      setTimeout(() => {
+        setDeleteStatus((prev) => {
+          const next = { ...prev };
+          delete next[itemId];
+          return next;
+        });
+      }, 3000);
+    }
+  }
+
+  return (
+    <section className="space-y-4">
+      <div className="rounded-xl border bg-white shadow-sm p-5">
+        <h2 className="text-lg font-semibold mb-3">Remove Item</h2>
+        <p className="text-sm text-gray-600 mb-4">
+          Search for items by title, ISBN, or ID. Be careful — deleting an item will permanently remove it and all its copies.
+        </p>
+
+        <div className="mb-4">
+          <label className="block text-xs font-medium text-gray-600 mb-1">Search Items</label>
+          <input
+            className="w-full rounded-md border px-3 py-2"
+            placeholder="Enter title, ISBN, or item ID..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+
+        {error && (
+          <div className="rounded-md bg-red-100 px-3 py-2 text-sm text-red-700 mb-4">
+            {error}
+          </div>
+        )}
+      </div>
+
+      {debouncedQuery && (
+        <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between border-b bg-gray-50 px-5 py-3 text-sm">
+            <span className="font-medium text-gray-700">
+              {loading ? "Searching..." : `Found ${items.length} item(s)`}
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-100 text-left">
+                <tr>
+                  <Th>ID</Th>
+                  <Th>Title</Th>
+                  <Th>Type</Th>
+                  <Th>ISBN</Th>
+                  <Th>Subject</Th>
+                  <Th>Actions</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td className="p-4 text-center" colSpan={6}>
+                      Loading...
+                    </td>
+                  </tr>
+                ) : items.length === 0 ? (
+                  <tr>
+                    <td className="p-4 text-center text-gray-600" colSpan={6}>
+                      No items found matching "{debouncedQuery}"
+                    </td>
+                  </tr>
+                ) : (
+                  items.map((item) => {
+                    const status = deleteStatus[item.item_id];
+                    return (
+                      <tr key={item.item_id} className="border-t">
+                        <Td>#{item.item_id}</Td>
+                        <Td className="max-w-[30ch] truncate" title={item.title}>
+                          {item.title}
+                        </Td>
+                        <Td className="capitalize">{item.item_type || "—"}</Td>
+                        <Td>{item.isbn || "—"}</Td>
+                        <Td>{item.subject || "—"}</Td>
+                        <Td>
+                          {status === "success" ? (
+                            <span className="text-green-600 text-xs font-medium">✓ Deleted</span>
+                          ) : status === "error" ? (
+                            <span className="text-red-600 text-xs font-medium">✗ Error</span>
+                          ) : (
+                            <button
+                              onClick={() => handleDelete(item.item_id, item.title)}
+                              disabled={status === "deleting"}
+                              className="px-3 py-1 text-xs font-medium rounded-md bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                            >
+                              {status === "deleting" ? "Deleting..." : "Delete"}
+                            </button>
+                          )}
+                        </Td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

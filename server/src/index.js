@@ -12,8 +12,9 @@ import { checkout, returnLoan, fetchUserLoans } from "./api/loans.js";
 import { placeHold, cancelHold } from "./api/holds.js";
 import { overdue, balances, topItems } from "./api/reports.js";
 import { listFines, listActiveLoans } from "./api/staff.js";
-import { createReservation, listReservations, createReservationSelf, listMyReservations } from "./api/reservations.js";
+import { createReservation, listReservations, createReservationSelf, listMyReservations, cancelReservation, deleteReservation } from "./api/reservations.js";
 import { createRoom, listRooms } from "./api/rooms.js";
+import { createAuthor, getItemAuthors, deleteItemAuthor } from "./api/authors.js";
 
 const PORT = Number(process.env.PORT) || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || "devsecret";
@@ -35,6 +36,11 @@ r.add("GET",    "/api/items/:id/copies", listItemCopies());
 r.add("POST",   "/api/items",     createItem(JWT_SECRET));
 r.add("PUT",    "/api/items/:id", updateItem(JWT_SECRET));
 r.add("DELETE", "/api/items/:id", deleteItem(JWT_SECRET));
+
+// authors
+r.add("POST", "/api/authors", createAuthor(JWT_SECRET));
+r.add("GET", "/api/items/:id/authors", getItemAuthors());
+r.add("DELETE", "/api/items/:id/authors/:author_id", deleteItemAuthor(JWT_SECRET));
 
 // copies
 r.add("POST",   "/api/copies",     createCopy(JWT_SECRET));
@@ -60,11 +66,13 @@ r.add("GET", "/api/staff/fines", listFines(JWT_SECRET));
 r.add("GET", "/api/staff/loans/active", listActiveLoans(JWT_SECRET));
 r.add("GET", "/api/staff/reservations", listReservations(JWT_SECRET));
 r.add("POST", "/api/staff/reservations", createReservation(JWT_SECRET));
+r.add("DELETE", "/api/staff/reservations/:id", deleteReservation(JWT_SECRET));
 r.add("POST", "/api/staff/rooms", createRoom(JWT_SECRET));
 
 // student reservations
 r.add("POST", "/api/reservations", createReservationSelf(JWT_SECRET));
 r.add("GET",  "/api/reservations/my", listMyReservations(JWT_SECRET));
+r.add("PATCH", "/api/reservations/:id/cancel", cancelReservation(JWT_SECRET));
 
 // rooms directory (open)
 r.add("GET", "/api/rooms", listRooms());

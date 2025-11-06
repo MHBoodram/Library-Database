@@ -111,7 +111,7 @@ export default function Books() {
       <NavBar />
       <h1>Find Books</h1>
       <p style={{ color: "#666", marginBottom: 16 }}>
-        Browse by Title or Author. We never require you to know internal IDs.
+        Browse by Title or Author
       </p>
 
       <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap", marginBottom: 16 }}>
@@ -126,7 +126,6 @@ export default function Books() {
               onClick={() => setMode("author")}
               style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #ccc", background: mode === "author" ? "#222" : "#f3f4f6", color: mode === "author" ? "#fff" : "#111" }}
             >Author</button>
-            {/* Removed ID search per requirements */}
           </div>
         </div>
         <div style={{ flex: 1, minWidth: 280 }}>
@@ -180,7 +179,7 @@ export default function Books() {
                       <Td>{r.subject || "—"}</Td>
                       <Td>{r.classification || "—"}</Td>
                       <Td>
-                        <button onClick={() => toggleCopies(r.item_id)} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #ccc", background: "#f3f4f6" }}>
+                        <button onClick={() => toggleCopies(r.item_id)} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #222", background: "#222", color: "#fff" }}>
                           {openItemId === r.item_id ? "Hide" : "View"}
                         </button>
                       </Td>
