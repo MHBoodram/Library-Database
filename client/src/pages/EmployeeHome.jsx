@@ -128,6 +128,12 @@ export default function EmployeeDashboard() {
               Room Reservations
             </button>
             <button
+              className={`tab-btn ${tab === "reports" ? "active" : ""}`}
+              onClick={() => setTab("reports")}
+            >
+              Reports
+            </button>
+            <button
               className={`tab-btn ${tab === "addItem" ? "active" : ""}`}
               onClick={() => setTab("addItem")}
             >
@@ -155,6 +161,7 @@ export default function EmployeeDashboard() {
         {tab === "return" && <ReturnLoanPanel api={apiWithAuth} staffUser={user} />}
         {tab === "activeLoans" && <ActiveLoansPanel api={apiWithAuth} />}
         {tab === "reservations" && <ReservationsPanel api={apiWithAuth} staffUser={user} />}
+        {tab === "reports" && <ReportsPanel api={apiWithAuth} />}
         {tab === "addItem" && <AddItemPanel api={apiWithAuth} />}
         {tab === "editItem" && <EditItemPanel api={apiWithAuth} />}
         {tab === "removeItem" && <RemoveItemPanel api={apiWithAuth} />}
@@ -787,6 +794,400 @@ function ReturnLoanPanel({ api, staffUser }) {
         </form>
       </div>
     </section>
+  );
+}
+
+function ReportsPanel({ api }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [activeReport, setActiveReport] = useState("overdue"); // "overdue" | "balances" | "topItems" | "newPatrons"
+  const [reportData, setReportData] = useState([]);
+  const [monthFilter, setMonthFilter] = useState(() => new Date().toISOString().slice(0,7)); // YYYY-MM
+  const [patronMode, setPatronMode] = useState("single"); // "single" | "window"
+  const [monthsWindow, setMonthsWindow] = useState(12); // 6,12,24 etc
+
+  const loadReport = useCallback(async (reportType) => {
+    if (!api) return;
+    setLoading(true);
+    setError("");
+    setReportData([]);
+
+    try {
+      let endpoint = reportType === "overdue" 
+        ? "reports/overdue" 
+        : reportType === "balances"
+        ? "reports/balances"
+        : reportType === "topItems"
+        ? "reports/top-items"
+        : "reports/new-patrons-monthly";
+      if (reportType === "newPatrons") {
+        if (patronMode === "single" && monthFilter) {
+          endpoint += `?month=${encodeURIComponent(monthFilter)}`;
+        } else if (patronMode === "window" && monthsWindow) {
+          endpoint += `?months=${encodeURIComponent(monthsWindow)}`;
+        }
+      }
+      
+      const data = await api(endpoint);
+      setReportData(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setError(err.message || "Failed to load report");
+    } finally {
+      setLoading(false);
+    }
+  }, [api, monthFilter, patronMode, monthsWindow]);
+
+  useEffect(() => {
+    loadReport(activeReport);
+  }, [activeReport, loadReport]);
+
+  function handleRefresh() {
+    loadReport(activeReport);
+  }
+
+  function handleExport() {
+    // Simple CSV export
+    if (reportData.length === 0) {
+      alert("No data to export");
+      return;
+    }
+
+    const headers = Object.keys(reportData[0]);
+    const csvContent = [
+      headers.join(","),
+      ...reportData.map(row => 
+        headers.map(h => {
+          const val = row[h];
+          // Escape commas and quotes
+          return typeof val === 'string' && (val.includes(',') || val.includes('"'))
+            ? `"${val.replace(/"/g, '""')}"`
+            : val ?? "";
+        }).join(",")
+      )
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${activeReport}_report_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <section className="space-y-4">
+      <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+        <div className="border-b bg-gray-50 px-5 py-4">
+          <h2 className="text-lg font-semibold">Reports</h2>
+          <p className="text-sm text-gray-600 mt-1">
+            Generate and view library reports
+          </p>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex-1 flex gap-2">
+              <button
+                onClick={() => setActiveReport("overdue")}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  activeReport === "overdue"
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                Overdue Loans
+              </button>
+              <button
+                onClick={() => setActiveReport("balances")}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  activeReport === "balances"
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                User Balances
+              </button>
+              <button
+                onClick={() => setActiveReport("topItems")}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  activeReport === "topItems"
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                Top Items
+              </button>
+              <button
+                onClick={() => setActiveReport("newPatrons")}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  activeReport === "newPatrons"
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                New Patrons / Month
+              </button>
+            </div>
+
+            <div className="flex items-end gap-2">
+              {activeReport === "newPatrons" && (
+                <div className="flex flex-wrap items-end gap-4">
+                  <div className="space-y-1">
+                    <span className="block text-xs font-medium text-gray-600">Mode</span>
+                    <div className="flex gap-3 text-sm">
+                      <label className="inline-flex items-center gap-1">
+                        <input
+                          type="radio"
+                          name="patron-mode"
+                          value="single"
+                          checked={patronMode === "single"}
+                          onChange={(e) => setPatronMode(e.target.value)}
+                        />
+                        Single Month
+                      </label>
+                      <label className="inline-flex items-center gap-1">
+                        <input
+                          type="radio"
+                          name="patron-mode"
+                          value="window"
+                          checked={patronMode === "window"}
+                          onChange={(e) => setPatronMode(e.target.value)}
+                        />
+                        Rolling Window
+                      </label>
+                    </div>
+                  </div>
+                  {patronMode === "single" && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Month</label>
+                      <input
+                        type="month"
+                        value={monthFilter}
+                        onChange={(e) => setMonthFilter(e.target.value)}
+                        className="rounded-md border bg-white px-3 py-2"
+                      />
+                    </div>
+                  )}
+                  {patronMode === "window" && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Months</label>
+                      <select
+                        value={monthsWindow}
+                        onChange={(e) => setMonthsWindow(Number(e.target.value))}
+                        className="rounded-md border bg-white px-3 py-2"
+                      >
+                        {[6,12,18,24,30,36].map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              )}
+            
+            <div className="flex gap-2 ml-auto">
+              <button
+                onClick={handleRefresh}
+                disabled={loading}
+                className="px-4 py-2 rounded-md bg-gray-700 text-white text-sm font-medium hover:bg-gray-800 disabled:opacity-50"
+              >
+                {loading ? "Loading..." : "Refresh"}
+              </button>
+              <button
+                onClick={handleExport}
+                disabled={loading || reportData.length === 0}
+                className="px-4 py-2 rounded-md bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-50"
+              >
+                Export CSV
+              </button>
+            </div>
+            </div>
+          </div>
+
+          {error && (
+            <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-800">
+              {error}
+            </div>
+          )}
+
+          <div className="rounded-lg border overflow-hidden">
+            {activeReport === "overdue" && <OverdueReportTable data={reportData} loading={loading} />}
+            {activeReport === "balances" && <BalancesReportTable data={reportData} loading={loading} />}
+            {activeReport === "topItems" && <TopItemsReportTable data={reportData} loading={loading} />}
+            {activeReport === "newPatrons" && <NewPatronsReportTable data={reportData} loading={loading} />}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function NewPatronsReportTable({ data, loading }) {
+  if (loading) {
+    return <div className="p-8 text-center text-gray-500">Loading report...</div>;
+  }
+  if (!data.length) {
+    return <div className="p-8 text-center text-gray-500">No patron signups in the selected window</div>;
+  }
+  // data: [{ month: 'YYYY-MM', new_patrons: number }, ...]
+  const total = data.reduce((sum, r) => sum + Number(r.new_patrons || 0), 0);
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-full text-sm">
+        <thead className="bg-gray-100 text-left">
+          <tr>
+            <Th>Month</Th>
+            <Th>New Patrons</Th>
+            <Th>Cumulative</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((row, idx) => {
+            const monthLabel = new Date(row.month + '-01').toLocaleDateString(undefined, { year: 'numeric', month: 'short' });
+            const cumulative = data.slice(0, idx + 1).reduce((s, r) => s + Number(r.new_patrons || 0), 0);
+            return (
+              <tr key={row.month} className="border-t">
+                <Td>{monthLabel}</Td>
+                <Td>
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${row.new_patrons > 0 ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}> 
+                    {row.new_patrons} {row.new_patrons === 1 ? 'patron' : 'patrons'}
+                  </span>
+                </Td>
+                <Td className="font-medium">{cumulative}</Td>
+              </tr>
+            );
+          })}
+          <tr className="bg-gray-50 border-t">
+            <Td className="font-semibold">Total</Td>
+            <Td className="font-semibold">{total}</Td>
+            <Td className="font-semibold">—</Td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function OverdueReportTable({ data, loading }) {
+  if (loading) {
+    return <div className="p-8 text-center text-gray-500">Loading report...</div>;
+  }
+
+  if (data.length === 0) {
+    return <div className="p-8 text-center text-gray-500">No overdue loans found</div>;
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-full text-sm">
+        <thead className="bg-gray-100 text-left">
+          <tr>
+            <Th>Borrower</Th>
+            <Th>Item Title</Th>
+            <Th>Media Type</Th>
+            <Th>Due Date</Th>
+            <Th>Days Overdue</Th>
+            <Th>Est. Fine</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((row, idx) => (
+            <tr key={idx} className="border-t">
+              <Td>{`${row.first_name} ${row.last_name}`}</Td>
+              <Td className="max-w-[30ch] truncate" title={row.title}>{row.title}</Td>
+              <Td>{(row.media_type || "book").toUpperCase()}</Td>
+              <Td>{formatDate(row.due_date)}</Td>
+              <Td>
+                <span className="inline-flex items-center gap-1 rounded-full bg-red-100 text-red-800 px-2 py-0.5 text-xs font-medium">
+                  {row.days_overdue} days
+                </span>
+              </Td>
+              <Td className="font-medium">${Number(row.est_fine || 0).toFixed(2)}</Td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function BalancesReportTable({ data, loading }) {
+  if (loading) {
+    return <div className="p-8 text-center text-gray-500">Loading report...</div>;
+  }
+
+  if (data.length === 0) {
+    return <div className="p-8 text-center text-gray-500">No balances found</div>;
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-full text-sm">
+        <thead className="bg-gray-100 text-left">
+          <tr>
+            <Th>Patron</Th>
+            <Th>Paid Total</Th>
+            <Th>Open Balance</Th>
+            <Th>Total</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((row, idx) => {
+            const paidTotal = Number(row.paid_total || 0);
+            const openBalance = Number(row.open_balance || 0);
+            const total = paidTotal + openBalance;
+            return (
+              <tr key={idx} className="border-t">
+                <Td>{`${row.first_name} ${row.last_name}`}</Td>
+                <Td className="text-green-700 font-medium">${paidTotal.toFixed(2)}</Td>
+                <Td className={openBalance > 0 ? "text-red-700 font-medium" : "text-gray-500"}>
+                  ${openBalance.toFixed(2)}
+                </Td>
+                <Td className="font-semibold">${total.toFixed(2)}</Td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function TopItemsReportTable({ data, loading }) {
+  if (loading) {
+    return <div className="p-8 text-center text-gray-500">Loading report...</div>;
+  }
+
+  if (data.length === 0) {
+    return <div className="p-8 text-center text-gray-500">No loan activity in the last 30 days</div>;
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-full text-sm">
+        <thead className="bg-gray-100 text-left">
+          <tr>
+            <Th>Rank</Th>
+            <Th>Item Title</Th>
+            <Th>Media Type</Th>
+            <Th>Loans (30 days)</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((row, idx) => (
+            <tr key={idx} className="border-t">
+              <Td className="font-medium">#{idx + 1}</Td>
+              <Td className="max-w-[40ch] truncate" title={row.title}>{row.title}</Td>
+              <Td>{(row.media_type || "book").toUpperCase()}</Td>
+              <Td>
+                <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 text-blue-800 px-2 py-0.5 text-xs font-medium">
+                  {row.loans_30d} loans
+                </span>
+              </Td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

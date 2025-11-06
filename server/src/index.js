@@ -10,11 +10,12 @@ import { createCopy, updateCopy, deleteCopy } from "./api/copies.js";
 //import { checkout, returnLoan, listMyLoans } from "./api/loans.js";
 import { checkout, returnLoan, fetchUserLoans } from "./api/loans.js";
 import { placeHold, cancelHold } from "./api/holds.js";
-import { overdue, balances, topItems } from "./api/reports.js";
+import { overdue, balances, topItems, newPatronsByMonth } from "./api/reports.js";
 import { listFines, listActiveLoans } from "./api/staff.js";
 import { createReservation, listReservations, createReservationSelf, listMyReservations, cancelReservation, deleteReservation } from "./api/reservations.js";
 import { createRoom, listRooms } from "./api/rooms.js";
 import { createAuthor, getItemAuthors, deleteItemAuthor } from "./api/authors.js";
+import { schemaInfo } from "./api/debug.js";
 
 const PORT = Number(process.env.PORT) || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || "devsecret";
@@ -60,6 +61,10 @@ r.add("DELETE", "/api/holds/:id",    cancelHold(JWT_SECRET));
 r.add("GET", "/api/reports/overdue",    overdue(JWT_SECRET));
 r.add("GET", "/api/reports/balances",   balances(JWT_SECRET));
 r.add("GET", "/api/reports/top-items",  topItems(JWT_SECRET));
+r.add("GET", "/api/reports/new-patrons-monthly",  newPatronsByMonth(JWT_SECRET));
+
+// diagnostics (staff only)
+r.add("GET", "/api/debug/schema", schemaInfo(JWT_SECRET));
 
 // staff tools
 r.add("GET", "/api/staff/fines", listFines(JWT_SECRET));

@@ -98,8 +98,16 @@ export const returnLoan = (JWT_SECRET) => async (req, res) => {
     
   } catch (err) {
     try { await conn.rollback(); } catch {}
-    console.error("Return loan error:", err);
-    return sendJSON(res, 500, { error: "return_failed", message: err.message });
+    // Improved diagnostics for production
+    const safe = {
+      code: err?.code,
+      errno: err?.errno,
+      sqlState: err?.sqlState,
+      message: err?.message,
+      loan_id,
+    };
+    console.error("Return loan error diagnostics:", safe);
+    return sendJSON(res, 500, { error: "return_failed", message: err?.message || "unknown_error" });
   } finally {
     conn.release();
   }
