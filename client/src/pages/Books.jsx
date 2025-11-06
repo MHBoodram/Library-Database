@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
 import { getItemCopies } from "../api";
 
 export default function Books() {
-  const { token, useApi } = useAuth();
+  const { token, useApi, user } = useAuth();
   const apiWithAuth = useMemo(()=>useApi(),[useApi]);
   const navigate = useNavigate();
 
@@ -87,11 +87,15 @@ export default function Books() {
 
   async function checkoutCopy(copy_id) {
     try {
-      await apiWithAuth("loans/checkout", { method: "POST", body: { copy_id } });
+      await apiWithAuth("loans/checkout", {
+        method: "POST",
+        body: { copy_id, user_id: user?.user_id, identifier_type: "copy_id" },
+      });
       alert("Checked out! Your loan will appear in the Loans page.");
     } catch (err) {
       const code = err?.data?.error;
       const msg = err?.data?.message || err?.message;
+      console.error("Checkout failed:", err?.status, code, msg, err?.data);
       if (code === "loan_limit_exceeded") {
         alert(msg || "You've reached your loan limit.");
       } else if (code === "copy_not_available") {
@@ -164,7 +168,11 @@ export default function Books() {
                 rows.map((r) => (
                   <>
                     <tr key={r.item_id} style={{ borderTop: "1px solid #e5e7eb" }}>
-                      <Td style={{ maxWidth: 320, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={r.title}>{r.title}</Td>
+                      <Td style={{ maxWidth: 320, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={r.title}>
+                        <Link to={`/books/${r.item_id}`} style={{ textDecoration: "none", color: "#2563eb" }}>
+                          {r.title}
+                        </Link>
+                      </Td>
                       <Td style={{ maxWidth: 280, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={(r.authors||[]).join(", ")}>{(r.authors||[]).join(", ")}</Td>
                       <Td>{r.isbn || "—"}</Td>
                       <Td>{r.publisher || "—"}</Td>

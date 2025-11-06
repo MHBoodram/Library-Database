@@ -193,37 +193,65 @@ async function performCheckout({ user_id, copy_id, barcode, employee_id }) {
     const loanDays = Number(policy?.loan_days) || defaultLoanDays(accountRole);
     const dueDate = getDueDateISO(loanDays);
 
-    const [insertResult] = await conn.execute(
-      `
-        INSERT INTO loan (
+    let insertResult;
+    try {
+      // Preferred: insert with policy + snapshot columns
+      const [res] = await conn.execute(
+        `
+          INSERT INTO loan (
+            user_id,
+            copy_id,
+            employee_id,
+            policy_id,
+            checkout_date,
+            due_date,
+            status,
+            daily_fine_rate_snapshot,
+            grace_days_snapshot,
+            max_fine_snapshot,
+            replacement_fee_snapshot
+          )
+          VALUES (
+            ?, ?, ?, ?, NOW(), ?, 'active', ?, ?, ?, ?
+          )
+        `,
+        [
           user_id,
-          copy_id,
+          resolvedCopyId,
           employee_id,
-          policy_id,
-          checkout_date,
-          due_date,
-          status,
-          daily_fine_rate_snapshot,
-          grace_days_snapshot,
-          max_fine_snapshot,
-          replacement_fee_snapshot
-        )
-        VALUES (
-          ?, ?, ?, ?, NOW(), ?, 'active', ?, ?, ?, ?
-        )
-      `,
-      [
-        user_id,
-        resolvedCopyId,
-        employee_id,
-        policy?.policy_id ?? null,
-        dueDate,
-        policy?.daily_rate ?? null,
-        policy?.grace_days ?? null,
-        policy?.max_fine ?? null,
-        policy?.replacement_fee ?? null,
-      ]
-    );
+          policy?.policy_id ?? null,
+          dueDate,
+          policy?.daily_rate ?? null,
+          policy?.grace_days ?? null,
+          policy?.max_fine ?? null,
+          policy?.replacement_fee ?? null,
+        ]
+      );
+      insertResult = res;
+    } catch (e) {
+      // Fallback for legacy schemas without policy/snapshot columns
+      const msg = String(e?.message || "");
+      if (e?.code === 'ER_BAD_FIELD_ERROR' || /Unknown column/.test(msg)) {
+        const [res] = await conn.execute(
+          `
+            INSERT INTO loan (
+              user_id,
+              copy_id,
+              employee_id,
+              checkout_date,
+              due_date,
+              status
+            ) VALUES (
+              ?, ?, ?, NOW(), ?, 'active'
+            )
+          `,
+          [user_id, resolvedCopyId, employee_id, dueDate]
+        );
+        insertResult = res;
+      } else {
+        throw e;
+      }
+    }
 
     await conn.execute(
       "UPDATE copy SET status='on_loan' WHERE copy_id=?",
@@ -273,29 +301,36 @@ async function resolvePolicy(conn, item_id, userCategory) {
   const policyMediaType = normalizePolicyMediaType(rawMediaType);
 
   if (!policyMediaType) return null;
-
-  const [policyRows] = await conn.query(
-    `
-      SELECT policy_id, media_type, loan_days, daily_rate, grace_days, max_fine, replacement_fee
-      FROM fine_policy
-      WHERE media_type = ? AND user_category = ?
-      LIMIT 1
-    `,
-    [policyMediaType, userCategory]
-  );
-  if (policyRows.length) return policyRows[0];
-
-  if (policyMediaType !== "other") {
-    const [fallbackRows] = await conn.query(
+  try {
+    const [policyRows] = await conn.query(
       `
         SELECT policy_id, media_type, loan_days, daily_rate, grace_days, max_fine, replacement_fee
         FROM fine_policy
-        WHERE media_type = 'other' AND user_category = ?
+        WHERE media_type = ? AND user_category = ?
         LIMIT 1
       `,
-      [userCategory]
+      [policyMediaType, userCategory]
     );
-    if (fallbackRows.length) return fallbackRows[0];
+    if (policyRows.length) return policyRows[0];
+
+    if (policyMediaType !== "other") {
+      const [fallbackRows] = await conn.query(
+        `
+          SELECT policy_id, media_type, loan_days, daily_rate, grace_days, max_fine, replacement_fee
+          FROM fine_policy
+          WHERE media_type = 'other' AND user_category = ?
+          LIMIT 1
+        `,
+        [userCategory]
+      );
+      if (fallbackRows.length) return fallbackRows[0];
+    }
+  } catch (err) {
+    // Make fine_policy optional: if the table is missing, proceed without a policy
+    if (err && (err.code === 'ER_NO_SUCH_TABLE' || /fine_policy/.test(String(err.message)))) {
+      return { media_type: policyMediaType };
+    }
+    throw err;
   }
 
   return { media_type: policyMediaType };
