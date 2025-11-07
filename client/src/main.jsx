@@ -14,6 +14,7 @@ import Reports from "./pages/Reports.jsx";
 import Loans from "./pages/Loans.jsx";
 import Rooms from "./pages/Rooms.jsx";
 import BookPage from "./pages/BookPage.jsx";
+import ManageAccounts from "./pages/ManageAccounts.jsx";
 
 import "./index.css";
 
@@ -21,7 +22,7 @@ import "./index.css";
 function BookRoute() {
   const { useApi, user, token } = useAuth();
   const api = useApi();
-
+  
   const fetchBookById = async (id) => {
     const rows = await api(`items?id=${encodeURIComponent(id)}`);
     const row = Array.isArray(rows) ? rows[0] : rows;
@@ -129,6 +130,14 @@ ReactDOM.createRoot(document.getElementById("root")).render(
             element={
               <Protected role="staff">
                 <EmployeeHome />
+              </Protected>
+            }
+          />
+          <Route
+            path="/manage/accounts"
+            element={
+              <Protected role="staff">
+                <ManageAccounts />
               </Protected>
             }
           />
