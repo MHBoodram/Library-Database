@@ -1,9 +1,8 @@
-/* ===========================
+/* 
    Books Page Styles - Book Search & Listing Page
    Used by: Books.jsx (search and browse books)
    Note: Book.css is for BookPage.jsx (individual book details)
-   Consistent with Home & Employee Dashboard
-   =========================== */
+ */
 
 :root {
   --primary-main: #187772;

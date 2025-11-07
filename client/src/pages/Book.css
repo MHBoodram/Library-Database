@@ -5,7 +5,7 @@
   --gap-md: 16px;
   --gap-sm: 10px;
 
-  /* Unified Color Palette (matching Books.css, Home.css, EmployeeHome.css) */
+  /* Unified Color Palette */
   --primary-main: #187772;
   --primary-dark: #115852;
   --primary-light: #78a24b;
@@ -234,7 +234,7 @@
   overflow: hidden;
 }
 
-/* Simple skeleton utility (optional) */
+/* Simple skeleton utility */
 .skeleton {
   position: relative;
   overflow: hidden;

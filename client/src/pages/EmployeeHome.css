@@ -1,7 +1,6 @@
-/* ===========================
-   Employee Dashboard Styles
-   Inspired by Material Design patterns from Group-9-App
-   =========================== */
+
+/* Employee Dashboard Styles */
+
 
 :root {
   --primary-main: #187772;
@@ -43,9 +42,7 @@
   --nav-height: 60px;
 }
 
-/* ===========================
-   Dashboard Header
-   =========================== */
+/* Dashboard Header*/
 .employee-dashboard-header {
   background: linear-gradient(135deg, var(--primary-main) 0%, var(--primary-dark) 100%);
   color: white;
@@ -63,9 +60,7 @@
   margin: 0 0 1rem 0;
 }
 
-/* ===========================
-   Widget Cards (Dashboard Metrics)
-   =========================== */
+/* Widget Cards (Dashboard Metrics)*/
 .eh-widgets {
   display: flex;
   gap: 1rem;
@@ -119,9 +114,7 @@
   margin-top: 0.25rem;
 }
 
-/* ===========================
-   Tab Navigation
-   =========================== */
+/* Tab Navigation */
 .employee-tabs {
   display: flex;
   gap: 0.5rem;
@@ -159,9 +152,7 @@
   box-shadow: var(--shadow-md);
 }
 
-/* ===========================
-   Responsive Design
-   =========================== */
+/* Responsive Design */
 @media (max-width: 768px) {
   .employee-dashboard-header h1 {
     font-size: 1.5rem;
