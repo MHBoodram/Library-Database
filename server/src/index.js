@@ -16,6 +16,7 @@ import { createReservation, listReservations, createReservationSelf, listMyReser
 import { createRoom, listRooms } from "./api/rooms.js";
 import { createAuthor, getItemAuthors, deleteItemAuthor } from "./api/authors.js";
 import { schemaInfo } from "./api/debug.js";
+import { listAccounts } from "./api/manageAcc.js";
 
 const PORT = Number(process.env.PORT) || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || "devsecret";
@@ -73,6 +74,9 @@ r.add("GET", "/api/staff/reservations", listReservations(JWT_SECRET));
 r.add("POST", "/api/staff/reservations", createReservation(JWT_SECRET));
 r.add("DELETE", "/api/staff/reservations/:id", deleteReservation(JWT_SECRET));
 r.add("POST", "/api/staff/rooms", createRoom(JWT_SECRET));
+
+// account management
+r.add("GET", "/api/manage/accounts", listAccounts(JWT_SECRET));
 
 // student reservations
 r.add("POST", "/api/reservations", createReservationSelf(JWT_SECRET));
