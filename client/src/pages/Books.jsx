@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
 import { getItemCopies } from "../api";
+import "./Books.css";
 
 export default function Books() {
   const { token, useApi, user } = useAuth();
@@ -107,48 +108,46 @@ export default function Books() {
   }
 
   return (
-    <div style={{ maxWidth: 1000, margin: "2rem auto", padding: 24 }}>
+    <div className="books-page">
       <NavBar />
       <h1>Find Books</h1>
-      <p style={{ color: "#666", marginBottom: 16 }}>
-        Browse by Title or Author
-      </p>
+      <p>Browse by Title or Author</p>
 
-      <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap", marginBottom: 16 }}>
+      <div className="books-search-controls">
         <div>
           <label style={{ display: "block", fontSize: 12, color: "#666", marginBottom: 6 }}>Mode</label>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div className="books-mode-selector">
             <button
               onClick={() => setMode("title")}
-              style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #ccc", background: mode === "title" ? "#222" : "#f3f4f6", color: mode === "title" ? "#fff" : "#111" }}
+              className={`books-mode-btn ${mode === "title" ? "active" : ""}`}
             >Title</button>
             <button
               onClick={() => setMode("author")}
-              style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #ccc", background: mode === "author" ? "#222" : "#f3f4f6", color: mode === "author" ? "#fff" : "#111" }}
+              className={`books-mode-btn ${mode === "author" ? "active" : ""}`}
             >Author</button>
           </div>
         </div>
-        <div style={{ flex: 1, minWidth: 280 }}>
+        <div className="books-search-input-wrapper">
           <label style={{ display: "block", fontSize: 12, color: "#666", marginBottom: 6 }}>{titleText}</label>
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={mode === "author" ? "e.g. Jane Austen" : "e.g. Pride and Prejudice"}
-            style={{ width: "100%", padding: 10, borderRadius: 6, border: "1px solid #ccc" }}
+            className="books-search-input"
           />
         </div>
       </div>
 
-      <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, overflow: "hidden" }}>
-        <div style={{ padding: 12, background: "#f8fafc", display: "flex", justifyContent: "space-between", fontSize: 14 }}>
+      <div className="books-results-container">
+        <div className="books-results-header">
           <span>Results: {rows.length}</span>
-          {loading && <span>Loading…</span>}
-          {error && <span style={{ color: "#b91c1c" }}>{error}</span>}
+          {loading && <span className="loading">Loading…</span>}
+          {error && <span className="error">{error}</span>}
         </div>
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-            <thead style={{ background: "#f1f5f9" }}>
+          <table className="books-table">
+            <thead>
               <tr>
                 <Th>Title</Th>
                 <Th>Authors</Th>
@@ -162,13 +161,13 @@ export default function Books() {
             </thead>
             <tbody>
               {rows.length === 0 ? (
-                <tr><td colSpan={8} style={{ padding: 12 }}>No results.</td></tr>
+                <tr><td colSpan={8} className="books-empty-state">No results.</td></tr>
               ) : (
                 rows.map((r) => (
                   <>
-                    <tr key={r.item_id} style={{ borderTop: "1px solid #e5e7eb" }}>
+                    <tr key={r.item_id}>
                       <Td style={{ maxWidth: 320, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={r.title}>
-                        <Link to={`/books/${r.item_id}`} style={{ textDecoration: "none", color: "#2563eb" }}>
+                        <Link to={`/books/${r.item_id}`} className="book-title-link">
                           {r.title}
                         </Link>
                       </Td>
@@ -179,23 +178,23 @@ export default function Books() {
                       <Td>{r.subject || "—"}</Td>
                       <Td>{r.classification || "—"}</Td>
                       <Td>
-                        <button onClick={() => toggleCopies(r.item_id)} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #222", background: "#222", color: "#fff" }}>
+                        <button onClick={() => toggleCopies(r.item_id)} className="books-view-copies-btn">
                           {openItemId === r.item_id ? "Hide" : "View"}
                         </button>
                       </Td>
                     </tr>
                     {openItemId === r.item_id && (
-                      <tr>
-                        <td colSpan={8} style={{ padding: 12, background: "#fafafa" }}>
+                      <tr className="books-copies-row">
+                        <td colSpan={8}>
                           {copiesLoading ? (
-                            <div>Loading copies…</div>
+                            <div className="books-loading">Loading copies…</div>
                           ) : copiesError ? (
-                            <div style={{ color: "#b91c1c" }}>{copiesError}</div>
+                            <div className="books-error">{copiesError}</div>
                           ) : copies.length === 0 ? (
-                            <div>No copies found.</div>
+                            <div className="books-empty-state">No copies found.</div>
                           ) : (
                             <div style={{ overflowX: "auto" }}>
-                              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                              <table className="books-copies-table">
                                 <thead>
                                   <tr>
                                     <Th>Copy</Th>
@@ -206,13 +205,17 @@ export default function Books() {
                                 </thead>
                                 <tbody>
                                   {copies.map((c) => (
-                                    <tr key={c.copy_id} style={{ borderTop: "1px solid #eee" }}>
+                                    <tr key={c.copy_id}>
                                       <Td>#{c.copy_id}{c.barcode ? ` (${c.barcode})` : ""}</Td>
-                                      <Td style={{ textTransform: "capitalize" }}>{c.status}</Td>
+                                      <Td>
+                                        <span className={`books-status-badge ${c.status}`}>
+                                          {c.status}
+                                        </span>
+                                      </Td>
                                       <Td>{c.shelf_location || "—"}</Td>
                                       <Td>
                                         {c.status === "available" ? (
-                                          <button onClick={() => checkoutCopy(c.copy_id)} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #0b7", background: "#10b981", color: "#fff" }}>Checkout</button>
+                                          <button onClick={() => checkoutCopy(c.copy_id)} className="books-checkout-btn">Checkout</button>
                                         ) : (
                                           <span style={{ color: "#666" }}>Unavailable</span>
                                         )}
@@ -238,12 +241,8 @@ export default function Books() {
 }
 
 function Th({ children }) {
-  return (
-    <th style={{ textAlign: "left", padding: 10, borderRight: "1px solid #e5e7eb" }}>{children}</th>
-  );
+  return <th>{children}</th>;
 }
-function Td({ children }) {
-  return (
-    <td style={{ padding: 10, borderRight: "1px solid #f1f5f9" }}>{children}</td>
-  );
+function Td({ children, ...props }) {
+  return <td {...props}>{children}</td>;
 }

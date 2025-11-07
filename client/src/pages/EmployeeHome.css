@@ -1,182 +1,205 @@
-/* EmployeeHome.css
-   Styles for the staff Employee Dashboard page.
-*/
+/* ===========================
+   Employee Dashboard Styles
+   Inspired by Material Design patterns from Group-9-App
+   =========================== */
 
+:root {
+  --primary-main: #187772;
+  --primary-dark: #115852;
+  --primary-light: #78a24b;
+  --secondary-main: #78a24b;
+  --success-main: #059669;
+  --success-light: #10b981;
+  --warning-main: #d97706;
+  --warning-light: #f59e0b;
+  --error-main: #dc2626;
+  --error-light: #ef4444;
+  --info-main: #0891b2;
+  --info-light: #06b6d4;
+  
+  --gray-50: #fafafa;
+  --gray-100: #f5f5f5;
+  --gray-200: #eeeeee;
+  --gray-300: #e0e0e0;
+  --gray-400: #bdbdbd;
+  --gray-500: #9e9e9e;
+  --gray-600: #757575;
+  --gray-700: #616161;
+  --gray-800: #424242;
+  --gray-900: #212121;
+  
+  --text-primary: rgba(0, 0, 0, 0.87);
+  --text-secondary: rgba(0, 0, 0, 0.6);
+  --text-disabled: rgba(0, 0, 0, 0.38);
+  
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  
+  --border-radius: 8px;
+  --border-radius-lg: 12px;
+  --transition-duration: 0.3s;
+  --nav-height: 60px;
+}
+
+/* ===========================
+   Dashboard Header
+   =========================== */
 .employee-dashboard-header {
+  background: linear-gradient(135deg, var(--primary-main) 0%, var(--primary-dark) 100%);
+  color: white;
+  padding: 1.5rem 0;
+  box-shadow: var(--shadow-lg);
   position: sticky;
   top: var(--nav-height, 60px);
-  z-index: 100;
-  background: #ffffff;
-  border-bottom: 1px solid #e5e7eb;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  z-index: 10;
 }
 
-.employee-dashboard-header .header-inner {
+.employee-dashboard-header h1 {
+  color: white;
+  font-weight: 600;
+  font-size: 1.75rem;
+  margin: 0 0 1rem 0;
+}
+
+/* ===========================
+   Widget Cards (Dashboard Metrics)
+   =========================== */
+.eh-widgets {
   display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-}
-
-@media (min-width: 1024px) {
-  .employee-dashboard-header .header-inner {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-  }
-}
-
-/* Header widgets */
-.eh-widgets { 
-  display: flex; 
-  gap: 0.75rem; 
-  align-items: center;
+  gap: 1rem;
   flex-wrap: wrap;
+  margin-top: 1rem;
 }
 
-.eh-widgets button {
+.eh-widgets > button {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.6rem 0.9rem;
-  border-radius: 0.5rem;
-  border: 1px solid #e5e7eb;
-  background: #f9fafb;
-  color: #111827;
+  gap: 0.75rem;
+  background: white;
+  border: none;
+  border-radius: var(--border-radius-lg);
+  padding: 1rem 1.5rem;
+  box-shadow: var(--shadow-md);
   cursor: pointer;
-  transition: background 0.15s ease;
-  font-family: inherit;
+  transition: all var(--transition-duration) ease;
+  min-width: 140px;
 }
 
-.eh-widgets button:hover { 
-  background: #f3f4f6; 
+.eh-widgets > button:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-xl);
+  background: var(--gray-50);
 }
 
-.eh-widgets .emoji { 
-  font-size: 1.25rem; 
-  line-height: 1; 
+.eh-widgets > button:active {
+  transform: translateY(-2px);
 }
 
-.eh-widgets .count-label { 
-  font-size: 0.7rem; 
-  color: #6b7280; 
-  text-transform: uppercase;
-  letter-spacing: 0.025em;
-}
-
-.eh-widgets .count-num { 
-  font-size: 1.125rem; 
-  font-weight: 600; 
-  color: #111827;
-  margin-top: 0.15rem;
-}
-
-/* Nav tab buttons */
-.employee-tabs { 
-  display: flex; 
-  gap: 0.5rem; 
-  flex-wrap: wrap;
+.eh-widgets .emoji {
+  font-size: 2rem;
+  display: flex;
   align-items: center;
+  justify-content: center;
 }
 
-.employee-tabs .tab-btn {
-  padding: 0.6rem 1rem; 
-  border-radius: 0.5rem; 
-  font-size: 0.875rem; 
+.eh-widgets .count-label {
+  font-size: 0.75rem;
   font-weight: 500;
-  border: none; 
-  cursor: pointer;
-  background: #e5e7eb; 
-  color: #111827;
-  transition: all 0.15s ease;
-  white-space: nowrap;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
-.employee-tabs .tab-btn.active { 
-  background: #111827; 
-  color: #ffffff; 
+.eh-widgets .count-num {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--primary-main);
+  margin-top: 0.25rem;
 }
 
-.employee-tabs .tab-btn:hover { 
-  filter: brightness(0.95); 
+/* ===========================
+   Tab Navigation
+   =========================== */
+.employee-tabs {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-/* Logout button */
-.eh-logout { 
-  background: #fef2f2; 
-  border: 1px solid #fca5a5; 
-  color: #b91c1c; 
-  padding: 0.6rem 1rem; 
-  border-radius: 0.5rem;
+.tab-btn {
+  background: rgba(255, 255, 255, 0.1);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  color: white;
+  border: 2px solid transparent;
+  padding: 0.625rem 1.25rem;
+  border-radius: var(--border-radius);
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s ease;
-  white-space: nowrap;
+  transition: all var(--transition-duration) ease;
+  text-transform: none;
 }
 
-.eh-logout:hover { 
-  background: #fee2e2; 
+.tab-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
-/* Focus styles for accessibility */
-.eh-widgets button:focus, 
-.employee-tabs .tab-btn:focus, 
-.eh-logout:focus { 
-  outline: 3px solid rgba(59, 130, 246, 0.3); 
-  outline-offset: 2px; 
-}
-
-/* Panels and tables */
-.eh-panel { 
-  background: #ffffff; 
-  border: 1px solid #e5e7eb; 
-  border-radius: 0.75rem; 
-  padding: 1.25rem; 
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); 
-}
-
-.eh-panel h2 { 
-  margin: 0 0 1rem 0; 
-  font-size: 1.125rem; 
+.tab-btn.active {
+  background: white;
+  color: var(--primary-main);
+  border-color: white;
   font-weight: 600;
+  box-shadow: var(--shadow-md);
 }
 
-.eh-table { 
-  width: 100%; 
-  border-collapse: collapse; 
-}
-
-.eh-table th, 
-.eh-table td { 
-  padding: 0.75rem; 
-  border-bottom: 1px solid #f3f4f6; 
-  text-align: left; 
-}
-
-.eh-table th {
-  background: #f9fafb;
-  font-weight: 600;
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.025em;
-  color: #6b7280;
-}
-
-/* Responsive tweaks */
-@media (max-width: 640px) {
-  .eh-widgets { 
-    display: none; 
+/* ===========================
+   Responsive Design
+   =========================== */
+@media (max-width: 768px) {
+  .employee-dashboard-header h1 {
+    font-size: 1.5rem;
   }
-  
-  .employee-tabs {
+
+  .eh-widgets {
+    flex-direction: column;
+  }
+
+  .eh-widgets > button {
     width: 100%;
   }
-  
-  .employee-tabs .tab-btn,
-  .eh-logout {
-    flex: 1 1 auto;
+
+  .employee-tabs {
+    flex-direction: column;
+  }
+
+  .tab-btn {
+    width: 100%;
     text-align: center;
-    font-size: 0.8rem;
-    padding: 0.5rem 0.6rem;
+  }
+
+  table.min-w-full {
+    font-size: 0.75rem;
+  }
+
+  table.min-w-full th,
+  table.min-w-full td {
+    padding: 0.5rem;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  .eh-widgets {
+    justify-content: center;
+  }
+
+  .employee-tabs {
+    justify-content: flex-start;
   }
 }

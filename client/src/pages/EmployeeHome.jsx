@@ -2474,7 +2474,7 @@ function RemoveItemPanel({ api }) {
       <div className="rounded-xl border bg-white shadow-sm p-5">
         <h2 className="text-lg font-semibold mb-3">Remove Item</h2>
         <p className="text-sm text-gray-600 mb-4">
-          Search for items by title, ISBN, or ID. Be careful — deleting an item will permanently remove it and all its copies.
+          Search for items by title, ISBN, or ID. 
         </p>
 
         <div className="mb-4">
