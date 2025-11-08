@@ -1,0 +1,17 @@
+option {
+    border: 1px solid black;
+}
+#search-input{
+    width:100%;
+    margin-left:5px;
+}
+#mode-dropdown{
+    margin-right:5px;
+    width:100%;
+    overflow:visible;
+}
+#dropdown-container{
+    border:1px solid gray;
+    width:15%;
+    border-radius: 5px;
+}
