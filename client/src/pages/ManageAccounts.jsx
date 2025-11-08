@@ -1,7 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
+import { formatDateTime, formatDate } from "../utils";
 import "./ManageAccounts.css";
+
+const ACCOUNT_ROLE_OPTIONS = ["student", "faculty", "staff", "admin"];
+const EMPLOYEE_ROLE_OPTIONS = ["librarian", "clerk", "assistant", "admin"];
+
+const PLACEHOLDERS = {
+  all: "Search by name, email, or ID",
+  fullname: "Enter full name (First Last)",
+  firstname: "Enter first name",
+  lastname: "Enter last name",
+  email: "Enter email address",
+  id: "Enter user ID",
+};
 
 export default function ManageAccounts() {
   const { useApi } = useAuth();
@@ -12,112 +25,300 @@ export default function ManageAccounts() {
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState("all");
-
-  const placeholders = {
-    all: "Enter search term",
-    fullname: "Enter user full name (format:first last)",
-    firstname: "Enter user first name",
-    lastname: "Enter user last name",
-    email: "Enter user email",
-    id: "Enter user ID",
-  };
-
-  const currPlaceholder = placeholders[mode] || "Enter search term";
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({});
+  const [savingId, setSavingId] = useState(null);
+  const [flaggingId, setFlaggingId] = useState(null);
+  const [message, setMessage] = useState({ type: "", text: "" });
 
   useEffect(() => {
-    const t = setTimeout(() => setDebounced(query.trim()), 300);
+    const t = setTimeout(() => setDebounced(query.trim()), 250);
     return () => clearTimeout(t);
   }, [query]);
 
   useEffect(() => {
-    let active = true;
+    let alive = true;
 
-    async function run() {
+    async function load() {
       setLoading(true);
       setError("");
       try {
         const params = new URLSearchParams();
-        if (debounced) params.set("term", debounced);
         params.set("mode", mode);
+        if (debounced) params.set("term", debounced);
         const data = await apiWithAuth(`manage/accounts?${params.toString()}`);
-        const list = Array.isArray(data) ? data : Array.isArray(data?.rows) ? data.rows : [];
-        if (!active) return;
-        setRows(list);
+        if (!alive) return;
+        setRows(Array.isArray(data) ? data : []);
       } catch (err) {
-        if (!active) return;
-        setError(err?.message || "Failed to list users");
+        if (!alive) return;
+        setError(err?.data?.error || err?.message || "Failed to load accounts.");
       } finally {
-        if (active) setLoading(false);
+        if (alive) setLoading(false);
       }
     }
 
-    run();
+    load();
     return () => {
-      active = false;
+      alive = false;
     };
-  }, [debounced, mode, apiWithAuth]);
+  }, [apiWithAuth, debounced, mode, refreshKey]);
+
+  const placeholder = PLACEHOLDERS[mode] || PLACEHOLDERS.all;
+
+  const startEdit = (row) => {
+    setEditingId(row.account_id);
+    setEditForm({
+      first_name: row.first_name || "",
+      last_name: row.last_name || "",
+      role: row.role,
+      is_active: row.is_active ? "1" : "0",
+      employee_role: row.employee_role || "assistant",
+    });
+    setMessage({ type: "", text: "" });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditForm({});
+  };
+
+  const handleEditChange = (field, value) => {
+    setEditForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const refresh = () => setRefreshKey((k) => k + 1);
+
+  const handleSave = async (row) => {
+    if (!apiWithAuth) return;
+    const payload = {};
+    if (editForm.first_name && editForm.first_name !== row.first_name) payload.first_name = editForm.first_name.trim();
+    if (editForm.last_name && editForm.last_name !== row.last_name) payload.last_name = editForm.last_name.trim();
+    if (editForm.role && editForm.role !== row.role) payload.role = editForm.role;
+    if (editForm.is_active !== undefined && (row.is_active ? "1" : "0") !== editForm.is_active) {
+      payload.is_active = editForm.is_active === "1";
+    }
+    if (row.employee_id && editForm.employee_role && editForm.employee_role !== row.employee_role) {
+      payload.employee_role = editForm.employee_role;
+    }
+
+    if (!Object.keys(payload).length) {
+      setMessage({ type: "info", text: "No changes to save." });
+      cancelEdit();
+      return;
+    }
+
+    setSavingId(row.account_id);
+    try {
+      await apiWithAuth(`manage/accounts/${row.account_id}`, { method: "PATCH", body: payload });
+      setMessage({ type: "success", text: "Account updated." });
+      cancelEdit();
+      refresh();
+    } catch (err) {
+      setMessage({ type: "error", text: err?.data?.error || err?.message || "Failed to update account." });
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const handleFlag = async (row) => {
+    if (row.flagged_for_deletion) return;
+    if (!window.confirm(`Flag ${row.email} for deletion?`)) return;
+    setFlaggingId(row.account_id);
+    try {
+      await apiWithAuth(`manage/accounts/${row.account_id}/flag`, { method: "POST" });
+      setMessage({ type: "success", text: "Account flagged for deletion." });
+      refresh();
+    } catch (err) {
+      setMessage({ type: "error", text: err?.data?.error || err?.message || "Failed to flag account." });
+    } finally {
+      setFlaggingId(null);
+    }
+  };
 
   return (
-    <div style={{ display: "block", maxWidth: 1000, margin: "2rem auto", padding: 24 }}>
+    <div className="manage-accounts-page">
       <NavBar />
-      <h1>Manage Accounts</h1>
-      <div className="search-labls" style={{ display: "flex", paddingLeft: 0 }}>
-        <label>Search by:</label>
-      </div>
-      <div className="account-search" style={{ display: "flex" }}>
-        <div id="dropdown-container">
-          <select id="mode-dropdown" value={mode} onChange={(e) => setMode(e.target.value)}>
-            <option value="all">All</option>
-            <option value="fullname">Full Name</option>
-            <option value="firstname">First Name</option>
-            <option value="lastname">Last Name</option>
-            <option value="email">Email</option>
-            <option value="id">ID</option>
-          </select>
-        </div>
-        <input id="search-input" onChange={(e) => setQuery(e.target.value)} placeholder={currPlaceholder} />
-      </div>
-      <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, overflow: "hidden" }}>
-        <div style={{ padding: 12, background: "#f8fafc", display: "flex", justifyContent: "space-between", fontSize: 14 }}>
-          <span>Accounts: {rows.length}</span>
-          {loading && <span>Loading…</span>}
-          {error && <span style={{ color: "#b91c1c" }}>{error}</span>}
-        </div>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-            <thead style={{ background: "#f1f5f9" }}>
-              <tr>
-                <Th>ID</Th>
-                <Th>First Name</Th>
-                <Th>Last Name</Th>
-                <Th>Email</Th>
-                <Th>Role</Th>
-                <Th>Join Date</Th>
-                <Th>Actions</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.length === 0 ? (
+      <div className="manage-accounts-content">
+        <header>
+          <h1>Account Manager</h1>
+          <p>Search, update, or flag patron and staff accounts.</p>
+        </header>
+
+        <section className="search-bar">
+          <div className="mode-select">
+            <label htmlFor="mode-dropdown">Search by</label>
+            <select id="mode-dropdown" value={mode} onChange={(e) => setMode(e.target.value)}>
+              <option value="all">All</option>
+              <option value="fullname">Full Name</option>
+              <option value="firstname">First Name</option>
+              <option value="lastname">Last Name</option>
+              <option value="email">Email</option>
+              <option value="id">ID</option>
+            </select>
+          </div>
+          <input
+            id="search-input"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={placeholder}
+          />
+        </section>
+
+        {message.text && (
+          <div className={`notice notice-${message.type || "info"}`}>
+            {message.text}
+          </div>
+        )}
+        {error && (
+          <div className="notice notice-error">{error}</div>
+        )}
+
+        <div className="accounts-card">
+          <div className="accounts-card__header">
+            <span>{loading ? "Loading accounts…" : `${rows.length} account${rows.length === 1 ? "" : "s"}`}</span>
+          </div>
+          <div className="accounts-table-wrapper">
+            <table className="accounts-table">
+              <thead>
                 <tr>
-                  <td colSpan={7} style={{ padding: 12 }}>
-                    {loading ? "" : "No accounts found."}
-                  </td>
+                  <Th>ID</Th>
+                  <Th>Name</Th>
+                  <Th>Email</Th>
+                  <Th>Role</Th>
+                  <Th>Status</Th>
+                  <Th>Created</Th>
+                  <Th>Flag</Th>
+                  <Th>Actions</Th>
                 </tr>
-              ) : (
-                rows.map((r) => (
-                  <tr key={r.user_id} style={{ borderTop: "1px solid #e5e7eb" }}>
-                    <Td>#{r.user_id}</Td>
-                    <Td>{r.first_name}</Td>
-                    <Td>{r.last_name}</Td>
-                    <Td>{r.email}</Td>
-                    <Td>{r.role}</Td>
-                    <Td>{r.created_at}</Td>
-                    <Td>Actions</Td>
+              </thead>
+              <tbody>
+                {!rows.length && !loading ? (
+                  <tr>
+                    <td colSpan={8} style={{ padding: 12 }}>No accounts found.</td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  rows.map((row) => {
+                    const isEditing = editingId === row.account_id;
+                    return (
+                      <tr
+                        key={row.account_id}
+                        className={row.flagged_for_deletion ? "flagged-row" : ""}
+                      >
+                        <Td>#{row.account_id}</Td>
+                        <Td>
+                          {isEditing ? (
+                            <div className="edit-name-fields">
+                              <input
+                                value={editForm.first_name || ""}
+                                onChange={(e) => handleEditChange("first_name", e.target.value)}
+                                placeholder="First"
+                              />
+                              <input
+                                value={editForm.last_name || ""}
+                                onChange={(e) => handleEditChange("last_name", e.target.value)}
+                                placeholder="Last"
+                              />
+                            </div>
+                          ) : (
+                            <>
+                              <div>{row.first_name} {row.last_name}</div>
+                            </>
+                          )}
+                        </Td>
+                        <Td>{row.email}</Td>
+                        <Td>
+                          {isEditing ? (
+                            <select value={editForm.role} onChange={(e) => handleEditChange("role", e.target.value)}>
+                              {ACCOUNT_ROLE_OPTIONS.map((role) => (
+                                <option key={role} value={role}>{role}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <span>{row.role}</span>
+                          )}
+                          {row.employee_id && (
+                            <div className="employee-role">
+                              {isEditing ? (
+                                <select
+                                  value={editForm.employee_role}
+                                  onChange={(e) => handleEditChange("employee_role", e.target.value)}
+                                >
+                                  {EMPLOYEE_ROLE_OPTIONS.map((role) => (
+                                    <option key={role} value={role}>{role}</option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <small>Employee: {row.employee_role || "—"}</small>
+                              )}
+                            </div>
+                          )}
+                        </Td>
+                        <Td>
+                          {isEditing ? (
+                            <select
+                              value={editForm.is_active}
+                              onChange={(e) => handleEditChange("is_active", e.target.value)}
+                            >
+                              <option value="1">Active</option>
+                              <option value="0">Inactive</option>
+                            </select>
+                          ) : (
+                            <span className={row.is_active ? "status-badge active" : "status-badge inactive"}>
+                              {row.is_active ? "Active" : "Inactive"}
+                            </span>
+                          )}
+                        </Td>
+                        <Td>{formatDateTime(row.created_at)}</Td>
+                        <Td>
+                          {row.flagged_for_deletion ? (
+                            <span className="flagged-badge">
+                              Flagged {formatDate(row.flagged_at)}
+                            </span>
+                          ) : (
+                            "—"
+                          )}
+                        </Td>
+                        <Td>
+                          {isEditing ? (
+                            <div className="row-actions">
+                              <button
+                                className="action-btn primary"
+                                onClick={() => handleSave(row)}
+                                disabled={savingId === row.account_id}
+                              >
+                                {savingId === row.account_id ? "Saving…" : "Save"}
+                              </button>
+                              <button className="action-btn" onClick={cancelEdit} disabled={savingId === row.account_id}>
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="row-actions">
+                              <button className="action-btn" onClick={() => startEdit(row)}>
+                                Edit
+                              </button>
+                              <button
+                                className="action-btn danger"
+                                disabled={row.flagged_for_deletion || flaggingId === row.account_id}
+                                onClick={() => handleFlag(row)}
+                              >
+                                {row.flagged_for_deletion
+                                  ? "Flagged"
+                                  : flaggingId === row.account_id
+                                  ? "Flagging…"
+                                  : "Flag Delete"}
+                              </button>
+                            </div>
+                          )}
+                        </Td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -125,9 +326,9 @@ export default function ManageAccounts() {
 }
 
 function Th({ children }) {
-  return <th style={{ textAlign: "left", padding: 10, borderRight: "1px solid #e5e7eb" }}>{children}</th>;
+  return <th>{children}</th>;
 }
 
 function Td({ children }) {
-  return <td style={{ padding: 10, borderRight: "1px solid #f1f5f9" }}>{children}</td>;
+  return <td>{children}</td>;
 }

@@ -40,13 +40,18 @@ CREATE TABLE `account` (
   `is_active` tinyint(1) NOT NULL DEFAULT '1',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `flagged_for_deletion` tinyint(1) NOT NULL DEFAULT '0',
+  `flagged_at` datetime DEFAULT NULL,
+  `flagged_by_account_id` int DEFAULT NULL,
   PRIMARY KEY (`account_id`),
   UNIQUE KEY `email` (`email`),
   KEY `user_id` (`user_id`),
   KEY `fk_account_employee` (`employee_id`),
+  KEY `flagged_by_account_id` (`flagged_by_account_id`),
   CONSTRAINT `account_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `user` (`user_id`),
   CONSTRAINT `fk_account_employee` FOREIGN KEY (`employee_id`) REFERENCES `employee` (`employee_id`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=44 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/**********************************************************/
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --

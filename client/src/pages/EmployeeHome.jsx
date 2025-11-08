@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
 import "./EmployeeHome.css";
@@ -2820,6 +2821,29 @@ function AdminPanel({ api }) {
               {submitting ? "Creating…" : "Create Account"}
             </button>
           </form>
+        </div>
+        <div className="rounded-lg border bg-white p-4 shadow-sm flex flex-col">
+          <h3 className="font-semibold mb-2">Account Directory</h3>
+          <p className="text-sm text-gray-600 flex-1">
+            Open the dedicated account manager to search, edit, or flag any patron or staff record.
+          </p>
+          <Link
+            to="/manage/accounts"
+            style={{
+              marginTop: "1rem",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.35rem",
+              background: "#2563eb",
+              color: "#fff",
+              padding: "0.5rem 0.9rem",
+              borderRadius: "999px",
+              fontWeight: 600,
+              textDecoration: "none",
+            }}
+          >
+            Open Account Manager →
+          </Link>
         </div>
 
         <div className="rounded-lg border bg-white p-4 shadow-sm">
