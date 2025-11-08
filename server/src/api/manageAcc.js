@@ -30,11 +30,11 @@ export const listAccounts = (JWT_SECRET) => async (req, res) => {
             params.push(`%${term}%`);
             break;
         case "id":
-            where.push("u.user_id = ?");
-            params.push(term);
+            where.push("u.user_id LIKE ?");
+            params.push(`%${term}%`);
             break;
         case "all":
-            where.push("(CONCAT(u.first_name, ' ', u.last_name) LIKE ? OR u.first_name Like ? OR u.last_name like ? OR a.email LIKE ? OR u.user_id = ?)");
+            where.push("(CONCAT(u.first_name, ' ', u.last_name) LIKE ? OR u.first_name Like ? OR u.last_name like ? OR a.email LIKE ? OR u.user_id LIKE ?)");
             params.push(`%${term}%`, `%${term}%`, `%${term}%`, `%${term}%`, `%${term}%`);
             break;
     }
