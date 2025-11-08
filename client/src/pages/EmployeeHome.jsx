@@ -21,7 +21,8 @@ const ACCOUNT_ROLE_OPTIONS = ["student", "faculty", "staff"];
 export default function EmployeeDashboard() {
   const { useApi, user } = useAuth();
   // obtain the api helper from context (memoized so effects don't refire each render)
-  const apiWithAuth = useMemo(() => useApi(), [useApi]);
+  // Directly invoke hook; calling inside useMemo triggered hook rules violation.
+  const apiWithAuth = useApi();
   const [tab, setTab] = useState("fines"); // "fines" | "checkout" | "activeLoans" | "reservations" | "addItem" | "removeItem"
   const [counts, setCounts] = useState({ fines: 0, activeLoans: 0, reservations: 0 });
   const [countsLoading, setCountsLoading] = useState(false);
@@ -1270,8 +1271,7 @@ function AddItemPanel({ api }) {
   const [form, setForm] = useState({
     title: "",
     subject: "",
-    classification: "",
-    item_type: "general",
+    item_type: "book",
     isbn: "",
     publisher: "",
     publication_year: "",
@@ -1279,6 +1279,9 @@ function AddItemPanel({ api }) {
     manufacturer: "",
     media_type: "DVD",
     length_minutes: "",
+    use_same_shelf: false,
+    same_shelf_location: "",
+    number_of_copies: "1",
   });
   const [copies, setCopies] = useState([{ barcode: "", shelf_location: "" }]);
   const [authors, setAuthors] = useState([{ name: "" }]);
@@ -1327,19 +1330,12 @@ function AddItemPanel({ api }) {
         throw new Error("Title is required");
       }
 
-      // Validate authors for books
+      // Determine item type (authors now optional for books)
       const itemType = form.item_type;
-      if (itemType === "book") {
-        const authorNames = authors.map(a => a.name.trim()).filter(Boolean);
-        if (authorNames.length === 0) {
-          throw new Error("At least one author is required for books");
-        }
-      }
 
       const itemPayload = {
         title,
         subject: form.subject.trim() || undefined,
-        classification: form.classification.trim() || undefined,
       };
 
       if (itemType && itemType !== "general") {
@@ -1380,20 +1376,30 @@ function AddItemPanel({ api }) {
       }
 
       const item_id = itemResponse?.item_id;
+      
+      // Determine how many copies to create
+      const numCopies = parseInt(form.number_of_copies, 10) || 1;
+      
+      // Build copy payloads from explicit rows.
+      // Accept either barcode OR shelf_location so users can set shelf without barcode
+      const useSameShelf = !!form.use_same_shelf;
+      const sameShelf = (form.same_shelf_location || "").trim();
       const copyPayloads = copies
         .map((copy) => ({
-          barcode: copy.barcode.trim(),
-          shelf_location: copy.shelf_location.trim(),
+          barcode: (copy.barcode || "").trim(),
+          shelf_location: (copy.shelf_location || "").trim(),
         }))
-        .filter((copy) => copy.barcode);
+        .filter((copy) => copy.barcode || copy.shelf_location);
 
       let createdCopies = 0;
-      if (item_id && copyPayloads.length) {
+      if (item_id) {
+        // First, create copies from the barcode rows if user provided them
         for (const copy of copyPayloads) {
+          const shelf = useSameShelf ? sameShelf : copy.shelf_location;
           const body = {
             item_id,
-            barcode: copy.barcode,
-            shelf_location: copy.shelf_location || undefined,
+            ...(copy.barcode ? { barcode: copy.barcode } : {}),
+            ...(shelf ? { shelf_location: shelf } : {}),
           };
           if (api) {
             await api("copies", { method: "POST", body });
@@ -1407,6 +1413,32 @@ function AddItemPanel({ api }) {
             if (!res.ok) {
               const msg = await safeError(res);
               throw new Error(msg || `Copy creation failed (${res.status})`);
+            }
+          }
+          createdCopies += 1;
+        }
+        
+        // Then, create additional copies if numCopies > copyPayloads.length
+        // (auto-generate barcodes for the rest)
+        const remaining = Math.max(0, numCopies - copyPayloads.length);
+        for (let i = 0; i < remaining; i++) {
+          const body = {
+            item_id,
+            ...(useSameShelf && sameShelf ? { shelf_location: sameShelf } : {}),
+          };
+          if (api) {
+            await api("copies", { method: "POST", body });
+          } else {
+            const res = await fetch(`${API_BASE}/copies`, {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body),
+            });
+            if (!res.ok) {
+              const msg = await safeError(res);
+              console.warn(`Auto-copy creation warning: ${msg}`);
+              break; // Stop on error but don't fail entire operation
             }
           }
           createdCopies += 1;
@@ -1446,7 +1478,6 @@ function AddItemPanel({ api }) {
       setForm({
         title: "",
         subject: "",
-        classification: "",
         item_type: "general",
         isbn: "",
         publisher: "",
@@ -1455,6 +1486,9 @@ function AddItemPanel({ api }) {
         manufacturer: "",
         media_type: "DVD",
         length_minutes: "",
+        use_same_shelf: false,
+        same_shelf_location: "",
+        number_of_copies: "1",
       });
       setCopies([{ barcode: "", shelf_location: "" }]);
       setAuthors([{ name: "" }]);
@@ -1479,9 +1513,7 @@ function AddItemPanel({ api }) {
             <input className="w-full rounded-md border px-3 py-2" value={form.subject} onChange={(e) => update("subject", e.target.value)} placeholder="e.g., Literature" />
           </Field>
 
-          <Field label="Classification / Call Number">
-            <input className="w-full rounded-md border px-3 py-2" value={form.classification} onChange={(e) => update("classification", e.target.value)} placeholder="e.g., 813.52 FIT" />
-          </Field>
+
 
           <Field label="Item Type">
             <select
@@ -1530,10 +1562,10 @@ function AddItemPanel({ api }) {
               {/* Authors section for books */}
               <div className="space-y-2 pt-2">
                 <h3 className="text-sm font-semibold text-gray-700">
-                  Authors <span className="text-red-600">*</span>
+                  Authors (optional)
                 </h3>
                 <p className="text-xs text-gray-500">
-                  At least one author is required for books.
+                  Add one or more authors. Leave blank if unknown.
                 </p>
 
                 {authors.map((author, index) => (
@@ -1544,7 +1576,6 @@ function AddItemPanel({ api }) {
                         value={author.name}
                         onChange={(e) => updateAuthor(index, e.target.value)}
                         placeholder="e.g., F. Scott Fitzgerald"
-                        required={form.item_type === "book"}
                       />
                     </Field>
                     <div className="pb-2">
@@ -1638,10 +1669,25 @@ function AddItemPanel({ api }) {
             </div>
           )}
 
+          <Field label="Number of Copies">
+            <input
+              type="number"
+              min="1"
+              max="100"
+              className="w-full rounded-md border px-3 py-2"
+              value={form.number_of_copies}
+              onChange={(e) => update("number_of_copies", e.target.value)}
+              placeholder="e.g., 3"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Specify how many physical copies to create. Barcodes will be auto-generated if not provided below.
+            </p>
+          </Field>
+
           <div className="space-y-2">
-            <h3 className="text-sm font-semibold text-gray-700">Copies</h3>
+            <h3 className="text-sm font-semibold text-gray-700">Specific Barcodes (Optional)</h3>
             <p className="text-xs text-gray-500">
-              Provide at least one barcode if you want to create physical copies now. Leave additional rows blank to skip.
+              If you want to assign custom barcodes or shelf locations, add them here. Otherwise, the system will auto-generate barcodes based on the number of copies above.
             </p>
 
             {copies.map((copy, index) => (
@@ -1654,14 +1700,16 @@ function AddItemPanel({ api }) {
                     placeholder="e.g., BC-000123"
                   />
                 </Field>
-                <Field label="Shelf Location">
-                  <input
-                    className="w-full rounded-md border px-3 py-2"
-                    value={copy.shelf_location}
-                    onChange={(e) => updateCopy(index, "shelf_location", e.target.value)}
-                    placeholder="Stacks A3"
-                  />
-                </Field>
+                {!form.use_same_shelf && (
+                  <Field label="Shelf Location">
+                    <input
+                      className="w-full rounded-md border px-3 py-2"
+                      value={copy.shelf_location}
+                      onChange={(e) => updateCopy(index, "shelf_location", e.target.value)}
+                      placeholder="Stacks A3"
+                    />
+                  </Field>
+                )}
                 <div className="pb-2">
                   {copies.length > 1 && (
                     <button
@@ -1675,7 +1723,27 @@ function AddItemPanel({ api }) {
                 </div>
               </div>
             ))}
-
+          {/* Shelf location controls */}
+          <div className="space-y-2">
+            <label className="inline-flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={!!form.use_same_shelf}
+                onChange={(e) => update("use_same_shelf", e.target.checked)}
+              />
+              Use same shelf location for all copies
+            </label>
+            {form.use_same_shelf && (
+              <Field label="Shelf Location for All Copies">
+                <input
+                  className="w-full rounded-md border px-3 py-2"
+                  value={form.same_shelf_location}
+                  onChange={(e) => update("same_shelf_location", e.target.value)}
+                  placeholder="e.g., Shelf A-12"
+                />
+              </Field>
+            )}
+          </div>
             <button
               type="button"
               className="text-xs font-medium text-gray-700 hover:underline"
@@ -2027,15 +2095,22 @@ function EditItemPanel({ api }) {
   const [form, setForm] = useState({
     title: "",
     subject: "",
-    classification: "",
     item_type: "book",
     isbn: "",
     publisher: "",
     publication_year: "",
+    model: "",
+    manufacturer: "",
+    media_type: "DVD",
+    length_minutes: "",
+    additional_copies: "0",
+    bulk_shelf_location: "",
   });
   const [authors, setAuthors] = useState([{ name: "" }]);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
+  const [existingCopies, setExistingCopies] = useState([]);
+  const [loadingCopies, setLoadingCopies] = useState(false);
 
   // Debounce search
   useEffect(() => {
@@ -2068,12 +2143,29 @@ function EditItemPanel({ api }) {
     setForm({
       title: item.title || "",
       subject: item.subject || "",
-      classification: item.classification || "",
       item_type: item.item_type || "book",
       isbn: item.isbn || "",
       publisher: item.publisher || "",
       publication_year: item.publication_year || "",
+      model: item.model || "",
+      manufacturer: item.manufacturer || "",
+      media_type: item.media_type || "DVD",
+      length_minutes: item.length_minutes || "",
+      additional_copies: "0",
+      bulk_shelf_location: "",
     });
+
+    // Fetch existing copies for this item
+    setLoadingCopies(true);
+    try {
+      const copiesData = await api(`items/${item.item_id}/copies`);
+      setExistingCopies(Array.isArray(copiesData) ? copiesData : []);
+    } catch (err) {
+      console.error("Error fetching copies:", err);
+      setExistingCopies([]);
+    } finally {
+      setLoadingCopies(false);
+    }
 
     // Fetch existing authors for this item
     if (item.item_type === "book") {
@@ -2127,24 +2219,25 @@ function EditItemPanel({ api }) {
         throw new Error("Title is required");
       }
 
-      // Validate authors for books
-      if (form.item_type === "book") {
-        const authorNames = authors.map(a => a.name.trim()).filter(Boolean);
-        if (authorNames.length === 0) {
-          throw new Error("At least one author is required for books");
-        }
-      }
+      // Authors are now optional for all types (including books)
 
       const itemPayload = {
         title,
         subject: form.subject.trim() || undefined,
-        classification: form.classification.trim() || undefined,
       };
 
       if (form.item_type === "book") {
         if (form.isbn.trim()) itemPayload.isbn = form.isbn.trim();
         if (form.publisher.trim()) itemPayload.publisher = form.publisher.trim();
         if (form.publication_year) itemPayload.publication_year = Number(form.publication_year);
+      } else if (form.item_type === "device") {
+        if (form.model.trim()) itemPayload.model = form.model.trim();
+        if (form.manufacturer.trim()) itemPayload.manufacturer = form.manufacturer.trim();
+      } else if (form.item_type === "media") {
+        if (form.publisher.trim()) itemPayload.publisher = form.publisher.trim();
+        if (form.publication_year) itemPayload.publication_year = Number(form.publication_year);
+        if (form.length_minutes) itemPayload.length_minutes = Number(form.length_minutes);
+        if (form.media_type) itemPayload.media_type = form.media_type;
       }
 
       // Update item
@@ -2180,7 +2273,27 @@ function EditItemPanel({ api }) {
         }
       }
 
-      setMessage(`✓ Item "${title}" updated successfully.`);
+      // Add additional copies if requested
+      const additionalCopies = parseInt(form.additional_copies, 10) || 0;
+      let createdCopies = 0;
+      if (additionalCopies > 0) {
+        for (let i = 0; i < additionalCopies; i++) {
+          try {
+            await api("copies", {
+              method: "POST",
+              body: { item_id: selectedItem.item_id },
+            });
+            createdCopies += 1;
+          } catch (err) {
+            console.error("Error creating copy:", err);
+            break;
+          }
+        }
+      }
+
+      setMessage(
+        `✓ Item "${title}" updated successfully${createdCopies > 0 ? ` and ${createdCopies} ${createdCopies === 1 ? "copy" : "copies"} added` : ""}.`
+      );
       setSelectedItem(null);
       setSearchQuery("");
       setItems([]);
@@ -2282,13 +2395,19 @@ function EditItemPanel({ api }) {
               />
             </Field>
 
-            <Field label="Classification / Call Number">
-              <input
+              {/* Classification removed per request */}
+
+            <Field label="Item Type">
+              <select
                 className="w-full rounded-md border px-3 py-2"
-                value={form.classification}
-                onChange={(e) => update("classification", e.target.value)}
-                placeholder="e.g., 813.52 FIT"
-              />
+                value={form.item_type}
+                onChange={(e) => update("item_type", e.target.value)}
+              >
+                <option value="general">General</option>
+                <option value="book">Book</option>
+                <option value="device">Device</option>
+                <option value="media">Media</option>
+              </select>
             </Field>
 
             {form.item_type === "book" && (
@@ -2325,10 +2444,10 @@ function EditItemPanel({ api }) {
                 {/* Authors section for books */}
                 <div className="space-y-2 pt-2">
                   <h3 className="text-sm font-semibold text-gray-700">
-                    Authors <span className="text-red-600">*</span>
+                    Authors 
                   </h3>
                   <p className="text-xs text-gray-500">
-                    At least one author is required for books.
+                    Add one or more authors. Leave blank if unknown.
                   </p>
 
                   {authors.map((author, index) => (
@@ -2339,7 +2458,6 @@ function EditItemPanel({ api }) {
                           value={author.name}
                           onChange={(e) => updateAuthor(index, e.target.value)}
                           placeholder="e.g., F. Scott Fitzgerald"
-                          required
                         />
                       </Field>
                       <div className="pb-2">
@@ -2367,6 +2485,230 @@ function EditItemPanel({ api }) {
               </>
             )}
 
+            {form.item_type === "device" && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Field label="Model">
+                  <input
+                    className="w-full rounded-md border px-3 py-2"
+                    value={form.model}
+                    onChange={(e) => update("model", e.target.value)}
+                    placeholder="e.g., iPad Pro"
+                  />
+                </Field>
+                <Field label="Manufacturer">
+                  <input
+                    className="w-full rounded-md border px-3 py-2"
+                    value={form.manufacturer}
+                    onChange={(e) => update("manufacturer", e.target.value)}
+                    placeholder="e.g., Apple"
+                  />
+                </Field>
+              </div>
+            )}
+
+            {form.item_type === "media" && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Field label="Media Type">
+                  <select
+                    className="w-full rounded-md border px-3 py-2"
+                    value={form.media_type}
+                    onChange={(e) => update("media_type", e.target.value)}
+                  >
+                    <option value="DVD">DVD</option>
+                    <option value="CD">CD</option>
+                    <option value="Blu-ray">Blu-ray</option>
+                    <option value="VHS">VHS</option>
+                  </select>
+                </Field>
+                <Field label="Length (minutes)">
+                  <input
+                    type="number"
+                    min="0"
+                    className="w-full rounded-md border px-3 py-2"
+                    value={form.length_minutes}
+                    onChange={(e) => update("length_minutes", e.target.value)}
+                    placeholder="e.g., 120"
+                  />
+                </Field>
+                <Field label="Publisher">
+                  <input
+                    className="w-full rounded-md border px-3 py-2"
+                    value={form.publisher}
+                    onChange={(e) => update("publisher", e.target.value)}
+                    placeholder="e.g., Warner Bros"
+                  />
+                </Field>
+                <Field label="Publication Year">
+                  <input
+                    type="number"
+                    min="0"
+                    className="w-full rounded-md border px-3 py-2"
+                    value={form.publication_year}
+                    onChange={(e) => update("publication_year", e.target.value)}
+                    placeholder="e.g., 2020"
+                  />
+                </Field>
+              </div>
+            )}
+
+            {/* Existing Copies Management */}
+            {selectedItem && (
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold text-gray-800">
+                  Active Copies ({existingCopies.filter(c => c.status !== 'lost').length})
+                </h3>
+                {loadingCopies ? (
+                  <p className="text-sm text-gray-500">Loading copies...</p>
+                ) : existingCopies.filter(c => c.status !== 'lost').length === 0 ? (
+                  <p className="text-sm text-gray-500">No active copies found for this item.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {existingCopies
+                      .filter(c => c.status !== 'lost')
+                      .map((copy) => (
+                        <CopyRow
+                          key={copy.copy_id}
+                          copy={copy}
+                          api={api}
+                          onUpdate={() => selectItem(selectedItem)}
+                          onDelete={async () => {
+                            const confirmed = window.confirm(
+                              `Are you sure you want to delete copy ${copy.barcode}?\n\n` +
+                              `This will permanently remove the copy if it has no loan history, ` +
+                              `or mark it as "lost" if it has been loaned before.`
+                            );
+                            if (!confirmed) return;
+
+                            try {
+                              const result = await api(`copies/${copy.copy_id}`, { method: "DELETE" });
+                              await selectItem(selectedItem);
+                              if (result?.marked_lost) {
+                                setMessage(`✓ Copy ${copy.barcode} marked as lost (has loan history).`);
+                              } else {
+                                setMessage(`✓ Copy ${copy.barcode} deleted successfully.`);
+                              }
+                            } catch (err) {
+                              setMessage(`Failed to delete copy: ${err?.data?.error || err?.message || "Unknown error"}`);
+                            }
+                          }}
+                        />
+                      ))}
+                  </div>
+                )}
+
+                {/* Lost Copies Section */}
+                {existingCopies.filter(c => c.status === 'lost').length > 0 && (
+                  <div className="mt-4 pt-4 border-t">
+                    <h3 className="text-sm font-semibold text-gray-800 mb-2">
+                      Lost Copies ({existingCopies.filter(c => c.status === 'lost').length})
+                    </h3>
+                    <p className="text-xs text-gray-600 mb-3">
+                      These copies are marked as lost. You can permanently remove them from the database.
+                    </p>
+                    <div className="space-y-2">
+                      {existingCopies
+                        .filter(c => c.status === 'lost')
+                        .map((copy) => (
+                          <div key={copy.copy_id} className="flex items-center gap-3 p-3 border rounded bg-red-50 border-red-200">
+                            <div className="flex-1 grid grid-cols-2 gap-3 text-sm">
+                              <div>
+                                <span className="font-medium text-gray-700">Barcode:</span>{" "}
+                                <span className="text-gray-900">{copy.barcode}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-700">Status:</span>{" "}
+                                <span className="text-red-700 font-semibold">LOST</span>
+                              </div>
+                              <div className="col-span-2">
+                                <span className="font-medium text-gray-700">Location:</span>{" "}
+                                <span className="text-gray-900">{copy.shelf_location || "—"}</span>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const confirmed = window.confirm(
+                                  `Permanently delete lost copy ${copy.barcode}?\n\n` +
+                                  `This action cannot be undone. The copy will be removed from the database ` +
+                                  `but loan history will be preserved.`
+                                );
+                                if (!confirmed) return;
+
+                                try {
+                                  await api(`copies/${copy.copy_id}?permanent=true`, { method: "DELETE" });
+                                  await selectItem(selectedItem);
+                                  setMessage(`✓ Lost copy ${copy.barcode} permanently deleted.`);
+                                } catch (err) {
+                                  setMessage(`Failed to delete copy: ${err?.data?.message || err?.message || "Unknown error"}`);
+                                }
+                              }}
+                              className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 whitespace-nowrap"
+                            >
+                              Permanently Delete
+                            </button>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Bulk Shelf Update */}
+            {selectedItem && existingCopies.filter(c => c.status !== 'lost').length > 0 && (
+              <div className="space-y-2 pt-2">
+                <h3 className="text-sm font-semibold text-gray-800">Bulk Shelf Update</h3>
+                <p className="text-xs text-gray-500">Set a new shelf location for all active copies below.</p>
+                <div className="flex gap-2 items-end">
+                  <div className="flex-1">
+                    <Field label="New Shelf Location">
+                      <input
+                        className="w-full rounded-md border px-3 py-2"
+                        value={form.bulk_shelf_location}
+                        onChange={(e) => update("bulk_shelf_location", e.target.value)}
+                        placeholder="e.g., Shelf B-4"
+                      />
+                    </Field>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={!form.bulk_shelf_location.trim() || submitting}
+                    onClick={async () => {
+                      const shelf = form.bulk_shelf_location.trim();
+                      if (!shelf) return;
+                      const activeCopies = existingCopies.filter(c => c.status !== 'lost');
+                      let updated = 0;
+                      for (const copy of activeCopies) {
+                        try {
+                          await api(`copies/${copy.copy_id}`, { method: 'PUT', body: { shelf_location: shelf } });
+                          updated++;
+                        } catch (err) {
+                          console.error('Bulk shelf update error:', err);
+                        }
+                      }
+                      await selectItem(selectedItem); // refresh copies
+                      setMessage(`✓ Updated shelf for ${updated} active ${updated === 1 ? 'copy' : 'copies'}.`);
+                      update('bulk_shelf_location', '');
+                    }}
+                    className="h-[42px] px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium disabled:opacity-50 hover:bg-blue-700"
+                  >
+                    Apply to All
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Additional Copies */}
+            <Field label="Add Additional Copies" helper="Number of new copies to create (leave 0 to not add any)">
+              <input
+                type="number"
+                min="0"
+                value={form.additional_copies}
+                onChange={(e) => setForm((f) => ({ ...f, additional_copies: e.target.value }))}
+                className="w-full rounded border border-gray-300 px-3 py-2"
+              />
+            </Field>
+
             <div className="flex items-center gap-3 pt-2">
               <button
                 type="submit"
@@ -2385,6 +2727,98 @@ function EditItemPanel({ api }) {
         </div>
       )}
     </section>
+  );
+}
+
+function CopyRow({ copy, api, onUpdate, onDelete }) {
+  const [editing, setEditing] = useState(false);
+  const [location, setLocation] = useState(copy.shelf_location || "");
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await api(`copies/${copy.copy_id}`, {
+        method: "PUT",
+        body: { shelf_location: location.trim() || null }
+      });
+      setEditing(false);
+      if (onUpdate) onUpdate();
+    } catch (err) {
+      alert(`Failed to update location: ${err?.data?.error || err?.message || "Unknown error"}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-3 p-3 border rounded bg-gray-50">
+      <div className="flex-1 grid grid-cols-2 gap-3 text-sm">
+        <div>
+          <span className="font-medium text-gray-700">Barcode:</span>{" "}
+          <span className="text-gray-900">{copy.barcode}</span>
+        </div>
+        <div>
+          <span className="font-medium text-gray-700">Status:</span>{" "}
+          <span className="text-gray-900 capitalize">{copy.status}</span>
+        </div>
+        <div className="col-span-2">
+          <span className="font-medium text-gray-700">Location:</span>{" "}
+          {editing ? (
+            <input
+              type="text"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              className="ml-2 px-2 py-1 border rounded text-sm"
+              placeholder="e.g., Shelf A-12"
+            />
+          ) : (
+            <span className="text-gray-900">{copy.shelf_location || "—"}</span>
+          )}
+        </div>
+      </div>
+      <div className="flex gap-2">
+        {editing ? (
+          <>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              className="px-3 py-1 text-xs bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50"
+            >
+              {saving ? "Saving..." : "Save"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setLocation(copy.shelf_location || "");
+                setEditing(false);
+              }}
+              className="px-3 py-1 text-xs bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+            >
+              Cancel
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+            >
+              Edit Location
+            </button>
+            <button
+              type="button"
+              onClick={onDelete}
+              className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+            >
+              Delete
+            </button>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 

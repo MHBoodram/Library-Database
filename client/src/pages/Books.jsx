@@ -174,13 +174,13 @@ export default function Books() {
                 <Th>Publisher</Th>
                 <Th>Year</Th>
                 <Th>Subject</Th>
-                <Th>Class</Th>
+                {/* Classification removed per request */}
                 <Th>Copies</Th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
-                <tr><td colSpan={8} className="books-empty-state">No results.</td></tr>
+                <tr><td colSpan={7} className="books-empty-state">No results.</td></tr>
               ) : (
                 rows.map((r) => (
                   <>
@@ -195,7 +195,7 @@ export default function Books() {
                       <Td>{r.publisher || "—"}</Td>
                       <Td>{r.publication_year || "—"}</Td>
                       <Td>{r.subject || "—"}</Td>
-                      <Td>{r.classification || "—"}</Td>
+                      {/* Classification column removed */}
                       <Td>
                         <button onClick={() => toggleCopies(r.item_id)} className="books-view-copies-btn">
                           {openItemId === r.item_id ? "Hide" : "View"}
@@ -204,7 +204,7 @@ export default function Books() {
                     </tr>
                     {openItemId === r.item_id && (
                       <tr className="books-copies-row">
-                        <td colSpan={8}>
+                        <td colSpan={7}>
                           {copiesLoading ? (
                             <div className="books-loading">Loading copies…</div>
                           ) : copiesError ? (
