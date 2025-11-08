@@ -21,7 +21,6 @@ import {
 } from "./api/reservations.js";
 import { createRoom, listRooms } from "./api/rooms.js";
 import { createAuthor, getItemAuthors, deleteItemAuthor } from "./api/authors.js";
-import { schemaInfo } from "./api/debug.js";
 import { adminOverview, listEmployees as adminEmployees, createAccount as adminCreateAccount } from "./api/admin.js";
 import { getProfile, updateProfile } from "./api/profile.js";
 import { listAccounts } from "./api/manageAcc.js";
@@ -61,8 +60,6 @@ r.add("GET", "/api/reports/overdue", overdue(JWT_SECRET));
 r.add("GET", "/api/reports/balances", balances(JWT_SECRET));
 r.add("GET", "/api/reports/top-items", topItems(JWT_SECRET));
 r.add("GET", "/api/reports/new-patrons-monthly", newPatronsByMonth(JWT_SECRET));
-
-r.add("GET", "/api/debug/schema", schemaInfo(JWT_SECRET));
 
 r.add("GET", "/api/admin/overview", adminOverview(JWT_SECRET));
 r.add("GET", "/api/admin/employees", adminEmployees(JWT_SECRET));
