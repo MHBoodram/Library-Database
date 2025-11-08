@@ -78,6 +78,11 @@ export const createAdminManagedAccount = (token, payload) =>
 export const createRoom = (token, payload) =>
   api("/staff/rooms", { method: "POST", token, body: payload });
 
+export const fetchProfile = (token) => api("/me", { token });
+
+export const updateProfile = (token, payload) =>
+  api("/me", { method: "PATCH", token, body: payload });
+
 // copies per item
 export const getItemCopies = (token, item_id) =>
   api(`/items/${item_id}/copies`, { token });

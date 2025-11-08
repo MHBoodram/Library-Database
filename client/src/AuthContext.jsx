@@ -8,6 +8,8 @@ const AuthCtx = createContext({
   logout: () => {},
   register: async () => DEFAULT_AUTH,
   useApi: () => api,
+  refreshProfile: async () => DEFAULT_AUTH.user,
+  updateProfile: async () => DEFAULT_AUTH.user,
 });
 
 function readStored() {
@@ -100,6 +102,25 @@ export function AuthProvider({ children }) {
     return (path, opts = {}) => api(path, { ...opts, token });
   }, [auth]);
 
+  const refreshProfile = useCallback(async () => {
+    if (!auth?.token) return null;
+    const data = await api("me", { token: auth.token });
+    const normalizedUser = normalizeUser(data.user);
+    save({ token: auth.token, user: normalizedUser });
+    return normalizedUser;
+  }, [auth?.token, save]);
+
+  const updateProfile = useCallback(
+    async (payload) => {
+      if (!auth?.token) throw new Error("unauthorized");
+      const data = await api("me", { method: "PATCH", token: auth.token, body: payload });
+      const normalizedUser = normalizeUser(data.user);
+      save({ token: auth.token, user: normalizedUser });
+      return normalizedUser;
+    },
+    [auth?.token, save]
+  );
+
   const value = useMemo(
     () => ({
       token: auth.token,
@@ -108,8 +129,10 @@ export function AuthProvider({ children }) {
       logout,
       register,
       useApi,
+      refreshProfile,
+      updateProfile,
     }),
-    [auth, login, logout, register, useApi]
+    [auth, login, logout, register, useApi, refreshProfile, updateProfile]
   );
 
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
