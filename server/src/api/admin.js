@@ -1,5 +1,9 @@
-import { sendJSON, requireEmployeeRole } from "../lib/http.js";
+import bcrypt from "bcryptjs";
+import { sendJSON, requireEmployeeRole, readJSONBody } from "../lib/http.js";
 import { pool } from "../lib/db.js";
+
+const EMPLOYEE_ROLES = ["librarian", "clerk", "assistant", "admin"];
+const ACCOUNT_ROLES = ["student", "faculty", "staff", "admin"];
 
 export const adminOverview = (JWT_SECRET) => async (req, res) => {
   const auth = requireEmployeeRole(req, res, JWT_SECRET, "admin");
@@ -28,9 +32,9 @@ export const adminOverview = (JWT_SECRET) => async (req, res) => {
     const [[fineStats]] = await pool.query(
       `SELECT
          COUNT(*) AS open_fines,
-         COALESCE(SUM(amount), 0) AS open_fine_amount
+         COALESCE(SUM(amount_assessed), 0) AS open_fine_amount
        FROM fine
-       WHERE LOWER(status) NOT IN ('paid','waived')`
+       WHERE LOWER(status) NOT IN ('paid','waived','written_off')`
     );
 
     return sendJSON(res, 200, {
@@ -81,5 +85,84 @@ export const listEmployees = (JWT_SECRET) => async (req, res) => {
   } catch (err) {
     console.error("Failed to list employees:", err.message);
     return sendJSON(res, 500, { error: "admin_employees_failed" });
+  }
+};
+
+export const createAccount = (JWT_SECRET) => async (req, res) => {
+  const auth = requireEmployeeRole(req, res, JWT_SECRET, "admin");
+  if (!auth) return;
+
+  const body = await readJSONBody(req);
+  const firstName = (body.first_name || "").trim();
+  const lastName = (body.last_name || "").trim();
+  const email = (body.email || "").trim().toLowerCase();
+  const password = body.password || "";
+  const accountTypeRaw = (body.account_type || "user").toString().toLowerCase();
+  const accountType = accountTypeRaw === "employee" ? "employee" : "user";
+  const accountRoleRaw = (body.account_role || "student").toString().toLowerCase();
+  const accountRole = ACCOUNT_ROLES.includes(accountRoleRaw) ? accountRoleRaw : "student";
+  const employeeRoleRaw = (body.employee_role || "").toString().toLowerCase();
+  const employeeRole = accountType === "employee" ? employeeRoleRaw : null;
+
+  if (!firstName || !lastName || !email || !password) {
+    return sendJSON(res, 400, { error: "missing_fields" });
+  }
+
+  if (accountType === "employee" && !EMPLOYEE_ROLES.includes(employeeRole)) {
+    return sendJSON(res, 400, { error: "invalid_employee_role" });
+  }
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const [existing] = await conn.execute(
+      "SELECT account_id FROM account WHERE email = ? LIMIT 1",
+      [email]
+    );
+    if (existing.length) {
+      await conn.rollback();
+      return sendJSON(res, 409, { error: "email_in_use" });
+    }
+
+    const [userRow] = await conn.execute(
+      "INSERT INTO user(first_name,last_name,email,joined_at) VALUES(?,?,?,CURDATE())",
+      [firstName, lastName, email]
+    );
+    const userId = userRow.insertId;
+
+    let employeeId = null;
+    if (accountType === "employee") {
+      const [employeeRow] = await conn.execute(
+        "INSERT INTO employee(first_name,last_name,role,hire_date) VALUES(?,?,?,CURDATE())",
+        [firstName, lastName, employeeRole]
+      );
+      employeeId = employeeRow.insertId;
+    }
+
+    const hash = await bcrypt.hash(password, 10);
+    const roleForAccount = accountType === "employee" ? "staff" : accountRole;
+
+    const [accountRow] = await conn.execute(
+      "INSERT INTO account(user_id, employee_id, email, password_hash, role, is_active) VALUES(?,?,?,?,?,1)",
+      [userId, employeeId, email, hash, roleForAccount]
+    );
+
+    await conn.commit();
+    return sendJSON(res, 201, {
+      account_id: accountRow.insertId,
+      user_id: userId,
+      employee_id: employeeId,
+      email,
+      account_type: accountType,
+      account_role: roleForAccount,
+      employee_role: employeeRole,
+    });
+  } catch (err) {
+    try { await conn.rollback(); } catch {}
+    console.error("Failed to create admin account:", err.message);
+    return sendJSON(res, 500, { error: "admin_account_create_failed" });
+  } finally {
+    conn.release();
   }
 };

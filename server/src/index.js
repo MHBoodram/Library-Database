@@ -14,10 +14,9 @@ import { overdue, balances, topItems, newPatronsByMonth } from "./api/reports.js
 import { listFines, listActiveLoans } from "./api/staff.js";
 import { createReservation, listReservations, createReservationSelf, listMyReservations, cancelReservation, deleteReservation } from "./api/reservations.js";
 import { createRoom, listRooms } from "./api/rooms.js";
-<<<<<<< HEAD
 import { createAuthor, getItemAuthors, deleteItemAuthor } from "./api/authors.js";
 import { schemaInfo } from "./api/debug.js";
-import { adminOverview, listEmployees as adminEmployees } from "./api/admin.js";
+import { adminOverview, listEmployees as adminEmployees, createAccount as adminCreateAccount } from "./api/admin.js";
 import { listAccounts } from "./api/manageAcc.js";
 
 const PORT = Number(process.env.PORT) || 3000;
@@ -72,6 +71,7 @@ r.add("GET", "/api/debug/schema", schemaInfo(JWT_SECRET));
 // admin tools
 r.add("GET", "/api/admin/overview", adminOverview(JWT_SECRET));
 r.add("GET", "/api/admin/employees", adminEmployees(JWT_SECRET));
+r.add("POST", "/api/admin/accounts", adminCreateAccount(JWT_SECRET));
 
 // staff tools
 r.add("GET", "/api/staff/fines", listFines(JWT_SECRET));

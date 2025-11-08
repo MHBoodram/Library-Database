@@ -72,6 +72,9 @@ export const listReservations = (token, params = {}) => {
   return api(path, { token });
 };
 
+export const createAdminManagedAccount = (token, payload) =>
+  api("/admin/accounts", { method: "POST", token, body: payload });
+
 export const createRoom = (token, payload) =>
   api("/staff/rooms", { method: "POST", token, body: payload });
 
