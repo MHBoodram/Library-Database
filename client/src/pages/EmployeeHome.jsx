@@ -64,7 +64,7 @@ export default function EmployeeDashboard() {
                 onClick={() => setTab('fines')}
                 aria-label="View fines"
               >
-                <span className="emoji">💸</span>
+
                 <div>
                   <div className="count-label">Fines</div>
                   <div className="count-num">{countsLoading ? '…' : counts.fines}</div>
@@ -76,7 +76,7 @@ export default function EmployeeDashboard() {
                 onClick={() => setTab('activeLoans')}
                 aria-label="View active loans"
               >
-                <span className="emoji">📚</span>
+              
                 <div>
                   <div className="count-label">Active Loans</div>
                   <div className="count-num">{countsLoading ? '…' : counts.activeLoans}</div>
@@ -88,7 +88,6 @@ export default function EmployeeDashboard() {
                 onClick={() => setTab('reservations')}
                 aria-label="View reservations"
               >
-                <span className="emoji">🪑</span>
                 <div>
                   <div className="count-label">Reservations</div>
                   <div className="count-num">{countsLoading ? '…' : counts.reservations}</div>

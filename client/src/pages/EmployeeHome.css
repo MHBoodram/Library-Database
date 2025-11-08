@@ -70,7 +70,9 @@
 
 .eh-widgets > button {
   display: flex;
+  flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 0.75rem;
   background: white;
   border: none;
@@ -80,6 +82,7 @@
   cursor: pointer;
   transition: all var(--transition-duration) ease;
   min-width: 140px;
+  text-align: center;
 }
 
 .eh-widgets > button:hover {
