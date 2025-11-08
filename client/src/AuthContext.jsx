@@ -97,9 +97,9 @@ export function AuthProvider({ children }) {
     [login]
   );
 
-  const useApi = useCallback(() => {
+  const useApi = useCallback((path, opts = {}) => {
     const { token } = auth;
-    return (path, opts = {}) => api(path, { ...opts, token });
+    return api(path, { ...opts, token });
   }, [auth]);
 
   const refreshProfile = useCallback(async () => {

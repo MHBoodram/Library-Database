@@ -18,7 +18,6 @@ const PLACEHOLDERS = {
 
 export default function ManageAccounts() {
   const { useApi } = useAuth();
-  const apiWithAuth = useMemo(() => useApi(), [useApi]);
   const [debounced, setDebounced] = useState("");
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -47,7 +46,7 @@ export default function ManageAccounts() {
         const params = new URLSearchParams();
         params.set("mode", mode);
         if (debounced) params.set("term", debounced);
-        const data = await apiWithAuth(`manage/accounts?${params.toString()}`);
+        const data = await useApi(`manage/accounts?${params.toString()}`);
         if (!alive) return;
         setRows(Array.isArray(data) ? data : []);
       } catch (err) {
@@ -62,7 +61,7 @@ export default function ManageAccounts() {
     return () => {
       alive = false;
     };
-  }, [apiWithAuth, debounced, mode, refreshKey]);
+  }, [useApi, debounced, mode, refreshKey]);
 
   const placeholder = PLACEHOLDERS[mode] || PLACEHOLDERS.all;
 
@@ -90,7 +89,7 @@ export default function ManageAccounts() {
   const refresh = () => setRefreshKey((k) => k + 1);
 
   const handleSave = async (row) => {
-    if (!apiWithAuth) return;
+    if (!useApi) return;
     const payload = {};
     if (editForm.first_name && editForm.first_name !== row.first_name) payload.first_name = editForm.first_name.trim();
     if (editForm.last_name && editForm.last_name !== row.last_name) payload.last_name = editForm.last_name.trim();
@@ -110,7 +109,7 @@ export default function ManageAccounts() {
 
     setSavingId(row.account_id);
     try {
-      await apiWithAuth(`manage/accounts/${row.account_id}`, { method: "PATCH", body: payload });
+      await useApi(`manage/accounts/${row.account_id}`, { method: "PATCH", body: payload });
       setMessage({ type: "success", text: "Account updated." });
       cancelEdit();
       refresh();
@@ -126,7 +125,7 @@ export default function ManageAccounts() {
     if (!window.confirm(`Flag ${row.email} for deletion?`)) return;
     setFlaggingId(row.account_id);
     try {
-      await apiWithAuth(`manage/accounts/${row.account_id}/flag`, { method: "POST" });
+      await useApi(`manage/accounts/${row.account_id}/flag`, { method: "POST" });
       setMessage({ type: "success", text: "Account flagged for deletion." });
       refresh();
     } catch (err) {

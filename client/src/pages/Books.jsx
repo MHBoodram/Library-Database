@@ -7,11 +7,8 @@ import "./Books.css";
 
 export default function Books() {
   const { token, useApi, user } = useAuth();
-  // useApi is a hook; call directly rather than inside useMemo to satisfy hook rules
-  const apiWithAuth = useApi();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-
   const [mode, setMode] = useState("title"); // "title" | "author"
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -65,7 +62,7 @@ export default function Books() {
           if (mode === "title") params.set("title", debounced);
           if (mode === "author") params.set("author", debounced);
         }
-        const data = await apiWithAuth(`items?${params.toString()}`);
+        const data = await useApi(`items?${params.toString()}`);
         const listRaw = Array.isArray(data) ? data : Array.isArray(data?.rows) ? data.rows : [];
         // derive copy counts (active vs available) if backend returns copies array or counts
         const list = listRaw.map(r => {
@@ -89,7 +86,7 @@ export default function Books() {
     }
     run();
     return () => { active = false; };
-  }, [debounced, mode, apiWithAuth]);
+  }, [debounced, mode, useApi]);
 
   const titleText = useMemo(() => {
     if (mode === "author") return "Search by Author";
@@ -119,7 +116,7 @@ export default function Books() {
 
   async function checkoutCopy(copy_id) {
     try {
-      await apiWithAuth("loans/checkout", {
+      await useApi("loans/checkout", {
         method: "POST",
         body: { copy_id, user_id: user?.user_id, identifier_type: "copy_id" },
       });

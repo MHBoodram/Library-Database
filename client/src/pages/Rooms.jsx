@@ -6,7 +6,6 @@ import "./Rooms.css";
 
 export default function Rooms() {
   const { token, useApi } = useAuth();
-  const apiWithAuth = useMemo(()=>useApi(),[useApi]);
   const navigate = useNavigate();
 
   const [rooms, setRooms] = useState([]);
@@ -30,7 +29,7 @@ export default function Rooms() {
     }
     (async () => {
       try {
-        const data = await apiWithAuth("rooms");
+        const data = await useApi("rooms");
         setRooms(Array.isArray(data) ? data : []);
       } catch (err) {
         setError(err?.message || "Failed to load rooms.");
@@ -38,7 +37,7 @@ export default function Rooms() {
         setLoading(false);
       }
     })();
-  }, [token, apiWithAuth, navigate]);
+  }, [token, useApi, navigate]);
 
   // Fetch user's reservations
   useEffect(() => {
@@ -48,7 +47,7 @@ export default function Rooms() {
       setReservationsLoading(true);
       setReservationsError("");
       try {
-        const data = await apiWithAuth("reservations/my");
+        const data = await useApi("reservations/my");
         setMyReservations(Array.isArray(data) ? data : []);
       } catch (err) {
         setReservationsError(err?.message || "Failed to load your reservations.");
@@ -56,14 +55,14 @@ export default function Rooms() {
         setReservationsLoading(false);
       }
     })();
-  }, [token, apiWithAuth, refreshFlag]);
+  }, [token, useApi, refreshFlag]);
 
   async function submit(e) {
     e.preventDefault();
     setError("");
     setMessage("");
     try {
-      await apiWithAuth("reservations", {
+      await useApi("reservations", {
         method: "POST",
         body: { room_id: Number(room_id), start_time, end_time },
       });
@@ -93,7 +92,7 @@ export default function Rooms() {
     }
 
     try {
-      await apiWithAuth(`reservations/${reservationId}/cancel`, { method: "PATCH" });
+      await useApi(`reservations/${reservationId}/cancel`, { method: "PATCH" });
       setMessage("Reservation cancelled successfully.");
       setRefreshFlag((f) => f + 1); // Refresh reservations list
     } catch (err) {

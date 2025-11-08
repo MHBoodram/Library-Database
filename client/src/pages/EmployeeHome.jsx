@@ -20,9 +20,6 @@ const ACCOUNT_ROLE_OPTIONS = ["student", "faculty", "staff"];
 
 export default function EmployeeDashboard() {
   const { useApi, user } = useAuth();
-  // obtain the api helper from context (memoized so effects don't refire each render)
-  // Directly invoke hook; calling inside useMemo triggered hook rules violation.
-  const apiWithAuth = useApi();
   const [tab, setTab] = useState("fines"); // "fines" | "checkout" | "activeLoans" | "reservations" | "addItem" | "removeItem"
   const [counts, setCounts] = useState({ fines: 0, activeLoans: 0, reservations: 0 });
   const [countsLoading, setCountsLoading] = useState(false);
@@ -30,16 +27,16 @@ export default function EmployeeDashboard() {
   const isAdmin = user?.employee_role === "admin";
 
   useEffect(() => {
-    if (!apiWithAuth || countsLoaded) return;
+    if (!useApi || countsLoaded) return;
     
     let alive = true;
     async function loadCounts() {
       setCountsLoading(true);
       try {
         const [finesRes, loansRes, resvRes] = await Promise.all([
-          apiWithAuth('staff/fines?&pageSize=1000'),
-          apiWithAuth('staff/loans/active?&pageSize=1000'),
-          apiWithAuth('staff/reservations?&pageSize=1000'),
+          useApi('staff/fines?&pageSize=1000'),
+          useApi('staff/loans/active?&pageSize=1000'),
+          useApi('staff/reservations?&pageSize=1000'),
         ]);
         if (!alive) return;
         const finesList = Array.isArray(finesRes?.rows) ? finesRes.rows : Array.isArray(finesRes) ? finesRes : [];
@@ -55,7 +52,7 @@ export default function EmployeeDashboard() {
     }
     loadCounts();
     return () => { alive = false; };
-  }, [apiWithAuth, countsLoaded]);
+  }, [useApi, countsLoaded]);
 
   return (
     <div style={{ minHeight: '100vh', background: '#f9fafb', paddingTop: 'var(--nav-height, 60px)' }}>
@@ -169,16 +166,16 @@ export default function EmployeeDashboard() {
       </header>
 
       <main style={{ maxWidth: 1200, margin: '0 auto', padding: '1.5rem' }}>
-        {tab === "fines" && <FinesPanel api={apiWithAuth} />}
-        {tab === "checkout" && <CheckoutPanel api={apiWithAuth} staffUser={user} />}
-        {tab === "return" && <ReturnLoanPanel api={apiWithAuth} staffUser={user} />}
-        {tab === "activeLoans" && <ActiveLoansPanel api={apiWithAuth} />}
-        {tab === "reservations" && <ReservationsPanel api={apiWithAuth} staffUser={user} />}
-        {tab === "reports" && <ReportsPanel api={apiWithAuth} />}
-        {tab === "addItem" && <AddItemPanel api={apiWithAuth} />}
-        {tab === "editItem" && <EditItemPanel api={apiWithAuth} />}
-        {tab === "removeItem" && <RemoveItemPanel api={apiWithAuth} />}
-        {tab === "admin" && isAdmin && <AdminPanel api={apiWithAuth} />}
+        {tab === "fines" && <FinesPanel api={useApi} />}
+        {tab === "checkout" && <CheckoutPanel api={useApi} staffUser={user} />}
+        {tab === "return" && <ReturnLoanPanel api={useApi} staffUser={user} />}
+        {tab === "activeLoans" && <ActiveLoansPanel api={useApi} />}
+        {tab === "reservations" && <ReservationsPanel api={useApi} staffUser={user} />}
+        {tab === "reports" && <ReportsPanel api={useApi} />}
+        {tab === "addItem" && <AddItemPanel api={useApi} />}
+        {tab === "editItem" && <EditItemPanel api={useApi} />}
+        {tab === "removeItem" && <RemoveItemPanel api={useApi} />}
+        {tab === "admin" && isAdmin && <AdminPanel api={useApi} />}
       </main>
     </div>
   );

@@ -7,7 +7,6 @@ import "./Loans.css";
 
 export default function Loans() {
   const { token, useApi } = useAuth();
-  const apiWithAuth = useMemo(()=>useApi(),[useApi]);
   const navigate = useNavigate();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -23,7 +22,7 @@ export default function Loans() {
       setLoading(true);
       setError("");
       try {
-        const data = await apiWithAuth("loans/my");
+        const data = await useApi("loans/my");
         const list = Array.isArray(data?.rows) ? data.rows : Array.isArray(data) ? data : [];
         if (!active) return;
         setRows(list);
@@ -35,7 +34,7 @@ export default function Loans() {
       }
     })();
     return () => { active = false; };
-  }, [token, apiWithAuth, navigate]);
+  }, [token, useApi, navigate]);
 
   return (
     <div className="loans-page">
