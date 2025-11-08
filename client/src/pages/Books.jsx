@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
 import { getItemCopies } from "../api";
@@ -9,6 +9,7 @@ export default function Books() {
   const { token, useApi, user } = useAuth();
   const apiWithAuth = useMemo(()=>useApi(),[useApi]);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [mode, setMode] = useState("title"); // "title" | "author"
   const [query, setQuery] = useState("");
@@ -20,6 +21,24 @@ export default function Books() {
   const [copiesError, setCopiesError] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Initialize search from URL parameters
+  useEffect(() => {
+    const titleParam = searchParams.get('title');
+    const authorParam = searchParams.get('author');
+    const qParam = searchParams.get('q');
+    
+    if (titleParam) {
+      setMode('title');
+      setQuery(titleParam);
+    } else if (authorParam) {
+      setMode('author');
+      setQuery(authorParam);
+    } else if (qParam) {
+      setMode('title');
+      setQuery(qParam);
+    }
+  }, [searchParams]);
 
   // redirect if not logged in
   useEffect(() => {

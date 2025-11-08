@@ -186,7 +186,7 @@ export default function Home() {
   const handleSearch = (e) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      navigate(`/books?q=${encodeURIComponent(searchQuery.trim())}`);
+      navigate(`/books?title=${encodeURIComponent(searchQuery.trim())}`);
     }
   };
 
@@ -405,7 +405,7 @@ export default function Home() {
                       Currently Unavailable
                     </button>
                   )}
-                  <button className="btn-browse" onClick={() => navigate('/books')}>
+                  <button className="btn-browse" onClick={() => navigate(`/books?title=${encodeURIComponent(selectedBook.title)}`)}>
                     Browse All Copies
                   </button>
                 </div>
