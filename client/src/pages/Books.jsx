@@ -7,7 +7,8 @@ import "./Books.css";
 
 export default function Books() {
   const { token, useApi, user } = useAuth();
-  const apiWithAuth = useMemo(()=>useApi(),[useApi]);
+  // useApi is a hook; call directly rather than inside useMemo to satisfy hook rules
+  const apiWithAuth = useApi();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -65,7 +66,18 @@ export default function Books() {
           if (mode === "author") params.set("author", debounced);
         }
         const data = await apiWithAuth(`items?${params.toString()}`);
-        const list = Array.isArray(data) ? data : Array.isArray(data?.rows) ? data.rows : [];
+        const listRaw = Array.isArray(data) ? data : Array.isArray(data?.rows) ? data.rows : [];
+        // derive copy counts (active vs available) if backend returns copies array or counts
+        const list = listRaw.map(r => {
+          const copies = Array.isArray(r.copies) ? r.copies : [];
+          const activeCopies = copies.filter(c => (c.status || '').toLowerCase() !== 'lost');
+          const availableCopies = activeCopies.filter(c => (c.status || '').toLowerCase() === 'available');
+          return {
+            ...r,
+            total_copies: activeCopies.length || r.total_copies || r.copy_count || 0,
+            available_copies: availableCopies.length || r.available_copies || r.available_count || 0,
+          };
+        });
         if (!active) return;
         setRows(list);
       } catch (err) {
@@ -175,7 +187,7 @@ export default function Books() {
                 <Th>Year</Th>
                 <Th>Subject</Th>
                 {/* Classification removed per request */}
-                <Th>Copies</Th>
+                <Th>Copies (Avail / Total)</Th>
               </tr>
             </thead>
             <tbody>
@@ -197,9 +209,12 @@ export default function Books() {
                       <Td>{r.subject || "—"}</Td>
                       {/* Classification column removed */}
                       <Td>
-                        <button onClick={() => toggleCopies(r.item_id)} className="books-view-copies-btn">
-                          {openItemId === r.item_id ? "Hide" : "View"}
-                        </button>
+                        <div style={{display:'flex',alignItems:'center',gap:'0.5rem'}}>
+                          <span style={{fontSize:12,color:'#444'}}>{r.available_copies}/{r.total_copies}</span>
+                          <button onClick={() => toggleCopies(r.item_id)} className="books-view-copies-btn">
+                            {openItemId === r.item_id ? "Hide" : "View"}
+                          </button>
+                        </div>
                       </Td>
                     </tr>
                     {openItemId === r.item_id && (

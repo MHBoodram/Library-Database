@@ -55,6 +55,9 @@ export const listItems = () => async (req, res) => {
         i.title,
         i.subject,
         i.classification,
+        /* Aggregated copy counts */
+        (SELECT COUNT(*) FROM copy c WHERE c.item_id = i.item_id AND c.status <> 'lost') AS total_copies,
+        (SELECT COUNT(*) FROM copy c WHERE c.item_id = i.item_id AND c.status = 'available') AS available_copies,
         CASE 
           WHEN b.item_id IS NOT NULL THEN 'book'
           WHEN d.item_id IS NOT NULL THEN 'device'
@@ -104,6 +107,8 @@ export const listItems = () => async (req, res) => {
       media_type: r.media_type,
       length_minutes: r.length_minutes,
       authors: typeof r.authors === "string" && r.authors.length ? r.authors.split(/\s*,\s*/) : [],
+      total_copies: Number(r.total_copies) || 0,
+      available_copies: Number(r.available_copies) || 0,
     }));
     return sendJSON(res, 200, out);
   } catch (err) {
