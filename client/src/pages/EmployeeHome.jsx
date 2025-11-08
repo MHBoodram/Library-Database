@@ -16,12 +16,13 @@ const STATUS_OPTIONS = [
 
 export default function EmployeeDashboard() {
   const { useApi, user } = useAuth();
-  // obtain the api helper from context
-  const apiWithAuth = useApi();
+  // obtain the api helper from context (memoized so effects don't refire each render)
+  const apiWithAuth = useMemo(() => useApi(), [useApi]);
   const [tab, setTab] = useState("fines"); // "fines" | "checkout" | "activeLoans" | "reservations" | "addItem" | "removeItem"
   const [counts, setCounts] = useState({ fines: 0, activeLoans: 0, reservations: 0 });
   const [countsLoading, setCountsLoading] = useState(false);
   const [countsLoaded, setCountsLoaded] = useState(false);
+  const isAdmin = user?.employee_role === "admin";
 
   useEffect(() => {
     if (!apiWithAuth || countsLoaded) return;
@@ -150,6 +151,14 @@ export default function EmployeeDashboard() {
             >
               Remove Item
             </button>
+            {isAdmin && (
+              <button
+                className={`tab-btn ${tab === "admin" ? "active" : ""}`}
+                onClick={() => setTab("admin")}
+              >
+                Admin Tools
+              </button>
+            )}
           </nav>
         </div>
       </header>
@@ -164,6 +173,7 @@ export default function EmployeeDashboard() {
         {tab === "addItem" && <AddItemPanel api={apiWithAuth} />}
         {tab === "editItem" && <EditItemPanel api={apiWithAuth} />}
         {tab === "removeItem" && <RemoveItemPanel api={apiWithAuth} />}
+        {tab === "admin" && isAdmin && <AdminPanel api={apiWithAuth} />}
       </main>
     </div>
   );
@@ -2565,3 +2575,160 @@ function RemoveItemPanel({ api }) {
   );
 }
 
+
+function AdminPanel({ api }) {
+  const [overview, setOverview] = useState(null);
+  const [employees, setEmployees] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!api) return;
+    let alive = true;
+    setLoading(true);
+    setError("");
+    (async () => {
+      try {
+        const [overviewRes, employeesRes] = await Promise.all([
+          api("admin/overview"),
+          api("admin/employees"),
+        ]);
+        if (!alive) return;
+        setOverview(overviewRes || {});
+        const employeeRows = Array.isArray(employeesRes?.rows)
+          ? employeesRes.rows
+          : Array.isArray(employeesRes)
+            ? employeesRes
+            : [];
+        setEmployees(employeeRows);
+      } catch (err) {
+        if (!alive) return;
+        const msg = err?.data?.error || err?.message || "Failed to load admin data";
+        setError(msg);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [api]);
+
+  if (loading && !overview) {
+    return <div style={{ padding: "1rem" }}>Loading admin data…</div>;
+  }
+
+  if (error && !overview) {
+    return <div style={{ padding: "1rem", color: "var(--danger, #b91c1c)" }}>{error}</div>;
+  }
+
+  const roleCounts = Array.isArray(overview?.role_counts) ? overview.role_counts : [];
+  const recentHires = Array.isArray(overview?.recent_hires) ? overview.recent_hires : [];
+  const accountStats = overview?.account_stats || {};
+  const fineStats = overview?.fine_stats || {};
+
+  return (
+    <section className="space-y-4">
+      {error && overview && (
+        <div style={{ padding: "0.75rem", borderRadius: 6, background: "#fef2f2", color: "#b91c1c" }}>
+          {error}
+        </div>
+      )}
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <StatCard
+          label="Total Accounts"
+          value={accountStats.total_accounts ?? 0}
+          sub={`Staff: ${accountStats.staff_accounts ?? 0}`}
+        />
+        <StatCard
+          label="Patron Accounts"
+          value={accountStats.patron_accounts ?? 0}
+          sub="Students + Faculty"
+        />
+        <StatCard
+          label="Open Fines"
+          value={fineStats.open_fines ?? 0}
+          sub={`$${Number(fineStats.open_fine_amount ?? 0).toFixed(2)}`}
+        />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="rounded-lg border bg-white p-4 shadow-sm">
+          <h3 className="font-semibold mb-2">Employee Roles</h3>
+          <ul className="divide-y divide-gray-100">
+            {roleCounts.length === 0 && <li className="py-2 text-sm text-gray-600">No employees found.</li>}
+            {roleCounts.map((row) => (
+              <li key={row.role} className="py-2 flex items-center justify-between text-sm">
+                <span className="capitalize text-gray-700">{row.role}</span>
+                <span className="font-semibold">{row.count}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="rounded-lg border bg-white p-4 shadow-sm">
+          <h3 className="font-semibold mb-2">Recent Hires</h3>
+          <ul className="divide-y divide-gray-100">
+            {recentHires.length === 0 && <li className="py-2 text-sm text-gray-600">No recent hires.</li>}
+            {recentHires.map((emp) => (
+              <li key={emp.employee_id} className="py-2">
+                <div className="font-medium text-gray-800">
+                  {emp.first_name} {emp.last_name}
+                </div>
+                <div className="text-xs text-gray-500">
+                  {emp.role} • {emp.hire_date ? formatDate(emp.hire_date) : "Unknown date"}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      <div className="rounded-lg border bg-white p-4 shadow-sm">
+        <h3 className="font-semibold mb-2">Employee Directory</h3>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="bg-gray-50 text-left">
+              <tr>
+                <th className="px-3 py-2">Name</th>
+                <th className="px-3 py-2">Role</th>
+                <th className="px-3 py-2">Hire Date</th>
+                <th className="px-3 py-2">Email</th>
+              </tr>
+            </thead>
+            <tbody>
+              {employees.length === 0 && (
+                <tr>
+                  <td className="px-3 py-3 text-center text-gray-500" colSpan={4}>
+                    No employees found.
+                  </td>
+                </tr>
+              )}
+              {employees.map((emp) => (
+                <tr key={emp.employee_id} className="border-t">
+                  <td className="px-3 py-2 font-medium text-gray-800">
+                    {emp.first_name} {emp.last_name}
+                  </td>
+                  <td className="px-3 py-2 capitalize text-gray-600">{emp.role}</td>
+                  <td className="px-3 py-2">{emp.hire_date ? formatDate(emp.hire_date) : "—"}</td>
+                  <td className="px-3 py-2">{emp.email || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function StatCard({ label, value, sub }) {
+  return (
+    <div className="rounded-lg border bg-white p-4 shadow-sm">
+      <p className="text-xs uppercase tracking-wide text-gray-500">{label}</p>
+      <p className="text-2xl font-semibold text-gray-900">{value}</p>
+      {sub && <p className="text-sm text-gray-500">{sub}</p>}
+    </div>
+  );
+}

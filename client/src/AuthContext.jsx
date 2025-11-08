@@ -27,10 +27,14 @@ function readStored() {
 function normalizeUser(user) {
   if (!user) return null;
   const fullName = [user.first_name, user.last_name].filter(Boolean).join(" ").trim();
+  const employeeRole = user.employee_role || null;
   const normalizedRole = user.employee_id ? "staff" : user.role || "student";
   return {
     ...user,
     role: normalizedRole,
+    employee_role: employeeRole,
+    is_employee: Boolean(user.employee_id),
+    is_admin: Boolean(employeeRole === "admin"),
     name: (user.name && typeof user.name === "string" && user.name) || fullName || user.email || "",
   };
 }

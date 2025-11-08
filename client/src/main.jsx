@@ -136,7 +136,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           <Route
             path="/manage/accounts"
             element={
-              <Protected role="staff">
+              <Protected role="staff" employeeRole="admin">
                 <ManageAccounts />
               </Protected>
             }
