@@ -24,6 +24,7 @@ import { createAuthor, getItemAuthors, deleteItemAuthor } from "./api/authors.js
 import { adminOverview, listEmployees as adminEmployees, createAccount as adminCreateAccount } from "./api/admin.js";
 import { getProfile, updateProfile } from "./api/profile.js";
 import { listAccounts, updateAccount as updateManagedAccount, flagAccount } from "./api/manageAcc.js";
+import { searchPatrons } from "./api/patrons.js";
 
 const PORT = Number(process.env.PORT) || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || "devsecret";
@@ -67,6 +68,8 @@ r.add("POST", "/api/admin/accounts", adminCreateAccount(JWT_SECRET));
 
 r.add("GET", "/api/me", getProfile(JWT_SECRET));
 r.add("PATCH", "/api/me", updateProfile(JWT_SECRET));
+
+r.add("GET", "/api/staff/patrons/search", searchPatrons(JWT_SECRET));
 
 r.add("GET", "/api/staff/fines", listFines(JWT_SECRET));
 r.add("GET", "/api/staff/loans/active", listActiveLoans(JWT_SECRET));

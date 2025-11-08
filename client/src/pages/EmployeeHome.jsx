@@ -473,141 +473,311 @@ function ActiveLoansPanel({ api }) {
 }
 
 function CheckoutPanel({ api, staffUser }) {
-  const [form, setForm] = useState({ user_id: "", copy_value: "", mode: "copy_id" });
+  const [patronQuery, setPatronQuery] = useState("");
+  const [patronResults, setPatronResults] = useState([]);
+  const [patronLoading, setPatronLoading] = useState(false);
+  const [selectedPatron, setSelectedPatron] = useState(null);
+
+  const [itemQuery, setItemQuery] = useState("");
+  const [itemResults, setItemResults] = useState([]);
+  const [itemLoading, setItemLoading] = useState(false);
+  const [selectedItem, setSelectedItem] = useState(null);
+
+  const [copyOptions, setCopyOptions] = useState([]);
+  const [selectedCopy, setSelectedCopy] = useState(null);
+  const [copyLoading, setCopyLoading] = useState(false);
+
+  const [manualForm, setManualForm] = useState({ user_id: "", identifier_type: "copy_id", identifier_value: "" });
+
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  function update(field, value) {
-    setForm((prev) => ({ ...prev, [field]: value }));
-  }
+  const canCheckout = Boolean(selectedPatron && selectedCopy && !submitting);
 
-  async function onSubmit(e) {
-    e.preventDefault();
-    setSubmitting(true);
+  const resetMessages = () => {
     setMessage("");
     setError("");
-    try {
-      const user_id = Number(form.user_id);
-      const copyValue = (form.copy_value || "").trim();
-      const mode = form.mode === "barcode" ? "barcode" : "copy_id";
-      if (!user_id) {
-        throw new Error("Patron ID is required.");
-      }
-      if (!copyValue) {
-        throw new Error(`Enter a ${mode === "barcode" ? "barcode" : "copy ID"}.`);
-      }
+  };
 
-      const body = {
-        user_id,
-        identifier_type: mode,
-        ...(mode === "copy_id"
-          ? { copy_id: Number(copyValue) }
-          : { barcode: copyValue }),
-        ...(staffUser?.employee_id ? { employee_id: staffUser.employee_id } : {}),
-      };
+  const searchPatrons = async () => {
+    if (!patronQuery.trim()) {
+      setPatronResults([]);
+      return;
+    }
+    resetMessages();
+    setPatronLoading(true);
+    try {
+      const results = await api(`staff/patrons/search?q=${encodeURIComponent(patronQuery.trim())}`);
+      setPatronResults(Array.isArray(results) ? results : []);
+    } catch (err) {
+      setError(err?.data?.error || err?.message || "Failed to search patrons.");
+    } finally {
+      setPatronLoading(false);
+    }
+  };
+
+  const searchItems = async () => {
+    if (!itemQuery.trim()) {
+      setItemResults([]);
+      return;
+    }
+    resetMessages();
+    setItemLoading(true);
+    try {
+      const results = await api(`items?q=${encodeURIComponent(itemQuery.trim())}`);
+      setItemResults(Array.isArray(results) ? results : []);
+    } catch (err) {
+      setError(err?.data?.error || err?.message || "Failed to search items.");
+    } finally {
+      setItemLoading(false);
+    }
+  };
+
+  const loadCopies = async (itemId) => {
+    setCopyLoading(true);
+    setCopyOptions([]);
+    setSelectedCopy(null);
+    try {
+      const copies = await api(`items/${itemId}/copies`);
+      setCopyOptions(Array.isArray(copies) ? copies.filter((c) => c.status === "available") : []);
+    } catch (err) {
+      setError(err?.data?.error || err?.message || "Failed to load copies.");
+    } finally {
+      setCopyLoading(false);
+    }
+  };
+
+  const startManual = () => {
+    setSelectedPatron(null);
+    setSelectedItem(null);
+    setCopyOptions([]);
+    setSelectedCopy(null);
+    setPatronResults([]);
+    setItemResults([]);
+  };
+
+  const submitCheckout = async (body) => {
+    resetMessages();
+    setSubmitting(true);
+    try {
       await api("loans/checkout", { method: "POST", body });
-      const label =
-        mode === "copy_id"
-          ? `copy #${body.copy_id}`
-          : `barcode ${copyValue}`;
-      setMessage(`Checked out ${label} to user #${user_id}.`);
-      setForm({ user_id: "", copy_value: "", mode });
+      setMessage("Checkout successful.");
+      setSelectedCopy(null);
+      setSelectedItem(null);
+      setCopyOptions([]);
+      setManualForm({ user_id: "", identifier_type: manualForm.identifier_type, identifier_value: "" });
     } catch (err) {
       const code = err?.data?.error;
       const serverMessage = err?.data?.message;
-      if (code === "loan_limit_exceeded") {
-        setError(serverMessage || "The patron has reached their loan limit.");
-      } else if (code === "copy_not_available") {
-        setError(serverMessage || "That copy is not available for checkout.");
-      } else if (code === "copy_not_found") {
-        setError(serverMessage || "Copy not found.");
-      } else if (code === "user_not_found") {
-        setError(serverMessage || "User not found.");
-      } else if (err?.message) {
-        setError(serverMessage || err.message);
-      } else {
-        setError("Checkout failed. Please try again.");
-      }
+      const fallback = err?.message || "Checkout failed.";
+      const mapped =
+        code === "loan_limit_exceeded"
+          ? "The patron has reached their loan limit."
+          : code === "copy_not_available"
+            ? "That copy is not available."
+            : code === "copy_not_found"
+              ? "Copy not found."
+              : code === "user_not_found"
+                ? "User not found."
+                : serverMessage || fallback;
+      setError(mapped);
     } finally {
       setSubmitting(false);
     }
-  }
+  };
+
+  const handleCheckout = async () => {
+    if (!selectedPatron || !selectedCopy) return;
+    const body = {
+      user_id: selectedPatron.user_id,
+      identifier_type: "copy_id",
+      copy_id: selectedCopy.copy_id,
+      ...(staffUser?.employee_id ? { employee_id: staffUser.employee_id } : {}),
+    };
+    await submitCheckout(body);
+  };
+
+  const handleManualSubmit = async (e) => {
+    e.preventDefault();
+    const user_id = Number(manualForm.user_id);
+    const identifier = manualForm.identifier_value.trim();
+    if (!user_id) {
+      setError("Patron ID is required.");
+      return;
+    }
+    if (!identifier) {
+      setError(`Enter a ${manualForm.identifier_type === "barcode" ? "barcode" : "copy ID"}.`);
+      return;
+    }
+    const body = {
+      user_id,
+      identifier_type: manualForm.identifier_type,
+      ...(manualForm.identifier_type === "barcode"
+        ? { barcode: identifier }
+        : { copy_id: Number(identifier) }),
+      ...(staffUser?.employee_id ? { employee_id: staffUser.employee_id } : {}),
+    };
+    await submitCheckout(body);
+  };
 
   return (
-    <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <form onSubmit={onSubmit} className="rounded-xl border bg-white p-4 shadow-sm space-y-4">
-        <div>
+    <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      <div className="rounded-xl border bg-white p-4 shadow-sm space-y-6">
+        <header>
           <h2 className="text-lg font-semibold">Checkout Item</h2>
-          <p className="text-sm text-gray-600">
-            Scan or enter a patron ID and copy barcode.
-          </p>
-        </div>
+          <p className="text-sm text-gray-600">Search for a patron and choose an available copy.</p>
+        </header>
 
-        <Field label="Patron ID">
-          <input
-            className="w-full rounded-md border px-3 py-2"
-            value={form.user_id}
-            onChange={(e) => update("user_id", e.target.value)}
-            placeholder="e.g., 123"
-          />
+        <Field label="Find Patron">
+          <div className="flex gap-2">
+            <input
+              className="flex-1 rounded-md border px-3 py-2"
+              value={patronQuery}
+              onChange={(e) => setPatronQuery(e.target.value)}
+              placeholder="Name, email, or ID"
+              onKeyDown={(e) => e.key === "Enter" && searchPatrons()}
+            />
+            <button
+              type="button"
+              onClick={searchPatrons}
+              disabled={patronLoading}
+              className="rounded-md bg-gray-800 text-white px-4 py-2 disabled:opacity-50"
+            >
+              {patronLoading ? "Searching…" : "Search"}
+            </button>
+          </div>
         </Field>
 
-        <div className="space-y-2">
-          <span className="block text-xs font-medium text-gray-600">Checkout By</span>
-          <div className="flex items-center gap-4 text-sm">
-            <label className="inline-flex items-center gap-2">
-              <input
-                type="radio"
-                name="checkout-mode"
-                value="copy_id"
-                checked={form.mode === "copy_id"}
-                onChange={(e) => update("mode", e.target.value)}
-              />
-              Copy ID
-            </label>
-            <label className="inline-flex items-center gap-2">
-              <input
-                type="radio"
-                name="checkout-mode"
-                value="barcode"
-                checked={form.mode === "barcode"}
-                onChange={(e) => update("mode", e.target.value)}
-              />
-              Barcode
-            </label>
-          </div>
-        </div>
-
-        <Field label={form.mode === "barcode" ? "Barcode" : "Copy ID"}>
-          <input
-            className="w-full rounded-md border px-3 py-2"
-            value={form.copy_value}
-            onChange={(e) => update("copy_value", e.target.value)}
-            placeholder={form.mode === "barcode" ? "e.g., BC-000123" : "e.g., 456"}
-          />
-        </Field>
-
-        {error && (
-          <div className="rounded-md bg-red-100 px-3 py-2 text-sm text-red-700">
-            {error}
-          </div>
-        )}
-        {message && (
-          <div className="rounded-md bg-green-100 px-3 py-2 text-sm text-green-700">
-            {message}
+        {patronResults.length > 0 && (
+          <div className="search-results">
+            {patronResults.map((patron) => (
+              <button
+                key={patron.user_id}
+                type="button"
+                onClick={() => {
+                  setSelectedPatron(patron);
+                  setPatronResults([]);
+                }}
+                className="result-item"
+                disabled={!patron.is_active}
+              >
+                <div>
+                  <div className="font-semibold text-sm">
+                    {patron.first_name} {patron.last_name} (#{patron.user_id})
+                  </div>
+                  <div className="text-xs text-gray-600">{patron.email || "No email"}</div>
+                </div>
+                <div className="text-xs">
+                  {patron.flagged_for_deletion && (
+                    <span className="text-red-500 font-medium mr-2">Flagged</span>
+                  )}
+                  <span className={patron.is_active ? "status-badge active" : "status-badge inactive"}>
+                    {patron.is_active ? "Active" : "Inactive"}
+                  </span>
+                </div>
+              </button>
+            ))}
           </div>
         )}
 
-        <button
-          type="submit"
-          disabled={submitting}
-          className="rounded-md bg-gray-900 text-white px-4 py-2 disabled:opacity-50"
-        >
-          {submitting ? "Processing…" : "Checkout"}
-        </button>
-      </form>
+        {selectedPatron && (
+          <div className="selected-pill">
+            <div>
+              <div className="font-semibold text-sm">{selectedPatron.first_name} {selectedPatron.last_name}</div>
+              <div className="text-xs text-gray-600">{selectedPatron.email || "No email"}</div>
+            </div>
+            <button type="button" onClick={() => setSelectedPatron(null)} className="text-xs text-red-500">
+              Clear
+            </button>
+          </div>
+        )}
 
+        <Field label="Find Item">
+          <div className="flex gap-2">
+            <input
+              className="flex-1 rounded-md border px-3 py-2"
+              value={itemQuery}
+              onChange={(e) => setItemQuery(e.target.value)}
+              placeholder="Title or author"
+              onKeyDown={(e) => e.key === "Enter" && searchItems()}
+            />
+            <button
+              type="button"
+              onClick={searchItems}
+              disabled={itemLoading}
+              className="rounded-md bg-gray-800 text-white px-4 py-2 disabled:opacity-50"
+            >
+              {itemLoading ? "Searching…" : "Search"}
+            </button>
+          </div>
+        </Field>
+
+        {itemResults.length > 0 && (
+          <div className="search-results">
+            {itemResults.map((item) => (
+              <button
+                key={item.item_id}
+                type="button"
+                onClick={() => {
+                  setSelectedItem(item);
+                  setItemResults([]);
+                  loadCopies(item.item_id);
+                }}
+                className="result-item"
+              >
+                <div className="font-semibold text-sm">
+                  {item.title} (#{item.item_id})
+                </div>
+                <div className="text-xs text-gray-500">
+                  {Array.isArray(item.authors) && item.authors.length ? item.authors.join(", ") : "Unknown author"}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {copyOptions.length > 0 && (
+          <div className="copy-picker">
+            <p className="text-xs font-medium text-gray-600 mb-2">
+              Available copies ({copyOptions.length})
+            </p>
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {copyOptions.map((copy) => (
+                <button
+                  key={copy.copy_id}
+                  type="button"
+                  onClick={() => setSelectedCopy(copy)}
+                  className={`copy-option ${selectedCopy?.copy_id === copy.copy_id ? "selected" : ""}`}
+                >
+                  <div className="text-sm font-medium">Copy #{copy.copy_id}</div>
+                  <div className="text-xs text-gray-600">
+                    Barcode: {copy.barcode || "—"} • Shelf: {copy.shelf_location || "—"}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="flex items-center justify-between border-t pt-4">
+          <div>
+            <div className="text-sm font-semibold">
+              Patron: {selectedPatron ? `#${selectedPatron.user_id}` : "—"}
+            </div>
+            <div className="text-sm font-semibold">
+              Copy: {selectedCopy ? `#${selectedCopy.copy_id}` : "—"}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleCheckout}
+            disabled={!canCheckout}
+            className="rounded-md bg-gray-900 text-white px-4 py-2 disabled:opacity-50"
+          >
+            {submitting ? "Processing…" : "Checkout"}
+          </button>
+        </div>
+      </div>
     </section>
   );
 }

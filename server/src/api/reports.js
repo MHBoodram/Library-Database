@@ -51,8 +51,8 @@ export const balances = (JWT_SECRET) => async (req, res) => {
       SELECT
         u.first_name,
         u.last_name,
-        SUM(CASE WHEN LOWER(f.status) IN ('paid','waived') THEN f.amount ELSE 0 END) AS paid_total,
-        SUM(CASE WHEN LOWER(f.status) NOT IN ('paid','waived') THEN f.amount ELSE 0 END) AS open_balance
+        SUM(CASE WHEN LOWER(f.status) IN ('paid','waived') THEN f.amount_assessed ELSE 0 END) AS paid_total,
+        SUM(CASE WHEN LOWER(f.status) NOT IN ('paid','waived') THEN f.amount_assessed ELSE 0 END) AS open_balance
       FROM fine f
       JOIN loan l ON l.loan_id = f.loan_id
       JOIN user u ON u.user_id = l.user_id

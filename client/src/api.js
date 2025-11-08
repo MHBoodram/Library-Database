@@ -81,6 +81,9 @@ export const updateManagedAccount = (token, accountId, payload) =>
 export const flagManagedAccount = (token, accountId) =>
   api(`/manage/accounts/${accountId}/flag`, { method: "POST", token });
 
+export const searchPatrons = (token, q) =>
+  api(`/staff/patrons/search?q=${encodeURIComponent(q)}`, { token });
+
 export const createRoom = (token, payload) =>
   api("/staff/rooms", { method: "POST", token, body: payload });
 
