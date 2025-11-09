@@ -39,11 +39,11 @@ export const listItems = () => async (req, res) => {
       const qNum = Number(q);
       if (Number.isFinite(qNum)) {
         // Important: Numeric titles like "1984" should still match by title
-        where.push("(i.item_id = ? OR i.title LIKE ? OR COALESCE(a.full_name, '') LIKE ?)");
-        params.push(qNum, `%${q}%`, `%${q}%`);
+        where.push("(i.item_id = ? OR i.title LIKE ? OR COALESCE(a.full_name, '') LIKE ? OR i.subject LIKE ?)");
+        params.push(qNum, `%${q}%`, `%${q}%`, `%${q}%`);
       } else {
-        where.push("(i.title LIKE ? OR COALESCE(a.full_name, '') LIKE ?)");
-        params.push(`%${q}%`, `%${q}%`);
+        where.push("(i.title LIKE ? OR COALESCE(a.full_name, '') LIKE ? OR i.subject LIKE ?)");
+        params.push(`%${q}%`, `%${q}%`, `%${q}%`);
       }
     }
 
