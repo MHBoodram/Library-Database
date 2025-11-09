@@ -24,6 +24,8 @@ export default function EmployeeDashboard() {
   const [counts, setCounts] = useState({ fines: 0, activeLoans: 0, reservations: 0 });
   const [countsLoading, setCountsLoading] = useState(false);
   const [countsLoaded, setCountsLoaded] = useState(false);
+  const [manageItemsOpen, setManageItemsOpen] = useState(false);
+  const [manageLoansOpen, setManageLoansOpen] = useState(false);
   const isAdmin = user?.employee_role === "admin";
 
   useEffect(() => {
@@ -53,6 +55,19 @@ export default function EmployeeDashboard() {
     loadCounts();
     return () => { alive = false; };
   }, [useApi, countsLoaded]);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (!event.target.closest('.dropdown-container')) {
+        setManageItemsOpen(false);
+        setManageLoansOpen(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
     <div style={{ minHeight: '100vh', background: '#f9fafb', paddingTop: 'var(--nav-height, 60px)' }}>
@@ -105,24 +120,39 @@ export default function EmployeeDashboard() {
             >
               Check Fines
             </button>
-            <button
-              className={`tab-btn ${tab === "checkout" ? "active" : ""}`}
-              onClick={() => setTab("checkout")}
-            >
-              Checkout Loan
-            </button>
-            <button
-              className={`tab-btn ${tab === "return" ? "active" : ""}`}
-              onClick={() => setTab("return")}
-            >
-              Return Loan
-            </button>
-            <button
-              className={`tab-btn ${tab === "activeLoans" ? "active" : ""}`}
-              onClick={() => setTab("activeLoans")}
-            >
-              Active Loans
-            </button>
+            
+            {/* Manage Loans Dropdown */}
+            <div className="dropdown-container">
+              <button
+                className={`tab-btn dropdown-btn ${["checkout", "return", "activeLoans"].includes(tab) ? "active" : ""}`}
+                onClick={() => setManageLoansOpen(!manageLoansOpen)}
+              >
+                Manage Loans ▾
+              </button>
+              {manageLoansOpen && (
+                <div className="dropdown-menu">
+                  <button
+                    className="dropdown-item"
+                    onClick={() => { setTab("checkout"); setManageLoansOpen(false); }}
+                  >
+                    Checkout Loan
+                  </button>
+                  <button
+                    className="dropdown-item"
+                    onClick={() => { setTab("return"); setManageLoansOpen(false); }}
+                  >
+                    Return Loan
+                  </button>
+                  <button
+                    className="dropdown-item"
+                    onClick={() => { setTab("activeLoans"); setManageLoansOpen(false); }}
+                  >
+                    Active Loans
+                  </button>
+                </div>
+              )}
+            </div>
+
             <button
               className={`tab-btn ${tab === "reservations" ? "active" : ""}`}
               onClick={() => setTab("reservations")}
@@ -135,24 +165,39 @@ export default function EmployeeDashboard() {
             >
               Reports
             </button>
-            <button
-              className={`tab-btn ${tab === "addItem" ? "active" : ""}`}
-              onClick={() => setTab("addItem")}
-            >
-              Add Item
-            </button>
-            <button
-              className={`tab-btn ${tab === "editItem" ? "active" : ""}`}
-              onClick={() => setTab("editItem")}
-            >
-              Edit Item
-            </button>
-            <button
-              className={`tab-btn ${tab === "removeItem" ? "active" : ""}`}
-              onClick={() => setTab("removeItem")}
-            >
-              Remove Item
-            </button>
+            
+            {/* Manage Items Dropdown */}
+            <div className="dropdown-container">
+              <button
+                className={`tab-btn dropdown-btn ${["addItem", "editItem", "removeItem"].includes(tab) ? "active" : ""}`}
+                onClick={() => setManageItemsOpen(!manageItemsOpen)}
+              >
+                Manage Items ▾
+              </button>
+              {manageItemsOpen && (
+                <div className="dropdown-menu">
+                  <button
+                    className="dropdown-item"
+                    onClick={() => { setTab("addItem"); setManageItemsOpen(false); }}
+                  >
+                    Add Item
+                  </button>
+                  <button
+                    className="dropdown-item"
+                    onClick={() => { setTab("editItem"); setManageItemsOpen(false); }}
+                  >
+                    Edit Item
+                  </button>
+                  <button
+                    className="dropdown-item"
+                    onClick={() => { setTab("removeItem"); setManageItemsOpen(false); }}
+                  >
+                    Remove Item
+                  </button>
+                </div>
+              )}
+            </div>
+
             {isAdmin && (
               <button
                 className={`tab-btn ${tab === "admin" ? "active" : ""}`}
