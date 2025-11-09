@@ -326,44 +326,54 @@ function FinesPanel({ api }) {
                 <Th>Status</Th>
                 <Th>Loan ID</Th>
                 <Th>Due Date</Th>
+                <Th>Days Overdue</Th>
+                <Th>Amount</Th>
                 <Th>Item Title</Th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td className="p-4" colSpan={7}>
+                  <td className="p-4" colSpan={9}>
                     Loading…
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td className="p-4 text-red-600" colSpan={7}>
+                  <td className="p-4 text-red-600" colSpan={9}>
                     {error}
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td className="p-4" colSpan={7}>
+                  <td className="p-4" colSpan={9}>
                     No fines match your search.
                   </td>
                 </tr>
               ) : (
-                filtered.map((r) => (
-                  <tr key={`${r.fine_id}-${r.loan_id}`} className="border-t">
-                    <Td>{r.first_name}</Td>
-                    <Td>{r.last_name}</Td>
-                    <Td>#{r.fine_id}</Td>
-                    <Td>
-                      <StatusPill status={r.status} />
-                    </Td>
-                    <Td>#{r.loan_id}</Td>
-                    <Td>{formatDate(r.due_date)}</Td>
-                    <Td className="max-w-[24ch] truncate" title={r.title}>
-                      {r.title}
-                    </Td>
-                  </tr>
-                ))
+                filtered.map((r) => {
+                  const amount = r.amount_assessed != null ? `$${Number(r.amount_assessed).toFixed(2)}` : '—';
+                  const daysOverdue = r.days_overdue != null ? r.days_overdue : 
+                    (r.due_date ? Math.max(0, Math.floor((new Date() - new Date(r.due_date)) / 86400000)) : '—');
+                  
+                  return (
+                    <tr key={`${r.fine_id}-${r.loan_id}`} className="border-t">
+                      <Td>{r.first_name}</Td>
+                      <Td>{r.last_name}</Td>
+                      <Td>#{r.fine_id}</Td>
+                      <Td>
+                        <StatusPill status={r.status} />
+                      </Td>
+                      <Td>#{r.loan_id}</Td>
+                      <Td>{formatDate(r.due_date)}</Td>
+                      <Td>{daysOverdue}</Td>
+                      <Td>{amount}</Td>
+                      <Td className="max-w-[24ch] truncate" title={r.title}>
+                        {r.title}
+                      </Td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -1421,9 +1431,11 @@ function StatusPill({ status }) {
   const map = {
     paid: "bg-green-100 text-green-800",
     unpaid: "bg-amber-100 text-amber-800",
+    open: "bg-amber-100 text-amber-800",
     waived: "bg-blue-100 text-blue-800",
+    overdue: "bg-orange-100 text-orange-800",
   };
-  const cls = map[status] || "bg-gray-100 text-gray-800";
+  const cls = map[String(status || "").toLowerCase()] || "bg-gray-100 text-gray-800";
   return (
     <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>
       <span className="inline-block h-1.5 w-1.5 rounded-full bg-current"></span>

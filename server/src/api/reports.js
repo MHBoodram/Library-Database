@@ -23,7 +23,7 @@ export const overdue = (JWT_SECRET) => async (req, res) => {
             GREATEST(
               0,
               (GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) - COALESCE(l.grace_days_snapshot, 0))
-            ) * COALESCE(l.daily_fine_rate_snapshot, 0)
+            ) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
           ), 2
         ) AS est_fine
       FROM loan l
