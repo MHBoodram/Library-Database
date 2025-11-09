@@ -394,7 +394,7 @@ function ActiveLoansPanel({ api }) {
         <button
           type="button"
           onClick={handleRefresh}
-          className="inline-flex items-center justify-center rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+          className="inline-flex items-center justify-center rounded-md btn-primary px-4 py-2 text-sm font-medium disabled:opacity-50"
           disabled={loading}
         >
           {loading ? "Refreshing…" : "Refresh"}
@@ -769,7 +769,7 @@ function CheckoutPanel({ api, staffUser }) {
             type="button"
             onClick={handleCheckout}
             disabled={!canCheckout}
-            className="rounded-md bg-gray-900 text-white px-4 py-2 disabled:opacity-50"
+            className="rounded-md btn-primary px-4 py-2 disabled:opacity-50"
           >
             {submitting ? "Processing…" : "Checkout"}
           </button>
@@ -1438,6 +1438,8 @@ function AddItemPanel({ api }) {
   const [form, setForm] = useState({
     title: "",
     subject: "",
+    description: "",
+    cover_image_url: "",
     item_type: "book",
     isbn: "",
     publisher: "",
@@ -1503,6 +1505,8 @@ function AddItemPanel({ api }) {
       const itemPayload = {
         title,
         subject: form.subject.trim() || undefined,
+        description: form.description.trim() || undefined,
+        cover_image_url: form.cover_image_url.trim() || undefined,
       };
 
       if (itemType && itemType !== "general") {
@@ -1680,6 +1684,28 @@ function AddItemPanel({ api }) {
             <input className="w-full rounded-md border px-3 py-2" value={form.subject} onChange={(e) => update("subject", e.target.value)} placeholder="e.g., Literature" />
           </Field>
 
+          <Field label="Description (optional)">
+            <textarea
+              className="w-full rounded-md border px-3 py-2"
+              value={form.description}
+              onChange={(e) => update("description", e.target.value)}
+              placeholder="Enter a description of this item..."
+              rows="4"
+            />
+          </Field>
+
+          <Field label="Cover Image URL (optional)">
+            <input
+              type="url"
+              className="w-full rounded-md border px-3 py-2"
+              value={form.cover_image_url}
+              onChange={(e) => update("cover_image_url", e.target.value)}
+              placeholder="e.g., https://example.com/cover.jpg"
+            />
+            <small className="text-xs text-gray-500 mt-1 block">
+              Leave blank to use ISBN lookup or default placeholder
+            </small>
+          </Field>
 
 
           <Field label="Item Type">
@@ -1924,7 +1950,7 @@ function AddItemPanel({ api }) {
             <button
               type="submit"
               disabled={submitting}
-              className="rounded-md bg-gray-900 text-white px-4 py-2 disabled:opacity-50"
+              className="rounded-md btn-primary px-4 py-2 disabled:opacity-50"
             >
               {submitting ? "Saving…" : "Create Item"}
             </button>
@@ -2062,7 +2088,7 @@ function ReservationsPanel({ api, staffUser }) {
             />
           </Field>
           <div className="md:col-span-2 flex items-center gap-3">
-            <button type="submit" className="rounded-md bg-gray-900 text-white px-4 py-2 disabled:opacity-50">
+            <button type="submit" className="rounded-md btn-primary px-4 py-2 disabled:opacity-50">
               Create Reservation
             </button>
             {submitMessage && <span className="text-sm text-green-700">{submitMessage}</span>}
@@ -2133,7 +2159,7 @@ function ReservationsPanel({ api, staffUser }) {
             />
           </Field>
           <div className="md:col-span-3 flex items-center gap-3">
-            <button type="submit" className="rounded-md bg-gray-900 text-white px-4 py-2">
+            <button type="submit" className="rounded-md btn-primary px-4 py-2">
               Add Room
             </button>
             {roomMessage && <span className="text-sm text-green-700">{roomMessage}</span>}
@@ -2262,6 +2288,8 @@ function EditItemPanel({ api }) {
   const [form, setForm] = useState({
     title: "",
     subject: "",
+    description: "",
+    cover_image_url: "",
     item_type: "book",
     isbn: "",
     publisher: "",
@@ -2310,6 +2338,8 @@ function EditItemPanel({ api }) {
     setForm({
       title: item.title || "",
       subject: item.subject || "",
+      description: item.description || "",
+      cover_image_url: item.cover_image_url || "",
       item_type: item.item_type || "book",
       isbn: item.isbn || "",
       publisher: item.publisher || "",
@@ -2390,8 +2420,12 @@ function EditItemPanel({ api }) {
 
       const itemPayload = {
         title,
-        subject: form.subject.trim() || undefined,
+        subject: form.subject.trim() || null,
+        description: form.description.trim() || null,
+        cover_image_url: form.cover_image_url.trim() || null,
       };
+
+      console.log('[EditItem] Updating item with payload:', itemPayload);
 
       if (form.item_type === "book") {
         if (form.isbn.trim()) itemPayload.isbn = form.isbn.trim();
@@ -2408,10 +2442,12 @@ function EditItemPanel({ api }) {
       }
 
       // Update item
-      await api(`items/${selectedItem.item_id}`, {
+      console.log('[EditItem] Sending PUT request to items/' + selectedItem.item_id);
+      const updateResult = await api(`items/${selectedItem.item_id}`, {
         method: "PUT",
         body: itemPayload,
       });
+      console.log('[EditItem] Update result:', updateResult);
 
       // Update authors if book
       if (form.item_type === "book") {
@@ -2560,6 +2596,29 @@ function EditItemPanel({ api }) {
                 onChange={(e) => update("subject", e.target.value)}
                 placeholder="e.g., Literature"
               />
+            </Field>
+
+            <Field label="Description">
+              <textarea
+                className="w-full rounded-md border px-3 py-2"
+                value={form.description}
+                onChange={(e) => update("description", e.target.value)}
+                placeholder="Enter a description of this item..."
+                rows="4"
+              />
+            </Field>
+
+            <Field label="Cover Image URL">
+              <input
+                type="url"
+                className="w-full rounded-md border px-3 py-2"
+                value={form.cover_image_url}
+                onChange={(e) => update("cover_image_url", e.target.value)}
+                placeholder="e.g., https://example.com/cover.jpg"
+              />
+              <small className="text-xs text-gray-500 mt-1 block">
+                Leave blank to use ISBN lookup or default placeholder
+              </small>
             </Field>
 
               {/* Classification removed per request */}
@@ -2880,7 +2939,7 @@ function EditItemPanel({ api }) {
               <button
                 type="submit"
                 disabled={submitting}
-                className="rounded-md bg-gray-900 text-white px-4 py-2 disabled:opacity-50"
+                className="rounded-md btn-primary px-4 py-2 disabled:opacity-50"
               >
                 {submitting ? "Saving…" : "Update Item"}
               </button>

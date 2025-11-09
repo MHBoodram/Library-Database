@@ -378,6 +378,8 @@ select.rounded-md,
 textarea.rounded-md {
   border-radius: 6px;
   border: 1px solid var(--gray-300);
+  background-color: white;
+  color: var(--gray-900);
   transition: all var(--transition-duration) ease;
 }
 
@@ -386,12 +388,44 @@ select.rounded-md:focus,
 textarea.rounded-md:focus {
   outline: none;
   border-color: var(--primary-main);
+  background-color: white;
   box-shadow: 0 0 0 3px rgba(24, 119, 114, 0.1);
 }
 
 /* Buttons */
 .bg-gray-900 {
-  background-color: var(--gray-900);
+  background-color: var(--primary-main);
+}
+
+.bg-gray-800 {
+  background-color: var(--primary-main) !important;
+  color: white !important;
+  border: none !important;
+}
+
+.bg-gray-800:hover {
+  background-color: var(--primary-dark) !important;
+}
+
+.bg-gray-700 {
+  background-color: var(--primary-main) !important;
+  color: white !important;
+  border: none !important;
+}
+
+.bg-gray-700:hover {
+  background-color: var(--primary-dark) !important;
+}
+
+.btn-primary {
+  background-color: var(--primary-main) !important;
+  color: white !important;
+  border: none !important;
+}
+
+.btn-primary:hover {
+  background-color: var(--primary-dark) !important;
+  border-color: transparent !important;
 }
 
 .bg-red-600 {
@@ -419,7 +453,7 @@ button.rounded-md {
 }
 
 button.bg-gray-900:hover {
-  background-color: var(--gray-800);
+  background-color: var(--primary-dark);
 }
 
 button.bg-red-600:hover,

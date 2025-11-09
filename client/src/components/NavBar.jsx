@@ -58,7 +58,7 @@ function NavBar() {
                     <a className='nav-brand' href="/">Library</a>
                     <div className='sub-nav-links'>
                         <NavLink to="/books" className = {({ isActive }) => (isActive? 'sub-nav-link active' : 'sub-nav-link')}>
-                            Books
+                            Library Catalog
                         </NavLink>
                         {user && (user.role === 'student' || user.role === 'teacher') && (
                             <NavLink to="/loans" className = {({ isActive }) => (isActive? 'sub-nav-link active' : 'sub-nav-link')}>

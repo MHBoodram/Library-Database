@@ -55,6 +55,8 @@ export const listItems = () => async (req, res) => {
         i.title,
         i.subject,
         i.classification,
+        i.description,
+        i.cover_image_url,
         /* Aggregated copy counts */
         (SELECT COUNT(*) FROM copy c WHERE c.item_id = i.item_id AND c.status <> 'lost') AS total_copies,
         (SELECT COUNT(*) FROM copy c WHERE c.item_id = i.item_id AND c.status = 'available') AS available_copies,
@@ -81,7 +83,7 @@ export const listItems = () => async (req, res) => {
       LEFT JOIN item_author ia ON ia.item_id = i.item_id
       LEFT JOIN author a ON a.author_id = ia.author_id
       ${whereSql}
-      GROUP BY i.item_id, i.title, i.subject, i.classification,
+      GROUP BY i.item_id, i.title, i.subject, i.classification, i.description, i.cover_image_url,
                b.isbn, b.publisher, b.publication_year,
                d.model, d.manufacturer,
                m.media_type, m.length_minutes, m.publisher, m.publication_year
@@ -98,6 +100,8 @@ export const listItems = () => async (req, res) => {
       title: r.title,
       subject: r.subject,
       classification: r.classification,
+      description: r.description,
+      cover_image_url: r.cover_image_url,
       item_type: r.item_type,
       isbn: r.isbn,
       publisher: r.book_publisher || r.media_publisher,
@@ -143,6 +147,8 @@ export const createItem = (JWT_SECRET) => async (req, res) => {
   if (!title) return sendJSON(res, 400, { error:"title_required" });
   const subject = (b.subject || "").trim() || null;
   const classification = (b.classification || "").trim() || null;
+  const description = (b.description || "").trim() || null;
+  const cover_image_url = (b.cover_image_url || "").trim() || null;
 
   const itemType = typeof b.item_type === "string" ? b.item_type.trim().toLowerCase() : "";
   console.log('[DEBUG] Item type:', itemType);
@@ -150,8 +156,8 @@ export const createItem = (JWT_SECRET) => async (req, res) => {
   try {
     await conn.beginTransaction();
     const [itemResult] = await conn.execute(
-      "INSERT INTO item(title, subject, classification) VALUES(?,?,?)",
-      [title, subject, classification]
+      "INSERT INTO item(title, subject, classification, description, cover_image_url) VALUES(?,?,?,?,?)",
+      [title, subject, classification, description, cover_image_url]
     );
     const item_id = itemResult.insertId;
     console.log('[DEBUG] Created item with ID:', item_id);
@@ -211,10 +217,45 @@ export const updateItem = (JWT_SECRET) => async (req, res, params) => {
   const b = await readJSONBody(req);
   const itemId = Number(params.id);
   
+  console.log('[updateItem] Updating item', itemId, 'with data:', b);
+  
+  // Build update fields - only update fields that are provided in the request
+  const updates = [];
+  const values = [];
+  
+  if (b.title !== undefined) {
+    updates.push('title = ?');
+    values.push(b.title);
+  }
+  if (b.subject !== undefined) {
+    updates.push('subject = ?');
+    values.push(b.subject);
+  }
+  if (b.classification !== undefined) {
+    updates.push('classification = ?');
+    values.push(b.classification);
+  }
+  if (b.description !== undefined) {
+    updates.push('description = ?');
+    values.push(b.description);
+  }
+  if (b.cover_image_url !== undefined) {
+    updates.push('cover_image_url = ?');
+    values.push(b.cover_image_url);
+  }
+  
+  if (updates.length === 0) {
+    return sendJSON(res, 400, { error: 'no_fields_to_update' });
+  }
+  
+  values.push(itemId);
+  
   await pool.execute(
-    "UPDATE item SET title=COALESCE(?,title), subject=COALESCE(?,subject), classification=COALESCE(?,classification) WHERE item_id=?",
-    [b.title||null, b.subject||null, b.classification||null, itemId]
+    `UPDATE item SET ${updates.join(', ')} WHERE item_id = ?`,
+    values
   );
+  
+  console.log('[updateItem] Item updated successfully');
   
   return sendJSON(res, 200, { ok:true });
 };
