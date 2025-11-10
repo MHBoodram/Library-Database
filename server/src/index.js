@@ -25,6 +25,7 @@ import { adminOverview, listEmployees as adminEmployees, createAccount as adminC
 import { getProfile, updateProfile } from "./api/profile.js";
 import { listAccounts, updateAccount as updateManagedAccount, flagAccount } from "./api/manageAcc.js";
 import { searchPatrons } from "./api/patrons.js";
+import { updateRoom, deleteRoom } from "./api/rooms.js";
 
 const PORT = Number(process.env.PORT) || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || "devsecret";
@@ -77,6 +78,8 @@ r.add("GET", "/api/staff/reservations", listReservations(JWT_SECRET));
 r.add("POST", "/api/staff/reservations", createReservation(JWT_SECRET));
 r.add("DELETE", "/api/staff/reservations/:id", deleteReservation(JWT_SECRET));
 r.add("POST", "/api/staff/rooms", createRoom(JWT_SECRET));
+r.add("PUT", "/api/staff/rooms/:id", updateRoom(JWT_SECRET));
+r.add("DELETE", "/api/staff/rooms/:id", deleteRoom(JWT_SECRET));
 
 r.add("GET", "/api/manage/accounts", listAccounts(JWT_SECRET));
 r.add("PATCH", "/api/manage/accounts/:id", updateManagedAccount(JWT_SECRET));
