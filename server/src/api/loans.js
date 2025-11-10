@@ -47,14 +47,70 @@ export const checkout = (JWT_SECRET) => async (req, res) => {
 };
 
 export const returnLoan = (JWT_SECRET) => async (req, res) => {
-  const auth = requireAuth(req, res, JWT_SECRET); if (!auth) return;
+  const auth = requireAuth(req, res, JWT_SECRET); 
+  if (!auth) return;
+  
   const b = await readJSONBody(req);
   const loan_id = Number(b.loan_id);
   const employee_id = Number(b.employee_id) || null;
-  if (!loan_id) return sendJSON(res, 400, { error:"invalid_payload" });
+  
+  if (!loan_id || loan_id <= 0) {
+    return sendJSON(res, 400, { error: "invalid_payload", message: "Valid loan ID is required" });
+  }
 
-  await pool.query("CALL sp_return(?,?)", [loan_id, employee_id]);
-  return sendJSON(res, 200, { ok:true });
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    // Check if loan exists and is active
+    const [loanRows] = await conn.query(
+      "SELECT loan_id, copy_id, status, return_date FROM loan WHERE loan_id = ?",
+      [loan_id]
+    );
+
+    if (loanRows.length === 0) {
+      await conn.rollback();
+      return sendJSON(res, 404, { error: "loan_not_found", message: "Loan not found" });
+    }
+
+    const loan = loanRows[0];
+
+    if (loan.return_date !== null) {
+      await conn.rollback();
+      return sendJSON(res, 400, { error: "already_returned", message: "This loan has already been returned" });
+    }
+
+    // Update loan with return date and status
+    // Note: employee_id field stores who checked it out, not who processed return
+    await conn.execute(
+      "UPDATE loan SET return_date = NOW(), status = 'returned' WHERE loan_id = ?",
+      [loan_id]
+    );
+
+    // Update copy status back to available
+    await conn.execute(
+      "UPDATE copy SET status = 'available' WHERE copy_id = ?",
+      [loan.copy_id]
+    );
+
+    await conn.commit();
+    return sendJSON(res, 200, { ok: true, message: "Loan returned successfully" });
+    
+  } catch (err) {
+    try { await conn.rollback(); } catch {}
+    // Improved diagnostics for production
+    const safe = {
+      code: err?.code,
+      errno: err?.errno,
+      sqlState: err?.sqlState,
+      message: err?.message,
+      loan_id,
+    };
+    console.error("Return loan error diagnostics:", safe);
+    return sendJSON(res, 500, { error: "return_failed", message: err?.message || "unknown_error" });
+  } finally {
+    conn.release();
+  }
 };
 
 // List loans for the current authenticated user (student or staff viewing their own)
@@ -186,44 +242,76 @@ async function performCheckout({ user_id, copy_id, barcode, employee_id }) {
       copy = copyRows[0];
     }
     if (copy.status !== "available") {
-      throw createAppError("copy_not_available", "Copy is not currently available for checkout.", 409);
+      throw createAppError(
+        "copy_not_available", 
+        `Copy is not currently available for checkout. Current status: ${copy.status}`, 
+        409
+      );
     }
 
     const policy = await resolvePolicy(conn, copy.item_id, userCategory);
     const loanDays = Number(policy?.loan_days) || defaultLoanDays(accountRole);
     const dueDate = getDueDateISO(loanDays);
 
-    const [insertResult] = await conn.execute(
-      `
-        INSERT INTO loan (
+    let insertResult;
+    try {
+      // Preferred: insert with policy + snapshot columns
+      const [res] = await conn.execute(
+        `
+          INSERT INTO loan (
+            user_id,
+            copy_id,
+            employee_id,
+            policy_id,
+            checkout_date,
+            due_date,
+            status,
+            daily_fine_rate_snapshot,
+            grace_days_snapshot,
+            max_fine_snapshot,
+            replacement_fee_snapshot
+          )
+          VALUES (
+            ?, ?, ?, ?, NOW(), ?, 'active', ?, ?, ?, ?
+          )
+        `,
+        [
           user_id,
-          copy_id,
+          resolvedCopyId,
           employee_id,
-          policy_id,
-          checkout_date,
-          due_date,
-          status,
-          daily_fine_rate_snapshot,
-          grace_days_snapshot,
-          max_fine_snapshot,
-          replacement_fee_snapshot
-        )
-        VALUES (
-          ?, ?, ?, ?, NOW(), ?, 'active', ?, ?, ?, ?
-        )
-      `,
-      [
-        user_id,
-        resolvedCopyId,
-        employee_id,
-        policy?.policy_id ?? null,
-        dueDate,
-        policy?.daily_rate ?? null,
-        policy?.grace_days ?? null,
-        policy?.max_fine ?? null,
-        policy?.replacement_fee ?? null,
-      ]
-    );
+          policy?.policy_id ?? null,
+          dueDate,
+          policy?.daily_rate ?? null,
+          policy?.grace_days ?? null,
+          policy?.max_fine ?? null,
+          policy?.replacement_fee ?? null,
+        ]
+      );
+      insertResult = res;
+    } catch (e) {
+      // Fallback for legacy schemas without policy/snapshot columns
+      const msg = String(e?.message || "");
+      if (e?.code === 'ER_BAD_FIELD_ERROR' || /Unknown column/.test(msg)) {
+        const [res] = await conn.execute(
+          `
+            INSERT INTO loan (
+              user_id,
+              copy_id,
+              employee_id,
+              checkout_date,
+              due_date,
+              status
+            ) VALUES (
+              ?, ?, ?, NOW(), ?, 'active'
+            )
+          `,
+          [user_id, resolvedCopyId, employee_id, dueDate]
+        );
+        insertResult = res;
+      } else {
+        throw e;
+      }
+    }
 
     await conn.execute(
       "UPDATE copy SET status='on_loan' WHERE copy_id=?",
@@ -273,29 +361,36 @@ async function resolvePolicy(conn, item_id, userCategory) {
   const policyMediaType = normalizePolicyMediaType(rawMediaType);
 
   if (!policyMediaType) return null;
-
-  const [policyRows] = await conn.query(
-    `
-      SELECT policy_id, media_type, loan_days, daily_rate, grace_days, max_fine, replacement_fee
-      FROM fine_policy
-      WHERE media_type = ? AND user_category = ?
-      LIMIT 1
-    `,
-    [policyMediaType, userCategory]
-  );
-  if (policyRows.length) return policyRows[0];
-
-  if (policyMediaType !== "other") {
-    const [fallbackRows] = await conn.query(
+  try {
+    const [policyRows] = await conn.query(
       `
         SELECT policy_id, media_type, loan_days, daily_rate, grace_days, max_fine, replacement_fee
         FROM fine_policy
-        WHERE media_type = 'other' AND user_category = ?
+        WHERE media_type = ? AND user_category = ?
         LIMIT 1
       `,
-      [userCategory]
+      [policyMediaType, userCategory]
     );
-    if (fallbackRows.length) return fallbackRows[0];
+    if (policyRows.length) return policyRows[0];
+
+    if (policyMediaType !== "other") {
+      const [fallbackRows] = await conn.query(
+        `
+          SELECT policy_id, media_type, loan_days, daily_rate, grace_days, max_fine, replacement_fee
+          FROM fine_policy
+          WHERE media_type = 'other' AND user_category = ?
+          LIMIT 1
+        `,
+        [userCategory]
+      );
+      if (fallbackRows.length) return fallbackRows[0];
+    }
+  } catch (err) {
+    // Make fine_policy optional: if the table is missing, proceed without a policy
+    if (err && (err.code === 'ER_NO_SUCH_TABLE' || /fine_policy/.test(String(err.message)))) {
+      return { media_type: policyMediaType };
+    }
+    throw err;
   }
 
   return { media_type: policyMediaType };

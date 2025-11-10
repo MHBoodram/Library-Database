@@ -41,6 +41,7 @@ export const listActiveLoans = (JWT_SECRET) => async (req, res) => {
       l.loan_id,
       l.due_date,
       l.status,
+      u.user_id,
       u.email        AS user_email,
       u.first_name   AS user_first_name,
       u.last_name    AS user_last_name,

@@ -110,6 +110,12 @@ export default function EmployeeDashboard() {
               Checkout Loan
             </button>
             <button
+              className={`tab-btn ${tab === "return" ? "active" : ""}`}
+              onClick={() => setTab("return")}
+            >
+              Return Loan
+            </button>
+            <button
               className={`tab-btn ${tab === "activeLoans" ? "active" : ""}`}
               onClick={() => setTab("activeLoans")}
             >
@@ -122,10 +128,22 @@ export default function EmployeeDashboard() {
               Room Reservations
             </button>
             <button
+              className={`tab-btn ${tab === "reports" ? "active" : ""}`}
+              onClick={() => setTab("reports")}
+            >
+              Reports
+            </button>
+            <button
               className={`tab-btn ${tab === "addItem" ? "active" : ""}`}
               onClick={() => setTab("addItem")}
             >
               Add Item
+            </button>
+            <button
+              className={`tab-btn ${tab === "editItem" ? "active" : ""}`}
+              onClick={() => setTab("editItem")}
+            >
+              Edit Item
             </button>
             <button
               className={`tab-btn ${tab === "removeItem" ? "active" : ""}`}
@@ -140,9 +158,12 @@ export default function EmployeeDashboard() {
       <main style={{ maxWidth: 1200, margin: '0 auto', padding: '1.5rem' }}>
         {tab === "fines" && <FinesPanel api={apiWithAuth} />}
         {tab === "checkout" && <CheckoutPanel api={apiWithAuth} staffUser={user} />}
+        {tab === "return" && <ReturnLoanPanel api={apiWithAuth} staffUser={user} />}
         {tab === "activeLoans" && <ActiveLoansPanel api={apiWithAuth} />}
         {tab === "reservations" && <ReservationsPanel api={apiWithAuth} staffUser={user} />}
+        {tab === "reports" && <ReportsPanel api={apiWithAuth} />}
         {tab === "addItem" && <AddItemPanel api={apiWithAuth} />}
+        {tab === "editItem" && <EditItemPanel api={apiWithAuth} />}
         {tab === "removeItem" && <RemoveItemPanel api={apiWithAuth} />}
       </main>
     </div>
@@ -378,6 +399,7 @@ function ActiveLoansPanel({ api }) {
           <table className="min-w-full text-sm">
             <thead className="bg-gray-100 text-left">
               <tr>
+                <Th>Patron ID</Th>
                 <Th>Borrower</Th>
                 <Th>Email</Th>
                 <Th>Item Title</Th>
@@ -391,19 +413,19 @@ function ActiveLoansPanel({ api }) {
             <tbody>
               {loading ? (
                 <tr>
-                  <td className="p-4" colSpan={8}>
+                  <td className="p-4" colSpan={9}>
                     Loading…
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td className="p-4 text-red-600" colSpan={8}>
+                  <td className="p-4 text-red-600" colSpan={9}>
                     {error}
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td className="p-4" colSpan={8}>
+                  <td className="p-4" colSpan={9}>
                     No active loans found.
                   </td>
                 </tr>
@@ -413,6 +435,7 @@ function ActiveLoansPanel({ api }) {
                   const staff = [r.employee_first_name, r.employee_last_name].filter(Boolean).join(" ").trim();
                   return (
                     <tr key={r.loan_id} className="border-t">
+                      <Td>{r.user_id ? `#${r.user_id}` : "—"}</Td>
                       <Td>{borrower || "—"}</Td>
                       <Td>{r.user_email || "—"}</Td>
                       <Td className="max-w-[24ch] truncate" title={r.item_title}>
@@ -583,6 +606,591 @@ function Td({ children, className = "" }) {
   return <td className={`px-4 py-3 align-top ${className}`}>{children}</td>;
 }
 
+function ReturnLoanPanel({ api, staffUser }) {
+  const [form, setForm] = useState({ loan_id: "" });
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+
+  function update(field, value) {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  async function handleSearch() {
+    if (!searchQuery.trim()) {
+      setError("Please enter a loan ID, patron name, or item title to search");
+      return;
+    }
+
+    setSearching(true);
+    setError("");
+    setSearchResults([]);
+
+    try {
+      const params = new URLSearchParams({ q: searchQuery.trim() });
+      const data = await api(`staff/loans/active?${params.toString()}`);
+      const list = Array.isArray(data?.rows) ? data.rows : Array.isArray(data) ? data : [];
+      setSearchResults(list);
+      if (list.length === 0) {
+        setError("No active loans found matching your search");
+      }
+    } catch (err) {
+      setError(err.message || "Failed to search loans");
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  async function onSubmit(e) {
+    e.preventDefault();
+    setSubmitting(true);
+    setMessage("");
+    setError("");
+    try {
+      const loan_id = Number(form.loan_id);
+      if (!loan_id || loan_id <= 0) {
+        throw new Error("Valid Loan ID is required.");
+      }
+
+      const body = {
+        loan_id,
+        ...(staffUser?.employee_id ? { employee_id: staffUser.employee_id } : {}),
+      };
+
+      await api("loans/return", { method: "POST", body });
+      setMessage(`Successfully returned loan #${loan_id}.`);
+      setForm({ loan_id: "" });
+      setSearchResults([]);
+      setSearchQuery("");
+    } catch (err) {
+      const code = err?.data?.error;
+      const serverMessage = err?.data?.message;
+      if (code === "loan_not_found") {
+        setError(serverMessage || "Loan not found.");
+      } else if (code === "already_returned") {
+        setError(serverMessage || "This loan has already been returned.");
+      } else if (err?.message) {
+        setError(serverMessage || err.message);
+      } else {
+        setError("Return failed. Please try again.");
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function selectLoan(loan) {
+    setForm({ loan_id: String(loan.loan_id) });
+    setError("");
+    setMessage("");
+  }
+
+  return (
+    <section className="space-y-6">
+      <div className="rounded-xl border bg-white p-6 shadow-sm space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold">Return Loan</h2>
+          <p className="text-sm text-gray-600">
+            Search for an active loan and process the return.
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          <Field label="Search Active Loans">
+            <div className="flex gap-2">
+              <input
+                className="flex-1 rounded-md border px-3 py-2"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Loan ID, patron name, or item title"
+                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              />
+              <button
+                type="button"
+                onClick={handleSearch}
+                disabled={searching}
+                className="rounded-md bg-gray-700 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+              >
+                {searching ? "Searching..." : "Search"}
+              </button>
+            </div>
+          </Field>
+
+          {searchResults.length > 0 && (
+            <div className="rounded-lg border bg-gray-50 p-3 max-h-96 overflow-y-auto">
+              <p className="text-xs font-medium text-gray-600 mb-2">
+                Found {searchResults.length} active loan(s) - Click to select:
+              </p>
+              <div className="space-y-2">
+                {searchResults.map((loan) => {
+                  const borrower = [loan.user_first_name, loan.user_last_name]
+                    .filter(Boolean)
+                    .join(" ")
+                    .trim();
+                  return (
+                    <button
+                      key={loan.loan_id}
+                      type="button"
+                      onClick={() => selectLoan(loan)}
+                      className="w-full text-left rounded-md border bg-white p-3 hover:bg-blue-50 hover:border-blue-300 transition-colors"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1">
+                          <div className="font-medium text-sm">
+                            Loan #{loan.loan_id} - {loan.item_title}
+                          </div>
+                          <div className="text-xs text-gray-600 mt-1">
+                            Borrower: {borrower || "Unknown"} (#{loan.user_id})
+                          </div>
+                          <div className="text-xs text-gray-600">
+                            Copy #{loan.copy_id} • Due: {formatDate(loan.due_date)}
+                          </div>
+                        </div>
+                        <div className="text-xs text-blue-600 font-medium">Select →</div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <form onSubmit={onSubmit} className="space-y-4">
+          <Field label="Loan ID">
+            <input
+              className="w-full rounded-md border px-3 py-2"
+              value={form.loan_id}
+              onChange={(e) => update("loan_id", e.target.value)}
+              placeholder="e.g., 123"
+              required
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Enter the loan ID manually or select from search results above
+            </p>
+          </Field>
+
+          {message && (
+            <div className="rounded-md bg-green-50 border border-green-200 p-3 text-sm text-green-800">
+              {message}
+            </div>
+          )}
+          {error && (
+            <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-800">
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full rounded-md bg-blue-600 px-4 py-2.5 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {submitting ? "Processing Return..." : "Return Loan"}
+          </button>
+        </form>
+      </div>
+    </section>
+  );
+}
+
+function ReportsPanel({ api }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [activeReport, setActiveReport] = useState("overdue"); // "overdue" | "balances" | "topItems" | "newPatrons"
+  const [reportData, setReportData] = useState([]);
+  const [monthFilter, setMonthFilter] = useState(() => new Date().toISOString().slice(0,7)); // YYYY-MM
+  const [patronMode, setPatronMode] = useState("single"); // "single" | "window"
+  const [monthsWindow, setMonthsWindow] = useState(12); // 6,12,24 etc
+
+  const loadReport = useCallback(async (reportType) => {
+    if (!api) return;
+    setLoading(true);
+    setError("");
+    setReportData([]);
+
+    try {
+      let endpoint = reportType === "overdue" 
+        ? "reports/overdue" 
+        : reportType === "balances"
+        ? "reports/balances"
+        : reportType === "topItems"
+        ? "reports/top-items"
+        : "reports/new-patrons-monthly";
+      if (reportType === "newPatrons") {
+        if (patronMode === "single" && monthFilter) {
+          endpoint += `?month=${encodeURIComponent(monthFilter)}`;
+        } else if (patronMode === "window" && monthsWindow) {
+          endpoint += `?months=${encodeURIComponent(monthsWindow)}`;
+        }
+      }
+      
+      const data = await api(endpoint);
+      setReportData(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setError(err.message || "Failed to load report");
+    } finally {
+      setLoading(false);
+    }
+  }, [api, monthFilter, patronMode, monthsWindow]);
+
+  useEffect(() => {
+    loadReport(activeReport);
+  }, [activeReport, loadReport]);
+
+  function handleRefresh() {
+    loadReport(activeReport);
+  }
+
+  function handleExport() {
+    // Simple CSV export
+    if (reportData.length === 0) {
+      alert("No data to export");
+      return;
+    }
+
+    const headers = Object.keys(reportData[0]);
+    const csvContent = [
+      headers.join(","),
+      ...reportData.map(row => 
+        headers.map(h => {
+          const val = row[h];
+          // Escape commas and quotes
+          return typeof val === 'string' && (val.includes(',') || val.includes('"'))
+            ? `"${val.replace(/"/g, '""')}"`
+            : val ?? "";
+        }).join(",")
+      )
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${activeReport}_report_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <section className="space-y-4">
+      <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+        <div className="border-b bg-gray-50 px-5 py-4">
+          <h2 className="text-lg font-semibold">Reports</h2>
+          <p className="text-sm text-gray-600 mt-1">
+            Generate and view library reports
+          </p>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex-1 flex gap-2">
+              <button
+                onClick={() => setActiveReport("overdue")}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  activeReport === "overdue"
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                Overdue Loans
+              </button>
+              <button
+                onClick={() => setActiveReport("balances")}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  activeReport === "balances"
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                User Balances
+              </button>
+              <button
+                onClick={() => setActiveReport("topItems")}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  activeReport === "topItems"
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                Top Items
+              </button>
+              <button
+                onClick={() => setActiveReport("newPatrons")}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  activeReport === "newPatrons"
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                New Patrons / Month
+              </button>
+            </div>
+
+            <div className="flex items-end gap-2">
+              {activeReport === "newPatrons" && (
+                <div className="flex flex-wrap items-end gap-4">
+                  <div className="space-y-1">
+                    <span className="block text-xs font-medium text-gray-600">Mode</span>
+                    <div className="flex gap-3 text-sm">
+                      <label className="inline-flex items-center gap-1">
+                        <input
+                          type="radio"
+                          name="patron-mode"
+                          value="single"
+                          checked={patronMode === "single"}
+                          onChange={(e) => setPatronMode(e.target.value)}
+                        />
+                        Single Month
+                      </label>
+                      <label className="inline-flex items-center gap-1">
+                        <input
+                          type="radio"
+                          name="patron-mode"
+                          value="window"
+                          checked={patronMode === "window"}
+                          onChange={(e) => setPatronMode(e.target.value)}
+                        />
+                        Rolling Window
+                      </label>
+                    </div>
+                  </div>
+                  {patronMode === "single" && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Month</label>
+                      <input
+                        type="month"
+                        value={monthFilter}
+                        onChange={(e) => setMonthFilter(e.target.value)}
+                        className="rounded-md border bg-white px-3 py-2"
+                      />
+                    </div>
+                  )}
+                  {patronMode === "window" && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Months</label>
+                      <select
+                        value={monthsWindow}
+                        onChange={(e) => setMonthsWindow(Number(e.target.value))}
+                        className="rounded-md border bg-white px-3 py-2"
+                      >
+                        {[6,12,18,24,30,36].map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              )}
+            
+            <div className="flex gap-2 ml-auto">
+              <button
+                onClick={handleRefresh}
+                disabled={loading}
+                className="px-4 py-2 rounded-md bg-gray-700 text-white text-sm font-medium hover:bg-gray-800 disabled:opacity-50"
+              >
+                {loading ? "Loading..." : "Refresh"}
+              </button>
+              <button
+                onClick={handleExport}
+                disabled={loading || reportData.length === 0}
+                className="px-4 py-2 rounded-md bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-50"
+              >
+                Export CSV
+              </button>
+            </div>
+            </div>
+          </div>
+
+          {error && (
+            <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-800">
+              {error}
+            </div>
+          )}
+
+          <div className="rounded-lg border overflow-hidden">
+            {activeReport === "overdue" && <OverdueReportTable data={reportData} loading={loading} />}
+            {activeReport === "balances" && <BalancesReportTable data={reportData} loading={loading} />}
+            {activeReport === "topItems" && <TopItemsReportTable data={reportData} loading={loading} />}
+            {activeReport === "newPatrons" && <NewPatronsReportTable data={reportData} loading={loading} />}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function NewPatronsReportTable({ data, loading }) {
+  if (loading) {
+    return <div className="p-8 text-center text-gray-500">Loading report...</div>;
+  }
+  if (!data.length) {
+    return <div className="p-8 text-center text-gray-500">No patron signups in the selected window</div>;
+  }
+  // data: [{ month: 'YYYY-MM', new_patrons: number }, ...]
+  const total = data.reduce((sum, r) => sum + Number(r.new_patrons || 0), 0);
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-full text-sm">
+        <thead className="bg-gray-100 text-left">
+          <tr>
+            <Th>Month</Th>
+            <Th>New Patrons</Th>
+            <Th>Cumulative</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((row, idx) => {
+            const monthLabel = new Date(row.month + '-01').toLocaleDateString(undefined, { year: 'numeric', month: 'short' });
+            const cumulative = data.slice(0, idx + 1).reduce((s, r) => s + Number(r.new_patrons || 0), 0);
+            return (
+              <tr key={row.month} className="border-t">
+                <Td>{monthLabel}</Td>
+                <Td>
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${row.new_patrons > 0 ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}> 
+                    {row.new_patrons} {row.new_patrons === 1 ? 'patron' : 'patrons'}
+                  </span>
+                </Td>
+                <Td className="font-medium">{cumulative}</Td>
+              </tr>
+            );
+          })}
+          <tr className="bg-gray-50 border-t">
+            <Td className="font-semibold">Total</Td>
+            <Td className="font-semibold">{total}</Td>
+            <Td className="font-semibold">—</Td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function OverdueReportTable({ data, loading }) {
+  if (loading) {
+    return <div className="p-8 text-center text-gray-500">Loading report...</div>;
+  }
+
+  if (data.length === 0) {
+    return <div className="p-8 text-center text-gray-500">No overdue loans found</div>;
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-full text-sm">
+        <thead className="bg-gray-100 text-left">
+          <tr>
+            <Th>Borrower</Th>
+            <Th>Item Title</Th>
+            <Th>Media Type</Th>
+            <Th>Due Date</Th>
+            <Th>Days Overdue</Th>
+            <Th>Est. Fine</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((row, idx) => (
+            <tr key={idx} className="border-t">
+              <Td>{`${row.first_name} ${row.last_name}`}</Td>
+              <Td className="max-w-[30ch] truncate" title={row.title}>{row.title}</Td>
+              <Td>{(row.media_type || "book").toUpperCase()}</Td>
+              <Td>{formatDate(row.due_date)}</Td>
+              <Td>
+                <span className="inline-flex items-center gap-1 rounded-full bg-red-100 text-red-800 px-2 py-0.5 text-xs font-medium">
+                  {row.days_overdue} days
+                </span>
+              </Td>
+              <Td className="font-medium">${Number(row.est_fine || 0).toFixed(2)}</Td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function BalancesReportTable({ data, loading }) {
+  if (loading) {
+    return <div className="p-8 text-center text-gray-500">Loading report...</div>;
+  }
+
+  if (data.length === 0) {
+    return <div className="p-8 text-center text-gray-500">No balances found</div>;
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-full text-sm">
+        <thead className="bg-gray-100 text-left">
+          <tr>
+            <Th>Patron</Th>
+            <Th>Paid Total</Th>
+            <Th>Open Balance</Th>
+            <Th>Total</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((row, idx) => {
+            const paidTotal = Number(row.paid_total || 0);
+            const openBalance = Number(row.open_balance || 0);
+            const total = paidTotal + openBalance;
+            return (
+              <tr key={idx} className="border-t">
+                <Td>{`${row.first_name} ${row.last_name}`}</Td>
+                <Td className="text-green-700 font-medium">${paidTotal.toFixed(2)}</Td>
+                <Td className={openBalance > 0 ? "text-red-700 font-medium" : "text-gray-500"}>
+                  ${openBalance.toFixed(2)}
+                </Td>
+                <Td className="font-semibold">${total.toFixed(2)}</Td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function TopItemsReportTable({ data, loading }) {
+  if (loading) {
+    return <div className="p-8 text-center text-gray-500">Loading report...</div>;
+  }
+
+  if (data.length === 0) {
+    return <div className="p-8 text-center text-gray-500">No loan activity in the last 30 days</div>;
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-full text-sm">
+        <thead className="bg-gray-100 text-left">
+          <tr>
+            <Th>Rank</Th>
+            <Th>Item Title</Th>
+            <Th>Media Type</Th>
+            <Th>Loans (30 days)</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((row, idx) => (
+            <tr key={idx} className="border-t">
+              <Td className="font-medium">#{idx + 1}</Td>
+              <Td className="max-w-[40ch] truncate" title={row.title}>{row.title}</Td>
+              <Td>{(row.media_type || "book").toUpperCase()}</Td>
+              <Td>
+                <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 text-blue-800 px-2 py-0.5 text-xs font-medium">
+                  {row.loans_30d} loans
+                </span>
+              </Td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function StatusPill({ status }) {
   const map = {
     paid: "bg-green-100 text-green-800",
@@ -660,6 +1268,7 @@ function AddItemPanel({ api }) {
     length_minutes: "",
   });
   const [copies, setCopies] = useState([{ barcode: "", shelf_location: "" }]);
+  const [authors, setAuthors] = useState([{ name: "" }]);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -681,6 +1290,20 @@ function AddItemPanel({ api }) {
     setCopies((list) => (list.length <= 1 ? list : list.filter((_, i) => i !== index)));
   }
 
+  function updateAuthor(index, value) {
+    setAuthors((list) =>
+      list.map((author, i) => (i === index ? { name: value } : author))
+    );
+  }
+
+  function addAuthorRow() {
+    setAuthors((list) => [...list, { name: "" }]);
+  }
+
+  function removeAuthorRow(index) {
+    setAuthors((list) => (list.length <= 1 ? list : list.filter((_, i) => i !== index)));
+  }
+
   async function onSubmit(e) {
     e.preventDefault();
     setSubmitting(true);
@@ -691,13 +1314,21 @@ function AddItemPanel({ api }) {
         throw new Error("Title is required");
       }
 
+      // Validate authors for books
+      const itemType = form.item_type;
+      if (itemType === "book") {
+        const authorNames = authors.map(a => a.name.trim()).filter(Boolean);
+        if (authorNames.length === 0) {
+          throw new Error("At least one author is required for books");
+        }
+      }
+
       const itemPayload = {
         title,
         subject: form.subject.trim() || undefined,
         classification: form.classification.trim() || undefined,
       };
 
-      const itemType = form.item_type;
       if (itemType && itemType !== "general") {
         itemPayload.item_type = itemType;
         if (itemType === "book") {
@@ -769,8 +1400,35 @@ function AddItemPanel({ api }) {
         }
       }
 
+      // Create authors if any
+      const authorNames = authors.map(a => a.name.trim()).filter(Boolean);
+      if (item_id && authorNames.length) {
+        for (const authorName of authorNames) {
+          try {
+            if (api) {
+              await api("authors", { method: "POST", body: { item_id, author_name: authorName } });
+            } else {
+              const res = await fetch(`${API_BASE}/authors`, {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ item_id, author_name: authorName }),
+              });
+              if (!res.ok && res.status !== 409) {
+                // 409 means author already exists, which is fine
+                const msg = await safeError(res);
+                console.warn(`Author creation warning: ${msg}`);
+              }
+            }
+          } catch (err) {
+            // Non-fatal: log but continue
+            console.warn("Author creation warning:", err);
+          }
+        }
+      }
+
       setMessage(
-        `Item created${createdCopies ? ` with ${createdCopies} ${createdCopies === 1 ? "copy" : "copies"}` : ""} ✅`
+        `Item created${createdCopies ? ` with ${createdCopies} ${createdCopies === 1 ? "copy" : "copies"}` : ""}${authorNames.length ? ` and ${authorNames.length} ${authorNames.length === 1 ? "author" : "authors"}` : ""} ✅`
       );
       setForm({
         title: "",
@@ -786,6 +1444,7 @@ function AddItemPanel({ api }) {
         length_minutes: "",
       });
       setCopies([{ barcode: "", shelf_location: "" }]);
+      setAuthors([{ name: "" }]);
     } catch (err) {
       setMessage(`Failed: ${err.message}`);
     } finally {
@@ -825,34 +1484,79 @@ function AddItemPanel({ api }) {
           </Field>
 
           {form.item_type === "book" && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <Field label="ISBN">
-                <input
-                  className="w-full rounded-md border px-3 py-2"
-                  value={form.isbn}
-                  onChange={(e) => update("isbn", e.target.value)}
-                  placeholder="e.g., 9780142407332"
-                />
-              </Field>
-              <Field label="Publisher">
-                <input
-                  className="w-full rounded-md border px-3 py-2"
-                  value={form.publisher}
-                  onChange={(e) => update("publisher", e.target.value)}
-                  placeholder="e.g., Penguin"
-                />
-              </Field>
-              <Field label="Publication Year">
-                <input
-                  type="number"
-                  min="0"
-                  className="w-full rounded-md border px-3 py-2"
-                  value={form.publication_year}
-                  onChange={(e) => update("publication_year", e.target.value)}
-                  placeholder="e.g., 2006"
-                />
-              </Field>
-            </div>
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <Field label="ISBN">
+                  <input
+                    className="w-full rounded-md border px-3 py-2"
+                    value={form.isbn}
+                    onChange={(e) => update("isbn", e.target.value)}
+                    placeholder="e.g., 9780142407332"
+                  />
+                </Field>
+                <Field label="Publisher">
+                  <input
+                    className="w-full rounded-md border px-3 py-2"
+                    value={form.publisher}
+                    onChange={(e) => update("publisher", e.target.value)}
+                    placeholder="e.g., Penguin"
+                  />
+                </Field>
+                <Field label="Publication Year">
+                  <input
+                    type="number"
+                    min="0"
+                    className="w-full rounded-md border px-3 py-2"
+                    value={form.publication_year}
+                    onChange={(e) => update("publication_year", e.target.value)}
+                    placeholder="e.g., 2006"
+                  />
+                </Field>
+              </div>
+
+              {/* Authors section for books */}
+              <div className="space-y-2 pt-2">
+                <h3 className="text-sm font-semibold text-gray-700">
+                  Authors <span className="text-red-600">*</span>
+                </h3>
+                <p className="text-xs text-gray-500">
+                  At least one author is required for books.
+                </p>
+
+                {authors.map((author, index) => (
+                  <div key={index} className="grid grid-cols-1 md:grid-cols-[1fr,auto] gap-3 items-end">
+                    <Field label={`Author ${authors.length > 1 ? `#${index + 1}` : ""}`}>
+                      <input
+                        className="w-full rounded-md border px-3 py-2"
+                        value={author.name}
+                        onChange={(e) => updateAuthor(index, e.target.value)}
+                        placeholder="e.g., F. Scott Fitzgerald"
+                        required={form.item_type === "book"}
+                      />
+                    </Field>
+                    <div className="pb-2">
+                      {authors.length > 1 && (
+                        <button
+                          type="button"
+                          className="mt-6 text-xs text-red-600 hover:underline"
+                          onClick={() => removeAuthorRow(index)}
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                <button
+                  type="button"
+                  className="text-xs font-medium text-gray-700 hover:underline"
+                  onClick={addAuthorRow}
+                >
+                  + Add another author
+                </button>
+              </div>
+            </>
           )}
 
           {form.item_type === "device" && (
@@ -1051,6 +1755,8 @@ function ReservationsPanel({ api, staffUser }) {
         setSubmitError(msg || "That room is already booked for the selected time.");
       } else if (code === "invalid_payload" || code === "invalid_timespan") {
         setSubmitError(msg || "Please check the form inputs.");
+      } else if (code === "outside_library_hours") {
+        setSubmitError(msg || "Reservation is outside library operating hours.");
       } else {
         setSubmitError(msg || "Failed to create reservation.");
       }
@@ -1061,9 +1767,15 @@ function ReservationsPanel({ api, staffUser }) {
     <section className="space-y-4">
       <div className="rounded-xl border bg-white p-4 shadow-sm">
         <h2 className="text-lg font-semibold">Create Room Reservation</h2>
-        <p className="text-sm text-gray-600 mb-4">
-          Submitting overlapping times for the same room will surface the <code>prevent_overlap</code> trigger as a conflict.
-        </p>
+        <div className="mb-4 p-3 bg-blue-50 rounded-md text-sm">
+          <strong>Library Hours:</strong>
+          <div className="mt-1 text-blue-900">
+            Mon-Fri: 7:00 AM - 10:00 PM | Sat: 9:00 AM - 8:00 PM | Sun: 10:00 AM - 6:00 PM
+          </div>
+          <div className="mt-1 text-xs text-gray-600">
+            Reservations must be within operating hours and cannot span multiple days.
+          </div>
+        </div>
         <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="Patron ID">
             <input
@@ -1202,39 +1914,463 @@ function ReservationsPanel({ api, staffUser }) {
                 <Th>Start</Th>
                 <Th>End</Th>
                 <Th>Status</Th>
+                <Th>Actions</Th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="p-4 text-center">Loading reservations…</td>
+                  <td colSpan={7} className="p-4 text-center">Loading reservations…</td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan={6} className="p-4 text-center text-red-600">{error}</td>
+                  <td colSpan={7} className="p-4 text-center text-red-600">{error}</td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="p-4 text-center text-gray-600">No reservations yet.</td>
+                  <td colSpan={7} className="p-4 text-center text-gray-600">No reservations yet.</td>
                 </tr>
               ) : (
-                rows.map((r) => (
-                  <tr key={r.reservation_id} className="border-t">
-                    <Td>#{r.reservation_id}</Td>
-                    <Td>Room {r.room_number || r.room_id}</Td>
-                    <Td>
-                      {r.first_name} {r.last_name}
-                    </Td>
-                    <Td>{formatDateTime(r.start_time)}</Td>
-                    <Td>{formatDateTime(r.end_time)}</Td>
-                    <Td className="capitalize">{r.status}</Td>
-                  </tr>
-                ))
+                rows.map((r) => {
+                  const displayStatus = r.computed_status || r.status;
+                  return (
+                    <tr key={r.reservation_id} className="border-t">
+                      <Td>#{r.reservation_id}</Td>
+                      <Td>Room {r.room_number || r.room_id}</Td>
+                      <Td>
+                        {r.first_name} {r.last_name}
+                      </Td>
+                      <Td>{formatDateTime(r.start_time)}</Td>
+                      <Td>{formatDateTime(r.end_time)}</Td>
+                      <Td>
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium capitalize ${
+                            displayStatus === 'completed' || displayStatus === 'cancelled'
+                              ? 'bg-gray-100 text-gray-700'
+                              : 'bg-green-100 text-green-700'
+                          }`}
+                        >
+                          {displayStatus}
+                        </span>
+                      </Td>
+                      <Td>
+                        {displayStatus === 'active' && (
+                          <button
+                            onClick={async () => {
+                              if (!window.confirm(`Cancel reservation #${r.reservation_id}?`)) return;
+                              try {
+                                await api(`reservations/${r.reservation_id}/cancel`, { method: 'PATCH' });
+                                setRefreshFlag((f) => f + 1);
+                              } catch (err) {
+                                console.error("Cancel error:", err);
+                                const errCode = err.data?.error || err.error;
+                                const errMsg = err.data?.message || err.message || 'Unknown error';
+                                alert(`Failed to cancel (${errCode}): ${errMsg}`);
+                              }
+                            }}
+                            className="text-xs px-2 py-1 rounded bg-yellow-600 text-white hover:bg-yellow-700"
+                          >
+                            Cancel
+                          </button>
+                        )}
+                        {' '}
+                        <button
+                          onClick={async () => {
+                            if (!window.confirm(`Permanently delete reservation #${r.reservation_id}?`)) return;
+                            try {
+                              await api(`staff/reservations/${r.reservation_id}`, { method: 'DELETE' });
+                              setRefreshFlag((f) => f + 1);
+                            } catch (err) {
+                              console.error("Delete error:", err);
+                              const errCode = err.data?.error || err.error;
+                              const errMsg = err.data?.message || err.message || 'Unknown error';
+                              alert(`Failed to delete (${errCode}): ${errMsg}`);
+                            }
+                          }}
+                          className="text-xs px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700"
+                        >
+                          Delete
+                        </button>
+                      </Td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
       </div>
+    </section>
+  );
+}
+
+function EditItemPanel({ api }) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [existingAuthors, setExistingAuthors] = useState([]);
+  const [form, setForm] = useState({
+    title: "",
+    subject: "",
+    classification: "",
+    item_type: "book",
+    isbn: "",
+    publisher: "",
+    publication_year: "",
+  });
+  const [authors, setAuthors] = useState([{ name: "" }]);
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState("");
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(searchQuery), 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Search items
+  useEffect(() => {
+    if (!debouncedQuery.trim()) {
+      setItems([]);
+      return;
+    }
+    (async () => {
+      setLoading(true);
+      try {
+        const data = await api(`items?q=${encodeURIComponent(debouncedQuery)}`);
+        setItems(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error("Search error:", err);
+        setItems([]);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [debouncedQuery, api]);
+
+  async function selectItem(item) {
+    setSelectedItem(item);
+    setForm({
+      title: item.title || "",
+      subject: item.subject || "",
+      classification: item.classification || "",
+      item_type: item.item_type || "book",
+      isbn: item.isbn || "",
+      publisher: item.publisher || "",
+      publication_year: item.publication_year || "",
+    });
+
+    // Fetch existing authors for this item
+    if (item.item_type === "book") {
+      try {
+        const authorsData = await api(`items/${item.item_id}/authors`);
+        if (authorsData && authorsData.length > 0) {
+          setExistingAuthors(authorsData);
+          setAuthors(authorsData.map(a => ({ name: a.author_name || a.full_name })));
+        } else {
+          setExistingAuthors([]);
+          setAuthors([{ name: "" }]);
+        }
+      } catch (err) {
+        console.error("Error fetching authors:", err);
+        setExistingAuthors([]);
+        setAuthors([{ name: "" }]);
+      }
+    } else {
+      setExistingAuthors([]);
+      setAuthors([{ name: "" }]);
+    }
+    setMessage("");
+  }
+
+  function update(field, value) {
+    setForm(prev => ({ ...prev, [field]: value }));
+  }
+
+  function updateAuthor(index, value) {
+    setAuthors(list => list.map((author, i) => (i === index ? { name: value } : author)));
+  }
+
+  function addAuthorRow() {
+    setAuthors(list => [...list, { name: "" }]);
+  }
+
+  function removeAuthorRow(index) {
+    setAuthors(list => (list.length <= 1 ? list : list.filter((_, i) => i !== index)));
+  }
+
+  async function onSubmit(e) {
+    e.preventDefault();
+    if (!selectedItem) return;
+
+    setSubmitting(true);
+    setMessage("");
+
+    try {
+      const title = form.title.trim();
+      if (!title) {
+        throw new Error("Title is required");
+      }
+
+      // Validate authors for books
+      if (form.item_type === "book") {
+        const authorNames = authors.map(a => a.name.trim()).filter(Boolean);
+        if (authorNames.length === 0) {
+          throw new Error("At least one author is required for books");
+        }
+      }
+
+      const itemPayload = {
+        title,
+        subject: form.subject.trim() || undefined,
+        classification: form.classification.trim() || undefined,
+      };
+
+      if (form.item_type === "book") {
+        if (form.isbn.trim()) itemPayload.isbn = form.isbn.trim();
+        if (form.publisher.trim()) itemPayload.publisher = form.publisher.trim();
+        if (form.publication_year) itemPayload.publication_year = Number(form.publication_year);
+      }
+
+      // Update item
+      await api(`items/${selectedItem.item_id}`, {
+        method: "PUT",
+        body: itemPayload,
+      });
+
+      // Update authors if book
+      if (form.item_type === "book") {
+        // Delete existing authors
+        for (const existingAuthor of existingAuthors) {
+          try {
+            await api(`items/${selectedItem.item_id}/authors/${existingAuthor.author_id}`, {
+              method: "DELETE",
+            });
+          } catch (err) {
+            console.error("Error deleting author:", err);
+          }
+        }
+
+        // Add new authors
+        const authorNames = authors.map(a => a.name.trim()).filter(Boolean);
+        for (const authorName of authorNames) {
+          try {
+            await api("authors", {
+              method: "POST",
+              body: { item_id: selectedItem.item_id, author_name: authorName },
+            });
+          } catch (err) {
+            console.error("Error adding author:", err);
+          }
+        }
+      }
+
+      setMessage(`✓ Item "${title}" updated successfully.`);
+      setSelectedItem(null);
+      setSearchQuery("");
+      setItems([]);
+    } catch (err) {
+      const msg = err?.data?.message || err.message || "Failed to update item";
+      setMessage(`Failed: ${msg}`);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <section className="space-y-4">
+      {!selectedItem ? (
+        <div className="rounded-xl border bg-white p-4 shadow-sm">
+          <h2 className="text-lg font-semibold mb-4">Edit Item</h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Search for an item by title, ISBN, or ID to edit its details.
+          </p>
+
+          <input
+            type="text"
+            className="w-full rounded-md border px-3 py-2 mb-4"
+            placeholder="Search by title, ISBN, or ID..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+
+          {loading && <div className="text-sm text-gray-600">Searching...</div>}
+          
+          {!loading && items.length > 0 && (
+            <div className="border rounded-md overflow-hidden">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="text-left p-3">ID</th>
+                    <th className="text-left p-3">Title</th>
+                    <th className="text-left p-3">Type</th>
+                    <th className="text-left p-3">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item) => (
+                    <tr key={item.item_id} className="border-t">
+                      <td className="p-3">#{item.item_id}</td>
+                      <td className="p-3">{item.title}</td>
+                      <td className="p-3 capitalize">{item.item_type || "general"}</td>
+                      <td className="p-3">
+                        <button
+                          onClick={() => selectItem(item)}
+                          className="text-xs px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
+                        >
+                          Edit
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {!loading && debouncedQuery && items.length === 0 && (
+            <div className="text-sm text-gray-600">No items found.</div>
+          )}
+        </div>
+      ) : (
+        <div className="rounded-xl border bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold">Edit Item: {selectedItem.title}</h2>
+            <button
+              onClick={() => {
+                setSelectedItem(null);
+                setSearchQuery("");
+                setMessage("");
+              }}
+              className="text-sm text-gray-600 hover:underline"
+            >
+              ← Back to search
+            </button>
+          </div>
+
+          <form onSubmit={onSubmit} className="space-y-4">
+            <Field label="Title">
+              <input
+                className="w-full rounded-md border px-3 py-2"
+                value={form.title}
+                onChange={(e) => update("title", e.target.value)}
+                required
+              />
+            </Field>
+
+            <Field label="Subject">
+              <input
+                className="w-full rounded-md border px-3 py-2"
+                value={form.subject}
+                onChange={(e) => update("subject", e.target.value)}
+                placeholder="e.g., Literature"
+              />
+            </Field>
+
+            <Field label="Classification / Call Number">
+              <input
+                className="w-full rounded-md border px-3 py-2"
+                value={form.classification}
+                onChange={(e) => update("classification", e.target.value)}
+                placeholder="e.g., 813.52 FIT"
+              />
+            </Field>
+
+            {form.item_type === "book" && (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <Field label="ISBN">
+                    <input
+                      className="w-full rounded-md border px-3 py-2"
+                      value={form.isbn}
+                      onChange={(e) => update("isbn", e.target.value)}
+                      placeholder="e.g., 9780142407332"
+                    />
+                  </Field>
+                  <Field label="Publisher">
+                    <input
+                      className="w-full rounded-md border px-3 py-2"
+                      value={form.publisher}
+                      onChange={(e) => update("publisher", e.target.value)}
+                      placeholder="e.g., Penguin"
+                    />
+                  </Field>
+                  <Field label="Publication Year">
+                    <input
+                      type="number"
+                      min="0"
+                      className="w-full rounded-md border px-3 py-2"
+                      value={form.publication_year}
+                      onChange={(e) => update("publication_year", e.target.value)}
+                      placeholder="e.g., 2006"
+                    />
+                  </Field>
+                </div>
+
+                {/* Authors section for books */}
+                <div className="space-y-2 pt-2">
+                  <h3 className="text-sm font-semibold text-gray-700">
+                    Authors <span className="text-red-600">*</span>
+                  </h3>
+                  <p className="text-xs text-gray-500">
+                    At least one author is required for books.
+                  </p>
+
+                  {authors.map((author, index) => (
+                    <div key={index} className="grid grid-cols-1 md:grid-cols-[1fr,auto] gap-3 items-end">
+                      <Field label={`Author ${authors.length > 1 ? `#${index + 1}` : ""}`}>
+                        <input
+                          className="w-full rounded-md border px-3 py-2"
+                          value={author.name}
+                          onChange={(e) => updateAuthor(index, e.target.value)}
+                          placeholder="e.g., F. Scott Fitzgerald"
+                          required
+                        />
+                      </Field>
+                      <div className="pb-2">
+                        {authors.length > 1 && (
+                          <button
+                            type="button"
+                            className="mt-6 text-xs text-red-600 hover:underline"
+                            onClick={() => removeAuthorRow(index)}
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+
+                  <button
+                    type="button"
+                    className="text-xs font-medium text-gray-700 hover:underline"
+                    onClick={addAuthorRow}
+                  >
+                    + Add another author
+                  </button>
+                </div>
+              </>
+            )}
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="submit"
+                disabled={submitting}
+                className="rounded-md bg-gray-900 text-white px-4 py-2 disabled:opacity-50"
+              >
+                {submitting ? "Saving…" : "Update Item"}
+              </button>
+              {message && (
+                <p className={`text-sm ${message.startsWith("Failed") ? "text-red-600" : "text-green-700"}`}>
+                  {message}
+                </p>
+              )}
+            </div>
+          </form>
+        </div>
+      )}
     </section>
   );
 }

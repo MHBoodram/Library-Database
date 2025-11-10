@@ -37,7 +37,7 @@ body {
 
 /* Hero Section */
 .hero-section {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #187772 0%, #78a24b 100%);
   color: white;
   padding: 80px 24px 100px;
   text-align: center;
@@ -115,7 +115,7 @@ body {
 
 .search-button {
   padding: 14px 32px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #d13131 0%, #9c2723 100%);
   color: white;
   border: none;
   border-radius: 50px;

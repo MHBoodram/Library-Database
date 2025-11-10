@@ -95,3 +95,71 @@ export const topItems = (JWT_SECRET) => async (req, res) => {
     return sendJSON(res, 500, { error: "report_top_items_failed" });
   }
 };
+
+// New Patrons by Month report
+// Returns the number of newly joined patrons (students + faculty) per month for the last 12 months (including current)
+export const newPatronsByMonth = (JWT_SECRET) => async (req, res) => {
+  const auth = requireRole(req, res, JWT_SECRET, "staff"); if (!auth) return;
+  try {
+    // Determine optional window size (months) param, default 12
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const monthParam = (url.searchParams.get("month") || "").trim(); // format YYYY-MM
+    const monthsParam = Number(url.searchParams.get("months"));
+    const monthsWindow = Number.isInteger(monthsParam) && monthsParam > 0 && monthsParam <= 36 ? monthsParam : 12;
+
+    // If a specific month is requested (YYYY-MM), return just that month's count
+    if (/^\d{4}-(0[1-9]|1[0-2])$/.test(monthParam)) {
+      const startYm = monthParam + "-01"; // first day of month
+      const sqlOne = `
+        SELECT COUNT(DISTINCT u.user_id) AS new_patrons
+        FROM user u
+        LEFT JOIN account a ON a.user_id = u.user_id
+        WHERE u.joined_at IS NOT NULL
+          AND u.joined_at >= ?
+          AND u.joined_at < DATE_ADD(?, INTERVAL 1 MONTH)
+          AND (a.role IS NULL OR a.role IN ('student','faculty'))
+      `;
+      const [one] = await pool.query(sqlOne, [startYm, startYm]);
+      const count = Number(one?.[0]?.new_patrons || 0);
+      return sendJSON(res, 200, [{ month: monthParam, new_patrons: count }]);
+    }
+
+    // We count users whose joined_at date falls inside each month bucket (range mode).
+    // Exclude staff/admin accounts by filtering through account.role if it exists; fallback to joined_at only.
+    // Some schemas store role in account; we approximate patrons as users who have an account role of student or faculty.
+    const sql = `
+      SELECT
+        DATE_FORMAT(u.joined_at, '%Y-%m') AS ym,
+        COUNT(DISTINCT u.user_id) AS new_patrons
+      FROM user u
+      LEFT JOIN account a ON a.user_id = u.user_id
+      WHERE u.joined_at IS NOT NULL
+        AND u.joined_at >= DATE_SUB(CURDATE(), INTERVAL ? MONTH)
+        AND (
+          a.role IS NULL OR a.role IN ('student','faculty')
+        )
+      GROUP BY ym
+      ORDER BY ym DESC
+      LIMIT ?
+    `;
+
+    const [rows] = await pool.query(sql, [monthsWindow, monthsWindow]);
+
+    // Normalize to ensure we return a list covering each month even if zero (fill gaps)
+    const now = new Date();
+    const buckets = new Map(rows.map(r => [r.ym, Number(r.new_patrons)]));
+    const out = [];
+    for (let i = 0; i < monthsWindow; i++) {
+      const dt = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const ym = dt.toISOString().slice(0,7); // YYYY-MM
+      out.push({ month: ym, new_patrons: buckets.get(ym) || 0 });
+    }
+    // Order ascending by month for chart friendliness
+    out.reverse();
+
+    return sendJSON(res, 200, out);
+  } catch (err) {
+    console.error("newPatronsByMonth report failed:", err.message);
+    return sendJSON(res, 500, { error: "report_new_patrons_failed" });
+  }
+};
