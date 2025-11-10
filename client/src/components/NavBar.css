@@ -10,9 +10,9 @@
   gap: 12px;
   padding: 6px 12px;
   box-sizing: border-box;
-  background: rgba(255,255,255,0.95);
+  background: #ffffff;
   z-index: 2000; /* ensure navbar sits above overlays */
-  border-bottom: 1px solid rgba(0,0,0,0.06);
+  border-bottom: 1px solid rgba(15,23,42,0.08);
   height: var(--nav-height);
 }
 
@@ -21,7 +21,7 @@
   align-items: center;
   gap: 8px;
   padding: 0 8px;
-  color: #0d0e0f;
+  color: #0f172a; /* slate-900 for stronger contrast */
 }
 
 .bar-link {
@@ -79,10 +79,17 @@
   gap: 6px;
   padding: 4px 10px;
   border-radius: 999px;
-  border: 1px solid rgba(59, 80, 116, 0.3);
-  background: #fff;
-  font-size: 0.9rem;
+  border: 1px solid rgba(15, 23, 42, 0.22);
+  background: #ffffff;
+  color: #0f172a; 
+  font-size: 0.92rem;
   font-weight: 600;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
+}
+
+.account-chip:hover {
+  background: #f8fafc;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.12);
 }
 
 .account-chip__initials {
@@ -98,11 +105,18 @@
   text-transform: uppercase;
 }
 
+.account-chip span:last-child {
+  max-width: 18ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .account-menu {
   position: absolute;
   right: 0;
   top: calc(100% + 6px);
-  background: #fff;
+  background: #ffffff;
   border: 1px solid rgba(15,23,42,0.1);
   border-radius: 8px;
   box-shadow: 0 12px 25px rgba(15, 23, 42, 0.12);
@@ -119,7 +133,8 @@
   border: none;
   background: transparent;
   text-align: left;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
+  color: #0f172a;
 }
 
 .account-menu button:hover,
