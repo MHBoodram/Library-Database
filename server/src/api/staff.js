@@ -167,7 +167,30 @@ export const listFines = (JWT_SECRET) => async (req, res) => {
       l.loan_id,
       l.due_date,
       i.title,
-      GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) AS days_overdue
+      GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) AS days_overdue,
+      -- dynamic estimate (mirrors reports.overdue)
+      ROUND(
+        LEAST(
+          COALESCE(l.max_fine_snapshot, 99999),
+          GREATEST(
+            0,
+            (GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) - COALESCE(l.grace_days_snapshot, 0))
+          ) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
+        ), 2
+      ) AS dynamic_est_fine,
+      -- prefer assessed amount if fine is overdue/open
+      COALESCE(
+        f.amount_assessed,
+        ROUND(
+          LEAST(
+            COALESCE(l.max_fine_snapshot, 99999),
+            GREATEST(
+              0,
+              (GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) - COALESCE(l.grace_days_snapshot, 0))
+            ) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
+          ), 2
+        )
+      ) AS current_fine
     FROM fine f
     JOIN loan l ON l.loan_id = f.loan_id
     JOIN user u ON u.user_id = l.user_id

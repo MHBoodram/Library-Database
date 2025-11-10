@@ -328,6 +328,7 @@ function FinesPanel({ api }) {
                 <Th>Due Date</Th>
                 <Th>Days Overdue</Th>
                 <Th>Amount</Th>
+                <Th className="hidden md:table-cell">Est Now</Th>
                 <Th>Item Title</Th>
               </tr>
             </thead>
@@ -367,7 +368,12 @@ function FinesPanel({ api }) {
                       <Td>#{r.loan_id}</Td>
                       <Td>{formatDate(r.due_date)}</Td>
                       <Td>{daysOverdue}</Td>
-                      <Td>{amount}</Td>
+                      <Td>{r.current_fine != null ? `$${Number(r.current_fine).toFixed(2)}` : amount}</Td>
+                      <Td className="hidden md:table-cell text-gray-500">
+                        {r.amount_assessed != null && r.dynamic_est_fine != null && Number(r.dynamic_est_fine) > Number(r.amount_assessed) + 0.009
+                          ? `$${Number(r.dynamic_est_fine).toFixed(2)}`
+                          : '—'}
+                      </Td>
                       <Td className="max-w-[24ch] truncate" title={r.title}>
                         {r.title}
                       </Td>
@@ -1397,7 +1403,7 @@ function OverdueReportTable({ data, loading }) {
             <Th>Media Type</Th>
             <Th>Due Date</Th>
             <Th>Days Overdue</Th>
-            <Th>Est. Fine</Th>
+            <Th>Fine</Th>
           </tr>
         </thead>
         <tbody>
@@ -1412,7 +1418,9 @@ function OverdueReportTable({ data, loading }) {
                   {row.days_overdue} days
                 </span>
               </Td>
-              <Td className="font-medium">${Number(row.est_fine || 0).toFixed(2)}</Td>
+              <Td className="font-medium">
+                ${Number(row.dynamic_est_fine || row.est_fine || 0).toFixed(2)}
+              </Td>
             </tr>
           ))}
         </tbody>
@@ -1444,7 +1452,7 @@ function BalancesReportTable({ data, loading }) {
         <tbody>
           {data.map((row, idx) => {
             const paidTotal = Number(row.paid_total || 0);
-            const openBalance = Number(row.open_balance || 0);
+            const openBalance = Number(row.open_balance_current || row.open_balance || 0);
             const total = paidTotal + openBalance;
             return (
               <tr key={idx} className="border-t">
