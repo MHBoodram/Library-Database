@@ -452,6 +452,28 @@ textarea.rounded-md {
   transition: all var(--transition-duration) ease;
 }
 
+input[type="date"],
+input[type="month"],
+input[type="datetime-local"] {
+  border: 2px solid var(--gray-300);
+  font-weight: 500;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="month"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.8;
+  padding: 2px;
+}
+
+input[type="date"]:hover::-webkit-calendar-picker-indicator,
+input[type="month"]:hover::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]:hover::-webkit-calendar-picker-indicator {
+  opacity: 1;
+}
+
 input.rounded-md:focus,
 select.rounded-md:focus,
 textarea.rounded-md:focus {
@@ -459,6 +481,52 @@ textarea.rounded-md:focus {
   border-color: var(--primary-main);
   background-color: white;
   box-shadow: 0 0 0 3px rgba(24, 119, 114, 0.1);
+}
+
+input[type="date"]:focus,
+input[type="month"]:focus,
+input[type="datetime-local"]:focus {
+  border-color: var(--primary-main);
+  box-shadow: 0 0 0 3px rgba(24, 119, 114, 0.15);
+}
+
+/* Dark mode support for inputs */
+@media (prefers-color-scheme: dark) {
+  input.rounded-md,
+  select.rounded-md,
+  textarea.rounded-md,
+  input[type="date"],
+  input[type="month"],
+  input[type="datetime-local"] {
+    background-color: #ffffff;
+    color: #0f172a;
+    border: 2px solid #d1d5db;
+    font-weight: 500;
+  }
+  
+  input.rounded-md:focus,
+  select.rounded-md:focus,
+  textarea.rounded-md:focus,
+  input[type="date"]:focus,
+  input[type="month"]:focus,
+  input[type="datetime-local"]:focus {
+    background-color: #ffffff;
+    border-color: var(--primary-main);
+    outline: 2px solid var(--primary-main);
+    outline-offset: 1px;
+  }
+  
+  /* Date input calendar icon - make it more visible */
+  input[type="date"]::-webkit-calendar-picker-indicator,
+  input[type="month"]::-webkit-calendar-picker-indicator,
+  input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    filter: invert(0);
+    cursor: pointer;
+    opacity: 1;
+    background-color: white;
+    padding: 4px;
+    border-radius: 4px;
+  }
 }
 
 /* Buttons */
@@ -497,6 +565,17 @@ textarea.rounded-md:focus {
   border-color: transparent !important;
 }
 
+.bg-green-600 {
+  background-color: var(--success-main) !important;
+  color: white !important;
+  border: none !important;
+}
+
+/* Support Tailwind-like hover utility class name */
+.hover\:bg-green-700:hover {
+  background-color: var(--success-light) !important;
+}
+
 .bg-red-600 {
   background-color: var(--error-main);
 }
@@ -523,6 +602,12 @@ button.rounded-md {
 
 button.bg-gray-900:hover {
   background-color: var(--primary-dark);
+}
+
+/* Disabled buttons: ensure visibility and proper cursor */
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 button.bg-red-600:hover,

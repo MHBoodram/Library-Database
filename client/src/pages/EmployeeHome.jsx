@@ -1038,9 +1038,35 @@ function ReportsPanel({ api }) {
   const [error, setError] = useState("");
   const [activeReport, setActiveReport] = useState("overdue"); // "overdue" | "balances" | "topItems" | "newPatrons"
   const [reportData, setReportData] = useState([]);
-  const [monthFilter, setMonthFilter] = useState(() => new Date().toISOString().slice(0,7)); // YYYY-MM
-  const [patronMode, setPatronMode] = useState("single"); // "single" | "window"
-  const [monthsWindow, setMonthsWindow] = useState(12); // 6,12,24 etc
+  
+  // Date ranges for all reports
+  const [overdueStartDate, setOverdueStartDate] = useState(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 1);
+    return d.toISOString().slice(0, 10);
+  });
+  const [overdueEndDate, setOverdueEndDate] = useState(() => new Date().toISOString().slice(0, 10));
+  
+  const [balancesStartDate, setBalancesStartDate] = useState(() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 1);
+    return d.toISOString().slice(0, 10);
+  });
+  const [balancesEndDate, setBalancesEndDate] = useState(() => new Date().toISOString().slice(0, 10));
+  
+  const [topItemsStartDate, setTopItemsStartDate] = useState(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 1);
+    return d.toISOString().slice(0, 10);
+  });
+  const [topItemsEndDate, setTopItemsEndDate] = useState(() => new Date().toISOString().slice(0, 10));
+  
+  const [newPatronsStartDate, setNewPatronsStartDate] = useState(() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 1);
+    return d.toISOString().slice(0, 10);
+  });
+  const [newPatronsEndDate, setNewPatronsEndDate] = useState(() => new Date().toISOString().slice(0, 10));
 
   const loadReport = useCallback(async (reportType) => {
     if (!api) return;
@@ -1049,29 +1075,42 @@ function ReportsPanel({ api }) {
     setReportData([]);
 
     try {
-      let endpoint = reportType === "overdue" 
-        ? "reports/overdue" 
-        : reportType === "balances"
-        ? "reports/balances"
-        : reportType === "topItems"
-        ? "reports/top-items"
-        : "reports/new-patrons-monthly";
-      if (reportType === "newPatrons") {
-        if (patronMode === "single" && monthFilter) {
-          endpoint += `?month=${encodeURIComponent(monthFilter)}`;
-        } else if (patronMode === "window" && monthsWindow) {
-          endpoint += `?months=${encodeURIComponent(monthsWindow)}`;
-        }
+      let endpoint = "";
+      let params = new URLSearchParams();
+      
+      switch (reportType) {
+        case "overdue":
+          endpoint = "reports/overdue";
+          params.set("start_date", overdueStartDate);
+          params.set("end_date", overdueEndDate);
+          break;
+        case "balances":
+          endpoint = "reports/balances";
+          params.set("start_date", balancesStartDate);
+          params.set("end_date", balancesEndDate);
+          break;
+        case "topItems":
+          endpoint = "reports/top-items";
+          params.set("start_date", topItemsStartDate);
+          params.set("end_date", topItemsEndDate);
+          break;
+        case "newPatrons":
+          endpoint = "reports/new-patrons-monthly";
+          params.set("start_date", newPatronsStartDate);
+          params.set("end_date", newPatronsEndDate);
+          break;
+        default:
+          throw new Error("Unknown report type");
       }
       
-      const data = await api(endpoint);
+      const data = await api(`${endpoint}?${params.toString()}`);
       setReportData(Array.isArray(data) ? data : []);
     } catch (err) {
       setError(err.message || "Failed to load report");
     } finally {
       setLoading(false);
     }
-  }, [api, monthFilter, patronMode, monthsWindow]);
+  }, [api, overdueStartDate, overdueEndDate, balancesStartDate, balancesEndDate, topItemsStartDate, topItemsEndDate, newPatronsStartDate, newPatronsEndDate]);
 
   useEffect(() => {
     loadReport(activeReport);
@@ -1162,61 +1201,97 @@ function ReportsPanel({ api }) {
                     : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                 }`}
               >
-                New Patrons / Month
+                New Patrons
               </button>
             </div>
 
-            <div className="flex items-end gap-2">
-              {activeReport === "newPatrons" && (
-                <div className="flex flex-wrap items-end gap-4">
-                  <div className="space-y-1">
-                    <span className="block text-xs font-medium text-gray-600">Mode</span>
-                    <div className="flex gap-3 text-sm">
-                      <label className="inline-flex items-center gap-1">
-                        <input
-                          type="radio"
-                          name="patron-mode"
-                          value="single"
-                          checked={patronMode === "single"}
-                          onChange={(e) => setPatronMode(e.target.value)}
-                        />
-                        Single Month
-                      </label>
-                      <label className="inline-flex items-center gap-1">
-                        <input
-                          type="radio"
-                          name="patron-mode"
-                          value="window"
-                          checked={patronMode === "window"}
-                          onChange={(e) => setPatronMode(e.target.value)}
-                        />
-                        Rolling Window
-                      </label>
-                    </div>
+            <div className="flex items-end gap-4">
+              {activeReport === "overdue" && (
+                <div className="flex flex-wrap items-end gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
+                    <input
+                      type="date"
+                      value={overdueStartDate}
+                      onChange={(e) => setOverdueStartDate(e.target.value)}
+                      className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                    />
                   </div>
-                  {patronMode === "single" && (
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Month</label>
-                      <input
-                        type="month"
-                        value={monthFilter}
-                        onChange={(e) => setMonthFilter(e.target.value)}
-                        className="rounded-md border bg-white px-3 py-2"
-                      />
-                    </div>
-                  )}
-                  {patronMode === "window" && (
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Months</label>
-                      <select
-                        value={monthsWindow}
-                        onChange={(e) => setMonthsWindow(Number(e.target.value))}
-                        className="rounded-md border bg-white px-3 py-2"
-                      >
-                        {[6,12,18,24,30,36].map(m => <option key={m} value={m}>{m}</option>)}
-                      </select>
-                    </div>
-                  )}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
+                    <input
+                      type="date"
+                      value={overdueEndDate}
+                      onChange={(e) => setOverdueEndDate(e.target.value)}
+                      className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                    />
+                  </div>
+                </div>
+              )}
+              {activeReport === "balances" && (
+                <div className="flex flex-wrap items-end gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
+                    <input
+                      type="date"
+                      value={balancesStartDate}
+                      onChange={(e) => setBalancesStartDate(e.target.value)}
+                      className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
+                    <input
+                      type="date"
+                      value={balancesEndDate}
+                      onChange={(e) => setBalancesEndDate(e.target.value)}
+                      className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                    />
+                  </div>
+                </div>
+              )}
+              {activeReport === "topItems" && (
+                <div className="flex flex-wrap items-end gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
+                    <input
+                      type="date"
+                      value={topItemsStartDate}
+                      onChange={(e) => setTopItemsStartDate(e.target.value)}
+                      className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
+                    <input
+                      type="date"
+                      value={topItemsEndDate}
+                      onChange={(e) => setTopItemsEndDate(e.target.value)}
+                      className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                    />
+                  </div>
+                </div>
+              )}
+              {activeReport === "newPatrons" && (
+                <div className="flex flex-wrap items-end gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
+                    <input
+                      type="date"
+                      value={newPatronsStartDate}
+                      onChange={(e) => setNewPatronsStartDate(e.target.value)}
+                      className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
+                    <input
+                      type="date"
+                      value={newPatronsEndDate}
+                      onChange={(e) => setNewPatronsEndDate(e.target.value)}
+                      className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                    />
+                  </div>
                 </div>
               )}
             
@@ -1394,7 +1469,7 @@ function TopItemsReportTable({ data, loading }) {
   }
 
   if (data.length === 0) {
-    return <div className="p-8 text-center text-gray-500">No loan activity in the last 30 days</div>;
+    return <div className="p-8 text-center text-gray-500">No loan activity in selected period</div>;
   }
 
   return (
@@ -1405,7 +1480,7 @@ function TopItemsReportTable({ data, loading }) {
             <Th>Rank</Th>
             <Th>Item Title</Th>
             <Th>Media Type</Th>
-            <Th>Loans (30 days)</Th>
+            <Th>Loans</Th>
           </tr>
         </thead>
         <tbody>
@@ -1416,7 +1491,7 @@ function TopItemsReportTable({ data, loading }) {
               <Td>{(row.media_type || "book").toUpperCase()}</Td>
               <Td>
                 <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 text-blue-800 px-2 py-0.5 text-xs font-medium">
-                  {row.loans_30d} loans
+                  {row.loans_count || row.loans_30d} loans
                 </span>
               </Td>
             </tr>
