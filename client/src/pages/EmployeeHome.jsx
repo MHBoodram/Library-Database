@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
 import "./EmployeeHome.css";
@@ -14,26 +15,30 @@ const STATUS_OPTIONS = [
   { value: "waived", label: "Waived" },
 ];
 
+const EMPLOYEE_ROLE_OPTIONS = ["librarian", "clerk", "assistant", "admin"];
+const ACCOUNT_ROLE_OPTIONS = ["student", "faculty", "staff"];
+
 export default function EmployeeDashboard() {
   const { useApi, user } = useAuth();
-  // obtain the api helper from context
-  const apiWithAuth = useApi();
   const [tab, setTab] = useState("fines"); // "fines" | "checkout" | "activeLoans" | "reservations" | "addItem" | "removeItem"
   const [counts, setCounts] = useState({ fines: 0, activeLoans: 0, reservations: 0 });
   const [countsLoading, setCountsLoading] = useState(false);
   const [countsLoaded, setCountsLoaded] = useState(false);
+  const [manageItemsOpen, setManageItemsOpen] = useState(false);
+  const [manageLoansOpen, setManageLoansOpen] = useState(false);
+  const isAdmin = user?.employee_role === "admin";
 
   useEffect(() => {
-    if (!apiWithAuth || countsLoaded) return;
+    if (!useApi || countsLoaded) return;
     
     let alive = true;
     async function loadCounts() {
       setCountsLoading(true);
       try {
         const [finesRes, loansRes, resvRes] = await Promise.all([
-          apiWithAuth('staff/fines?&pageSize=1000'),
-          apiWithAuth('staff/loans/active?&pageSize=1000'),
-          apiWithAuth('staff/reservations?&pageSize=1000'),
+          useApi('staff/fines?&pageSize=1000'),
+          useApi('staff/loans/active?&pageSize=1000'),
+          useApi('staff/reservations?&pageSize=1000'),
         ]);
         if (!alive) return;
         const finesList = Array.isArray(finesRes?.rows) ? finesRes.rows : Array.isArray(finesRes) ? finesRes : [];
@@ -49,7 +54,20 @@ export default function EmployeeDashboard() {
     }
     loadCounts();
     return () => { alive = false; };
-  }, [apiWithAuth, countsLoaded]);
+  }, [useApi, countsLoaded]);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (!event.target.closest('.dropdown-container')) {
+        setManageItemsOpen(false);
+        setManageLoansOpen(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
     <div style={{ minHeight: '100vh', background: '#f9fafb', paddingTop: 'var(--nav-height, 60px)' }}>
@@ -64,7 +82,7 @@ export default function EmployeeDashboard() {
                 onClick={() => setTab('fines')}
                 aria-label="View fines"
               >
-                <span className="emoji">💸</span>
+
                 <div>
                   <div className="count-label">Fines</div>
                   <div className="count-num">{countsLoading ? '…' : counts.fines}</div>
@@ -76,7 +94,7 @@ export default function EmployeeDashboard() {
                 onClick={() => setTab('activeLoans')}
                 aria-label="View active loans"
               >
-                <span className="emoji">📚</span>
+              
                 <div>
                   <div className="count-label">Active Loans</div>
                   <div className="count-num">{countsLoading ? '…' : counts.activeLoans}</div>
@@ -88,7 +106,6 @@ export default function EmployeeDashboard() {
                 onClick={() => setTab('reservations')}
                 aria-label="View reservations"
               >
-                <span className="emoji">🪑</span>
                 <div>
                   <div className="count-label">Reservations</div>
                   <div className="count-num">{countsLoading ? '…' : counts.reservations}</div>
@@ -103,24 +120,39 @@ export default function EmployeeDashboard() {
             >
               Check Fines
             </button>
-            <button
-              className={`tab-btn ${tab === "checkout" ? "active" : ""}`}
-              onClick={() => setTab("checkout")}
-            >
-              Checkout Loan
-            </button>
-            <button
-              className={`tab-btn ${tab === "return" ? "active" : ""}`}
-              onClick={() => setTab("return")}
-            >
-              Return Loan
-            </button>
-            <button
-              className={`tab-btn ${tab === "activeLoans" ? "active" : ""}`}
-              onClick={() => setTab("activeLoans")}
-            >
-              Active Loans
-            </button>
+            
+            {/* Manage Loans Dropdown */}
+            <div className="dropdown-container">
+              <button
+                className={`tab-btn dropdown-btn ${["checkout", "return", "activeLoans"].includes(tab) ? "active" : ""}`}
+                onClick={() => setManageLoansOpen(!manageLoansOpen)}
+              >
+                Manage Loans ▾
+              </button>
+              {manageLoansOpen && (
+                <div className="dropdown-menu">
+                  <button
+                    className="dropdown-item"
+                    onClick={() => { setTab("checkout"); setManageLoansOpen(false); }}
+                  >
+                    Checkout Loan
+                  </button>
+                  <button
+                    className="dropdown-item"
+                    onClick={() => { setTab("return"); setManageLoansOpen(false); }}
+                  >
+                    Return Loan
+                  </button>
+                  <button
+                    className="dropdown-item"
+                    onClick={() => { setTab("activeLoans"); setManageLoansOpen(false); }}
+                  >
+                    Active Loans
+                  </button>
+                </div>
+              )}
+            </div>
+
             <button
               className={`tab-btn ${tab === "reservations" ? "active" : ""}`}
               onClick={() => setTab("reservations")}
@@ -133,38 +165,62 @@ export default function EmployeeDashboard() {
             >
               Reports
             </button>
-            <button
-              className={`tab-btn ${tab === "addItem" ? "active" : ""}`}
-              onClick={() => setTab("addItem")}
-            >
-              Add Item
-            </button>
-            <button
-              className={`tab-btn ${tab === "editItem" ? "active" : ""}`}
-              onClick={() => setTab("editItem")}
-            >
-              Edit Item
-            </button>
-            <button
-              className={`tab-btn ${tab === "removeItem" ? "active" : ""}`}
-              onClick={() => setTab("removeItem")}
-            >
-              Remove Item
-            </button>
+            
+            {/* Manage Items Dropdown */}
+            <div className="dropdown-container">
+              <button
+                className={`tab-btn dropdown-btn ${["addItem", "editItem", "removeItem"].includes(tab) ? "active" : ""}`}
+                onClick={() => setManageItemsOpen(!manageItemsOpen)}
+              >
+                Manage Items ▾
+              </button>
+              {manageItemsOpen && (
+                <div className="dropdown-menu">
+                  <button
+                    className="dropdown-item"
+                    onClick={() => { setTab("addItem"); setManageItemsOpen(false); }}
+                  >
+                    Add Item
+                  </button>
+                  <button
+                    className="dropdown-item"
+                    onClick={() => { setTab("editItem"); setManageItemsOpen(false); }}
+                  >
+                    Edit Item
+                  </button>
+                  <button
+                    className="dropdown-item"
+                    onClick={() => { setTab("removeItem"); setManageItemsOpen(false); }}
+                  >
+                    Remove Item
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {isAdmin && (
+              <button
+                className={`tab-btn ${tab === "admin" ? "active" : ""}`}
+                onClick={() => setTab("admin")}
+              >
+                Admin Tools
+              </button>
+            )}
           </nav>
         </div>
       </header>
 
       <main style={{ maxWidth: 1200, margin: '0 auto', padding: '1.5rem' }}>
-        {tab === "fines" && <FinesPanel api={apiWithAuth} />}
-        {tab === "checkout" && <CheckoutPanel api={apiWithAuth} staffUser={user} />}
-        {tab === "return" && <ReturnLoanPanel api={apiWithAuth} staffUser={user} />}
-        {tab === "activeLoans" && <ActiveLoansPanel api={apiWithAuth} />}
-        {tab === "reservations" && <ReservationsPanel api={apiWithAuth} staffUser={user} />}
-        {tab === "reports" && <ReportsPanel api={apiWithAuth} />}
-        {tab === "addItem" && <AddItemPanel api={apiWithAuth} />}
-        {tab === "editItem" && <EditItemPanel api={apiWithAuth} />}
-        {tab === "removeItem" && <RemoveItemPanel api={apiWithAuth} />}
+        {tab === "fines" && <FinesPanel api={useApi} />}
+        {tab === "checkout" && <CheckoutPanel api={useApi} staffUser={user} />}
+        {tab === "return" && <ReturnLoanPanel api={useApi} staffUser={user} />}
+        {tab === "activeLoans" && <ActiveLoansPanel api={useApi} />}
+        {tab === "reservations" && <ReservationsPanel api={useApi} staffUser={user} />}
+        {tab === "reports" && <ReportsPanel api={useApi} />}
+        {tab === "addItem" && <AddItemPanel api={useApi} />}
+        {tab === "editItem" && <EditItemPanel api={useApi} />}
+        {tab === "removeItem" && <RemoveItemPanel api={useApi} />}
+        {tab === "admin" && isAdmin && <AdminPanel api={useApi} />}
       </main>
     </div>
   );
@@ -270,44 +326,60 @@ function FinesPanel({ api }) {
                 <Th>Status</Th>
                 <Th>Loan ID</Th>
                 <Th>Due Date</Th>
+                <Th>Days Overdue</Th>
+                <Th>Amount</Th>
+                <Th className="hidden md:table-cell">Est Now</Th>
                 <Th>Item Title</Th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td className="p-4" colSpan={7}>
+                  <td className="p-4" colSpan={9}>
                     Loading…
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td className="p-4 text-red-600" colSpan={7}>
+                  <td className="p-4 text-red-600" colSpan={9}>
                     {error}
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td className="p-4" colSpan={7}>
+                  <td className="p-4" colSpan={9}>
                     No fines match your search.
                   </td>
                 </tr>
               ) : (
-                filtered.map((r) => (
-                  <tr key={`${r.fine_id}-${r.loan_id}`} className="border-t">
-                    <Td>{r.first_name}</Td>
-                    <Td>{r.last_name}</Td>
-                    <Td>#{r.fine_id}</Td>
-                    <Td>
-                      <StatusPill status={r.status} />
-                    </Td>
-                    <Td>#{r.loan_id}</Td>
-                    <Td>{formatDate(r.due_date)}</Td>
-                    <Td className="max-w-[24ch] truncate" title={r.title}>
-                      {r.title}
-                    </Td>
-                  </tr>
-                ))
+                filtered.map((r) => {
+                  const amount = r.amount_assessed != null ? `$${Number(r.amount_assessed).toFixed(2)}` : '—';
+                  const daysOverdue = r.days_overdue != null ? r.days_overdue : 
+                    (r.due_date ? Math.max(0, Math.floor((new Date() - new Date(r.due_date)) / 86400000)) : '—');
+                  
+                  return (
+                    <tr key={`${r.fine_id}-${r.loan_id}`} className="border-t">
+                      <Td>{r.first_name}</Td>
+                      <Td>{r.last_name}</Td>
+                      <Td>#{r.fine_id}</Td>
+                      <Td>
+                        <StatusPill status={r.status} />
+                      </Td>
+                      <Td>#{r.loan_id}</Td>
+                      <Td>{formatDate(r.due_date)}</Td>
+                      <Td>{daysOverdue}</Td>
+                      <Td>{r.current_fine != null ? `$${Number(r.current_fine).toFixed(2)}` : amount}</Td>
+                      <Td className="hidden md:table-cell text-gray-500">
+                        {r.amount_assessed != null && r.dynamic_est_fine != null && Number(r.dynamic_est_fine) > Number(r.amount_assessed) + 0.009
+                          ? `$${Number(r.dynamic_est_fine).toFixed(2)}`
+                          : '—'}
+                      </Td>
+                      <Td className="max-w-[24ch] truncate" title={r.title}>
+                        {r.title}
+                      </Td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -383,7 +455,7 @@ function ActiveLoansPanel({ api }) {
         <button
           type="button"
           onClick={handleRefresh}
-          className="inline-flex items-center justify-center rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+          className="inline-flex items-center justify-center rounded-md btn-primary px-4 py-2 text-sm font-medium disabled:opacity-50"
           disabled={loading}
         >
           {loading ? "Refreshing…" : "Refresh"}
@@ -459,141 +531,311 @@ function ActiveLoansPanel({ api }) {
 }
 
 function CheckoutPanel({ api, staffUser }) {
-  const [form, setForm] = useState({ user_id: "", copy_value: "", mode: "copy_id" });
+  const [patronQuery, setPatronQuery] = useState("");
+  const [patronResults, setPatronResults] = useState([]);
+  const [patronLoading, setPatronLoading] = useState(false);
+  const [selectedPatron, setSelectedPatron] = useState(null);
+
+  const [itemQuery, setItemQuery] = useState("");
+  const [itemResults, setItemResults] = useState([]);
+  const [itemLoading, setItemLoading] = useState(false);
+  const [selectedItem, setSelectedItem] = useState(null);
+
+  const [copyOptions, setCopyOptions] = useState([]);
+  const [selectedCopy, setSelectedCopy] = useState(null);
+  const [copyLoading, setCopyLoading] = useState(false);
+
+  const [manualForm, setManualForm] = useState({ user_id: "", identifier_type: "copy_id", identifier_value: "" });
+
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  function update(field, value) {
-    setForm((prev) => ({ ...prev, [field]: value }));
-  }
+  const canCheckout = Boolean(selectedPatron && selectedCopy && !submitting);
 
-  async function onSubmit(e) {
-    e.preventDefault();
-    setSubmitting(true);
+  const resetMessages = () => {
     setMessage("");
     setError("");
-    try {
-      const user_id = Number(form.user_id);
-      const copyValue = (form.copy_value || "").trim();
-      const mode = form.mode === "barcode" ? "barcode" : "copy_id";
-      if (!user_id) {
-        throw new Error("Patron ID is required.");
-      }
-      if (!copyValue) {
-        throw new Error(`Enter a ${mode === "barcode" ? "barcode" : "copy ID"}.`);
-      }
+  };
 
-      const body = {
-        user_id,
-        identifier_type: mode,
-        ...(mode === "copy_id"
-          ? { copy_id: Number(copyValue) }
-          : { barcode: copyValue }),
-        ...(staffUser?.employee_id ? { employee_id: staffUser.employee_id } : {}),
-      };
+  const searchPatrons = async () => {
+    if (!patronQuery.trim()) {
+      setPatronResults([]);
+      return;
+    }
+    resetMessages();
+    setPatronLoading(true);
+    try {
+      const results = await api(`staff/patrons/search?q=${encodeURIComponent(patronQuery.trim())}`);
+      setPatronResults(Array.isArray(results) ? results : []);
+    } catch (err) {
+      setError(err?.data?.error || err?.message || "Failed to search patrons.");
+    } finally {
+      setPatronLoading(false);
+    }
+  };
+
+  const searchItems = async () => {
+    if (!itemQuery.trim()) {
+      setItemResults([]);
+      return;
+    }
+    resetMessages();
+    setItemLoading(true);
+    try {
+      const results = await api(`items?q=${encodeURIComponent(itemQuery.trim())}`);
+      setItemResults(Array.isArray(results) ? results : []);
+    } catch (err) {
+      setError(err?.data?.error || err?.message || "Failed to search items.");
+    } finally {
+      setItemLoading(false);
+    }
+  };
+
+  const loadCopies = async (itemId) => {
+    setCopyLoading(true);
+    setCopyOptions([]);
+    setSelectedCopy(null);
+    try {
+      const copies = await api(`items/${itemId}/copies`);
+      setCopyOptions(Array.isArray(copies) ? copies.filter((c) => c.status === "available") : []);
+    } catch (err) {
+      setError(err?.data?.error || err?.message || "Failed to load copies.");
+    } finally {
+      setCopyLoading(false);
+    }
+  };
+
+  const startManual = () => {
+    setSelectedPatron(null);
+    setSelectedItem(null);
+    setCopyOptions([]);
+    setSelectedCopy(null);
+    setPatronResults([]);
+    setItemResults([]);
+  };
+
+  const submitCheckout = async (body) => {
+    resetMessages();
+    setSubmitting(true);
+    try {
       await api("loans/checkout", { method: "POST", body });
-      const label =
-        mode === "copy_id"
-          ? `copy #${body.copy_id}`
-          : `barcode ${copyValue}`;
-      setMessage(`Checked out ${label} to user #${user_id}.`);
-      setForm({ user_id: "", copy_value: "", mode });
+      setMessage("Checkout successful.");
+      setSelectedCopy(null);
+      setSelectedItem(null);
+      setCopyOptions([]);
+      setManualForm({ user_id: "", identifier_type: manualForm.identifier_type, identifier_value: "" });
     } catch (err) {
       const code = err?.data?.error;
       const serverMessage = err?.data?.message;
-      if (code === "loan_limit_exceeded") {
-        setError(serverMessage || "The patron has reached their loan limit.");
-      } else if (code === "copy_not_available") {
-        setError(serverMessage || "That copy is not available for checkout.");
-      } else if (code === "copy_not_found") {
-        setError(serverMessage || "Copy not found.");
-      } else if (code === "user_not_found") {
-        setError(serverMessage || "User not found.");
-      } else if (err?.message) {
-        setError(serverMessage || err.message);
-      } else {
-        setError("Checkout failed. Please try again.");
-      }
+      const fallback = err?.message || "Checkout failed.";
+      const mapped =
+        code === "loan_limit_exceeded"
+          ? "The patron has reached their loan limit."
+          : code === "copy_not_available"
+            ? "That copy is not available."
+            : code === "copy_not_found"
+              ? "Copy not found."
+              : code === "user_not_found"
+                ? "User not found."
+                : serverMessage || fallback;
+      setError(mapped);
     } finally {
       setSubmitting(false);
     }
-  }
+  };
+
+  const handleCheckout = async () => {
+    if (!selectedPatron || !selectedCopy) return;
+    const body = {
+      user_id: selectedPatron.user_id,
+      identifier_type: "copy_id",
+      copy_id: selectedCopy.copy_id,
+      ...(staffUser?.employee_id ? { employee_id: staffUser.employee_id } : {}),
+    };
+    await submitCheckout(body);
+  };
+
+  const handleManualSubmit = async (e) => {
+    e.preventDefault();
+    const user_id = Number(manualForm.user_id);
+    const identifier = manualForm.identifier_value.trim();
+    if (!user_id) {
+      setError("Patron ID is required.");
+      return;
+    }
+    if (!identifier) {
+      setError(`Enter a ${manualForm.identifier_type === "barcode" ? "barcode" : "copy ID"}.`);
+      return;
+    }
+    const body = {
+      user_id,
+      identifier_type: manualForm.identifier_type,
+      ...(manualForm.identifier_type === "barcode"
+        ? { barcode: identifier }
+        : { copy_id: Number(identifier) }),
+      ...(staffUser?.employee_id ? { employee_id: staffUser.employee_id } : {}),
+    };
+    await submitCheckout(body);
+  };
 
   return (
-    <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <form onSubmit={onSubmit} className="rounded-xl border bg-white p-4 shadow-sm space-y-4">
-        <div>
+    <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      <div className="rounded-xl border bg-white p-4 shadow-sm space-y-6">
+        <header>
           <h2 className="text-lg font-semibold">Checkout Item</h2>
-          <p className="text-sm text-gray-600">
-            Scan or enter a patron ID and copy barcode.
-          </p>
-        </div>
+          <p className="text-sm text-gray-600">Search for a patron and choose an available copy.</p>
+        </header>
 
-        <Field label="Patron ID">
-          <input
-            className="w-full rounded-md border px-3 py-2"
-            value={form.user_id}
-            onChange={(e) => update("user_id", e.target.value)}
-            placeholder="e.g., 123"
-          />
+        <Field label="Find Patron">
+          <div className="flex gap-2">
+            <input
+              className="flex-1 rounded-md border px-3 py-2"
+              value={patronQuery}
+              onChange={(e) => setPatronQuery(e.target.value)}
+              placeholder="Name, email, or ID"
+              onKeyDown={(e) => e.key === "Enter" && searchPatrons()}
+            />
+            <button
+              type="button"
+              onClick={searchPatrons}
+              disabled={patronLoading}
+              className="rounded-md bg-gray-800 text-white px-4 py-2 disabled:opacity-50"
+            >
+              {patronLoading ? "Searching…" : "Search"}
+            </button>
+          </div>
         </Field>
 
-        <div className="space-y-2">
-          <span className="block text-xs font-medium text-gray-600">Checkout By</span>
-          <div className="flex items-center gap-4 text-sm">
-            <label className="inline-flex items-center gap-2">
-              <input
-                type="radio"
-                name="checkout-mode"
-                value="copy_id"
-                checked={form.mode === "copy_id"}
-                onChange={(e) => update("mode", e.target.value)}
-              />
-              Copy ID
-            </label>
-            <label className="inline-flex items-center gap-2">
-              <input
-                type="radio"
-                name="checkout-mode"
-                value="barcode"
-                checked={form.mode === "barcode"}
-                onChange={(e) => update("mode", e.target.value)}
-              />
-              Barcode
-            </label>
-          </div>
-        </div>
-
-        <Field label={form.mode === "barcode" ? "Barcode" : "Copy ID"}>
-          <input
-            className="w-full rounded-md border px-3 py-2"
-            value={form.copy_value}
-            onChange={(e) => update("copy_value", e.target.value)}
-            placeholder={form.mode === "barcode" ? "e.g., BC-000123" : "e.g., 456"}
-          />
-        </Field>
-
-        {error && (
-          <div className="rounded-md bg-red-100 px-3 py-2 text-sm text-red-700">
-            {error}
-          </div>
-        )}
-        {message && (
-          <div className="rounded-md bg-green-100 px-3 py-2 text-sm text-green-700">
-            {message}
+        {patronResults.length > 0 && (
+          <div className="search-results">
+            {patronResults.map((patron) => (
+              <button
+                key={patron.user_id}
+                type="button"
+                onClick={() => {
+                  setSelectedPatron(patron);
+                  setPatronResults([]);
+                }}
+                className="result-item"
+                disabled={!patron.is_active}
+              >
+                <div>
+                  <div className="font-semibold text-sm">
+                    {patron.first_name} {patron.last_name} (#{patron.user_id})
+                  </div>
+                  <div className="text-xs text-gray-600">{patron.email || "No email"}</div>
+                </div>
+                <div className="text-xs">
+                  {patron.flagged_for_deletion && (
+                    <span className="text-red-500 font-medium mr-2">Flagged</span>
+                  )}
+                  <span className={patron.is_active ? "status-badge active" : "status-badge inactive"}>
+                    {patron.is_active ? "Active" : "Inactive"}
+                  </span>
+                </div>
+              </button>
+            ))}
           </div>
         )}
 
-        <button
-          type="submit"
-          disabled={submitting}
-          className="rounded-md bg-gray-900 text-white px-4 py-2 disabled:opacity-50"
-        >
-          {submitting ? "Processing…" : "Checkout"}
-        </button>
-      </form>
+        {selectedPatron && (
+          <div className="selected-pill">
+            <div>
+              <div className="font-semibold text-sm">{selectedPatron.first_name} {selectedPatron.last_name}</div>
+              <div className="text-xs text-gray-600">{selectedPatron.email || "No email"}</div>
+            </div>
+            <button type="button" onClick={() => setSelectedPatron(null)} className="text-xs text-red-500">
+              Clear
+            </button>
+          </div>
+        )}
 
+        <Field label="Find Item">
+          <div className="flex gap-2">
+            <input
+              className="flex-1 rounded-md border px-3 py-2"
+              value={itemQuery}
+              onChange={(e) => setItemQuery(e.target.value)}
+              placeholder="Title or author"
+              onKeyDown={(e) => e.key === "Enter" && searchItems()}
+            />
+            <button
+              type="button"
+              onClick={searchItems}
+              disabled={itemLoading}
+              className="rounded-md bg-gray-800 text-white px-4 py-2 disabled:opacity-50"
+            >
+              {itemLoading ? "Searching…" : "Search"}
+            </button>
+          </div>
+        </Field>
+
+        {itemResults.length > 0 && (
+          <div className="search-results">
+            {itemResults.map((item) => (
+              <button
+                key={item.item_id}
+                type="button"
+                onClick={() => {
+                  setSelectedItem(item);
+                  setItemResults([]);
+                  loadCopies(item.item_id);
+                }}
+                className="result-item"
+              >
+                <div className="font-semibold text-sm">
+                  {item.title} (#{item.item_id})
+                </div>
+                <div className="text-xs text-gray-500">
+                  {Array.isArray(item.authors) && item.authors.length ? item.authors.join(", ") : "Unknown author"}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {copyOptions.length > 0 && (
+          <div className="copy-picker">
+            <p className="text-xs font-medium text-gray-600 mb-2">
+              Available copies ({copyOptions.length})
+            </p>
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {copyOptions.map((copy) => (
+                <button
+                  key={copy.copy_id}
+                  type="button"
+                  onClick={() => setSelectedCopy(copy)}
+                  className={`copy-option ${selectedCopy?.copy_id === copy.copy_id ? "selected" : ""}`}
+                >
+                  <div className="text-sm font-medium">Copy #{copy.copy_id}</div>
+                  <div className="text-xs text-gray-600">
+                    Barcode: {copy.barcode || "—"} • Shelf: {copy.shelf_location || "—"}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="flex items-center justify-between border-t pt-4">
+          <div>
+            <div className="text-sm font-semibold">
+              Patron: {selectedPatron ? `#${selectedPatron.user_id}` : "—"}
+            </div>
+            <div className="text-sm font-semibold">
+              Copy: {selectedCopy ? `#${selectedCopy.copy_id}` : "—"}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleCheckout}
+            disabled={!canCheckout}
+            className="rounded-md btn-primary px-4 py-2 disabled:opacity-50"
+          >
+            {submitting ? "Processing…" : "Checkout"}
+          </button>
+        </div>
+      </div>
     </section>
   );
 }
@@ -802,9 +1044,35 @@ function ReportsPanel({ api }) {
   const [error, setError] = useState("");
   const [activeReport, setActiveReport] = useState("overdue"); // "overdue" | "balances" | "topItems" | "newPatrons"
   const [reportData, setReportData] = useState([]);
-  const [monthFilter, setMonthFilter] = useState(() => new Date().toISOString().slice(0,7)); // YYYY-MM
-  const [patronMode, setPatronMode] = useState("single"); // "single" | "window"
-  const [monthsWindow, setMonthsWindow] = useState(12); // 6,12,24 etc
+  
+  // Date ranges for all reports
+  const [overdueStartDate, setOverdueStartDate] = useState(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 1);
+    return d.toISOString().slice(0, 10);
+  });
+  const [overdueEndDate, setOverdueEndDate] = useState(() => new Date().toISOString().slice(0, 10));
+  
+  const [balancesStartDate, setBalancesStartDate] = useState(() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 1);
+    return d.toISOString().slice(0, 10);
+  });
+  const [balancesEndDate, setBalancesEndDate] = useState(() => new Date().toISOString().slice(0, 10));
+  
+  const [topItemsStartDate, setTopItemsStartDate] = useState(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 1);
+    return d.toISOString().slice(0, 10);
+  });
+  const [topItemsEndDate, setTopItemsEndDate] = useState(() => new Date().toISOString().slice(0, 10));
+  
+  const [newPatronsStartDate, setNewPatronsStartDate] = useState(() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 1);
+    return d.toISOString().slice(0, 10);
+  });
+  const [newPatronsEndDate, setNewPatronsEndDate] = useState(() => new Date().toISOString().slice(0, 10));
 
   const loadReport = useCallback(async (reportType) => {
     if (!api) return;
@@ -813,29 +1081,42 @@ function ReportsPanel({ api }) {
     setReportData([]);
 
     try {
-      let endpoint = reportType === "overdue" 
-        ? "reports/overdue" 
-        : reportType === "balances"
-        ? "reports/balances"
-        : reportType === "topItems"
-        ? "reports/top-items"
-        : "reports/new-patrons-monthly";
-      if (reportType === "newPatrons") {
-        if (patronMode === "single" && monthFilter) {
-          endpoint += `?month=${encodeURIComponent(monthFilter)}`;
-        } else if (patronMode === "window" && monthsWindow) {
-          endpoint += `?months=${encodeURIComponent(monthsWindow)}`;
-        }
+      let endpoint = "";
+      let params = new URLSearchParams();
+      
+      switch (reportType) {
+        case "overdue":
+          endpoint = "reports/overdue";
+          params.set("start_date", overdueStartDate);
+          params.set("end_date", overdueEndDate);
+          break;
+        case "balances":
+          endpoint = "reports/balances";
+          params.set("start_date", balancesStartDate);
+          params.set("end_date", balancesEndDate);
+          break;
+        case "topItems":
+          endpoint = "reports/top-items";
+          params.set("start_date", topItemsStartDate);
+          params.set("end_date", topItemsEndDate);
+          break;
+        case "newPatrons":
+          endpoint = "reports/new-patrons-monthly";
+          params.set("start_date", newPatronsStartDate);
+          params.set("end_date", newPatronsEndDate);
+          break;
+        default:
+          throw new Error("Unknown report type");
       }
       
-      const data = await api(endpoint);
+      const data = await api(`${endpoint}?${params.toString()}`);
       setReportData(Array.isArray(data) ? data : []);
     } catch (err) {
       setError(err.message || "Failed to load report");
     } finally {
       setLoading(false);
     }
-  }, [api, monthFilter, patronMode, monthsWindow]);
+  }, [api, overdueStartDate, overdueEndDate, balancesStartDate, balancesEndDate, topItemsStartDate, topItemsEndDate, newPatronsStartDate, newPatronsEndDate]);
 
   useEffect(() => {
     loadReport(activeReport);
@@ -926,61 +1207,97 @@ function ReportsPanel({ api }) {
                     : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                 }`}
               >
-                New Patrons / Month
+                New Patrons
               </button>
             </div>
 
-            <div className="flex items-end gap-2">
-              {activeReport === "newPatrons" && (
-                <div className="flex flex-wrap items-end gap-4">
-                  <div className="space-y-1">
-                    <span className="block text-xs font-medium text-gray-600">Mode</span>
-                    <div className="flex gap-3 text-sm">
-                      <label className="inline-flex items-center gap-1">
-                        <input
-                          type="radio"
-                          name="patron-mode"
-                          value="single"
-                          checked={patronMode === "single"}
-                          onChange={(e) => setPatronMode(e.target.value)}
-                        />
-                        Single Month
-                      </label>
-                      <label className="inline-flex items-center gap-1">
-                        <input
-                          type="radio"
-                          name="patron-mode"
-                          value="window"
-                          checked={patronMode === "window"}
-                          onChange={(e) => setPatronMode(e.target.value)}
-                        />
-                        Rolling Window
-                      </label>
-                    </div>
+            <div className="flex items-end gap-4">
+              {activeReport === "overdue" && (
+                <div className="flex flex-wrap items-end gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
+                    <input
+                      type="date"
+                      value={overdueStartDate}
+                      onChange={(e) => setOverdueStartDate(e.target.value)}
+                      className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                    />
                   </div>
-                  {patronMode === "single" && (
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Month</label>
-                      <input
-                        type="month"
-                        value={monthFilter}
-                        onChange={(e) => setMonthFilter(e.target.value)}
-                        className="rounded-md border bg-white px-3 py-2"
-                      />
-                    </div>
-                  )}
-                  {patronMode === "window" && (
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Months</label>
-                      <select
-                        value={monthsWindow}
-                        onChange={(e) => setMonthsWindow(Number(e.target.value))}
-                        className="rounded-md border bg-white px-3 py-2"
-                      >
-                        {[6,12,18,24,30,36].map(m => <option key={m} value={m}>{m}</option>)}
-                      </select>
-                    </div>
-                  )}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
+                    <input
+                      type="date"
+                      value={overdueEndDate}
+                      onChange={(e) => setOverdueEndDate(e.target.value)}
+                      className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                    />
+                  </div>
+                </div>
+              )}
+              {activeReport === "balances" && (
+                <div className="flex flex-wrap items-end gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
+                    <input
+                      type="date"
+                      value={balancesStartDate}
+                      onChange={(e) => setBalancesStartDate(e.target.value)}
+                      className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
+                    <input
+                      type="date"
+                      value={balancesEndDate}
+                      onChange={(e) => setBalancesEndDate(e.target.value)}
+                      className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                    />
+                  </div>
+                </div>
+              )}
+              {activeReport === "topItems" && (
+                <div className="flex flex-wrap items-end gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
+                    <input
+                      type="date"
+                      value={topItemsStartDate}
+                      onChange={(e) => setTopItemsStartDate(e.target.value)}
+                      className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
+                    <input
+                      type="date"
+                      value={topItemsEndDate}
+                      onChange={(e) => setTopItemsEndDate(e.target.value)}
+                      className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                    />
+                  </div>
+                </div>
+              )}
+              {activeReport === "newPatrons" && (
+                <div className="flex flex-wrap items-end gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
+                    <input
+                      type="date"
+                      value={newPatronsStartDate}
+                      onChange={(e) => setNewPatronsStartDate(e.target.value)}
+                      className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
+                    <input
+                      type="date"
+                      value={newPatronsEndDate}
+                      onChange={(e) => setNewPatronsEndDate(e.target.value)}
+                      className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                    />
+                  </div>
                 </div>
               )}
             
@@ -1086,7 +1403,7 @@ function OverdueReportTable({ data, loading }) {
             <Th>Media Type</Th>
             <Th>Due Date</Th>
             <Th>Days Overdue</Th>
-            <Th>Est. Fine</Th>
+            <Th>Fine</Th>
           </tr>
         </thead>
         <tbody>
@@ -1101,7 +1418,9 @@ function OverdueReportTable({ data, loading }) {
                   {row.days_overdue} days
                 </span>
               </Td>
-              <Td className="font-medium">${Number(row.est_fine || 0).toFixed(2)}</Td>
+              <Td className="font-medium">
+                ${Number(row.dynamic_est_fine || row.est_fine || 0).toFixed(2)}
+              </Td>
             </tr>
           ))}
         </tbody>
@@ -1133,7 +1452,7 @@ function BalancesReportTable({ data, loading }) {
         <tbody>
           {data.map((row, idx) => {
             const paidTotal = Number(row.paid_total || 0);
-            const openBalance = Number(row.open_balance || 0);
+            const openBalance = Number(row.open_balance_current || row.open_balance || 0);
             const total = paidTotal + openBalance;
             return (
               <tr key={idx} className="border-t">
@@ -1158,7 +1477,7 @@ function TopItemsReportTable({ data, loading }) {
   }
 
   if (data.length === 0) {
-    return <div className="p-8 text-center text-gray-500">No loan activity in the last 30 days</div>;
+    return <div className="p-8 text-center text-gray-500">No loan activity in selected period</div>;
   }
 
   return (
@@ -1169,7 +1488,7 @@ function TopItemsReportTable({ data, loading }) {
             <Th>Rank</Th>
             <Th>Item Title</Th>
             <Th>Media Type</Th>
-            <Th>Loans (30 days)</Th>
+            <Th>Loans</Th>
           </tr>
         </thead>
         <tbody>
@@ -1180,7 +1499,7 @@ function TopItemsReportTable({ data, loading }) {
               <Td>{(row.media_type || "book").toUpperCase()}</Td>
               <Td>
                 <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 text-blue-800 px-2 py-0.5 text-xs font-medium">
-                  {row.loans_30d} loans
+                  {row.loans_count || row.loans_30d} loans
                 </span>
               </Td>
             </tr>
@@ -1195,9 +1514,11 @@ function StatusPill({ status }) {
   const map = {
     paid: "bg-green-100 text-green-800",
     unpaid: "bg-amber-100 text-amber-800",
+    open: "bg-amber-100 text-amber-800",
     waived: "bg-blue-100 text-blue-800",
+    overdue: "bg-orange-100 text-orange-800",
   };
-  const cls = map[status] || "bg-gray-100 text-gray-800";
+  const cls = map[String(status || "").toLowerCase()] || "bg-gray-100 text-gray-800";
   return (
     <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>
       <span className="inline-block h-1.5 w-1.5 rounded-full bg-current"></span>
@@ -1257,8 +1578,9 @@ function AddItemPanel({ api }) {
   const [form, setForm] = useState({
     title: "",
     subject: "",
-    classification: "",
-    item_type: "general",
+    description: "",
+    cover_image_url: "",
+    item_type: "book",
     isbn: "",
     publisher: "",
     publication_year: "",
@@ -1266,6 +1588,9 @@ function AddItemPanel({ api }) {
     manufacturer: "",
     media_type: "DVD",
     length_minutes: "",
+    use_same_shelf: false,
+    same_shelf_location: "",
+    number_of_copies: "1",
   });
   const [copies, setCopies] = useState([{ barcode: "", shelf_location: "" }]);
   const [authors, setAuthors] = useState([{ name: "" }]);
@@ -1314,19 +1639,14 @@ function AddItemPanel({ api }) {
         throw new Error("Title is required");
       }
 
-      // Validate authors for books
+      // Determine item type (authors now optional for books)
       const itemType = form.item_type;
-      if (itemType === "book") {
-        const authorNames = authors.map(a => a.name.trim()).filter(Boolean);
-        if (authorNames.length === 0) {
-          throw new Error("At least one author is required for books");
-        }
-      }
 
       const itemPayload = {
         title,
         subject: form.subject.trim() || undefined,
-        classification: form.classification.trim() || undefined,
+        description: form.description.trim() || undefined,
+        cover_image_url: form.cover_image_url.trim() || undefined,
       };
 
       if (itemType && itemType !== "general") {
@@ -1367,20 +1687,30 @@ function AddItemPanel({ api }) {
       }
 
       const item_id = itemResponse?.item_id;
+      
+      // Determine how many copies to create
+      const numCopies = parseInt(form.number_of_copies, 10) || 1;
+      
+      // Build copy payloads from explicit rows.
+      // Accept either barcode OR shelf_location so users can set shelf without barcode
+      const useSameShelf = !!form.use_same_shelf;
+      const sameShelf = (form.same_shelf_location || "").trim();
       const copyPayloads = copies
         .map((copy) => ({
-          barcode: copy.barcode.trim(),
-          shelf_location: copy.shelf_location.trim(),
+          barcode: (copy.barcode || "").trim(),
+          shelf_location: (copy.shelf_location || "").trim(),
         }))
-        .filter((copy) => copy.barcode);
+        .filter((copy) => copy.barcode || copy.shelf_location);
 
       let createdCopies = 0;
-      if (item_id && copyPayloads.length) {
+      if (item_id) {
+        // First, create copies from the barcode rows if user provided them
         for (const copy of copyPayloads) {
+          const shelf = useSameShelf ? sameShelf : copy.shelf_location;
           const body = {
             item_id,
-            barcode: copy.barcode,
-            shelf_location: copy.shelf_location || undefined,
+            ...(copy.barcode ? { barcode: copy.barcode } : {}),
+            ...(shelf ? { shelf_location: shelf } : {}),
           };
           if (api) {
             await api("copies", { method: "POST", body });
@@ -1394,6 +1724,32 @@ function AddItemPanel({ api }) {
             if (!res.ok) {
               const msg = await safeError(res);
               throw new Error(msg || `Copy creation failed (${res.status})`);
+            }
+          }
+          createdCopies += 1;
+        }
+        
+        // Then, create additional copies if numCopies > copyPayloads.length
+        // (auto-generate barcodes for the rest)
+        const remaining = Math.max(0, numCopies - copyPayloads.length);
+        for (let i = 0; i < remaining; i++) {
+          const body = {
+            item_id,
+            ...(useSameShelf && sameShelf ? { shelf_location: sameShelf } : {}),
+          };
+          if (api) {
+            await api("copies", { method: "POST", body });
+          } else {
+            const res = await fetch(`${API_BASE}/copies`, {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body),
+            });
+            if (!res.ok) {
+              const msg = await safeError(res);
+              console.warn(`Auto-copy creation warning: ${msg}`);
+              break; // Stop on error but don't fail entire operation
             }
           }
           createdCopies += 1;
@@ -1433,7 +1789,6 @@ function AddItemPanel({ api }) {
       setForm({
         title: "",
         subject: "",
-        classification: "",
         item_type: "general",
         isbn: "",
         publisher: "",
@@ -1442,6 +1797,9 @@ function AddItemPanel({ api }) {
         manufacturer: "",
         media_type: "DVD",
         length_minutes: "",
+        use_same_shelf: false,
+        same_shelf_location: "",
+        number_of_copies: "1",
       });
       setCopies([{ barcode: "", shelf_location: "" }]);
       setAuthors([{ name: "" }]);
@@ -1466,9 +1824,29 @@ function AddItemPanel({ api }) {
             <input className="w-full rounded-md border px-3 py-2" value={form.subject} onChange={(e) => update("subject", e.target.value)} placeholder="e.g., Literature" />
           </Field>
 
-          <Field label="Classification / Call Number">
-            <input className="w-full rounded-md border px-3 py-2" value={form.classification} onChange={(e) => update("classification", e.target.value)} placeholder="e.g., 813.52 FIT" />
+          <Field label="Description (optional)">
+            <textarea
+              className="w-full rounded-md border px-3 py-2"
+              value={form.description}
+              onChange={(e) => update("description", e.target.value)}
+              placeholder="Enter a description of this item..."
+              rows="4"
+            />
           </Field>
+
+          <Field label="Cover Image URL (optional)">
+            <input
+              type="url"
+              className="w-full rounded-md border px-3 py-2"
+              value={form.cover_image_url}
+              onChange={(e) => update("cover_image_url", e.target.value)}
+              placeholder="e.g., https://example.com/cover.jpg"
+            />
+            <small className="text-xs text-gray-500 mt-1 block">
+              Leave blank to use ISBN lookup or default placeholder
+            </small>
+          </Field>
+
 
           <Field label="Item Type">
             <select
@@ -1517,10 +1895,10 @@ function AddItemPanel({ api }) {
               {/* Authors section for books */}
               <div className="space-y-2 pt-2">
                 <h3 className="text-sm font-semibold text-gray-700">
-                  Authors <span className="text-red-600">*</span>
+                  Authors (optional)
                 </h3>
                 <p className="text-xs text-gray-500">
-                  At least one author is required for books.
+                  Add one or more authors. Leave blank if unknown.
                 </p>
 
                 {authors.map((author, index) => (
@@ -1531,7 +1909,6 @@ function AddItemPanel({ api }) {
                         value={author.name}
                         onChange={(e) => updateAuthor(index, e.target.value)}
                         placeholder="e.g., F. Scott Fitzgerald"
-                        required={form.item_type === "book"}
                       />
                     </Field>
                     <div className="pb-2">
@@ -1625,10 +2002,25 @@ function AddItemPanel({ api }) {
             </div>
           )}
 
+          <Field label="Number of Copies">
+            <input
+              type="number"
+              min="1"
+              max="100"
+              className="w-full rounded-md border px-3 py-2"
+              value={form.number_of_copies}
+              onChange={(e) => update("number_of_copies", e.target.value)}
+              placeholder="e.g., 3"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Specify how many physical copies to create. Barcodes will be auto-generated if not provided below.
+            </p>
+          </Field>
+
           <div className="space-y-2">
-            <h3 className="text-sm font-semibold text-gray-700">Copies</h3>
+            <h3 className="text-sm font-semibold text-gray-700">Specific Barcodes (Optional)</h3>
             <p className="text-xs text-gray-500">
-              Provide at least one barcode if you want to create physical copies now. Leave additional rows blank to skip.
+              If you want to assign custom barcodes or shelf locations, add them here. Otherwise, the system will auto-generate barcodes based on the number of copies above.
             </p>
 
             {copies.map((copy, index) => (
@@ -1641,14 +2033,16 @@ function AddItemPanel({ api }) {
                     placeholder="e.g., BC-000123"
                   />
                 </Field>
-                <Field label="Shelf Location">
-                  <input
-                    className="w-full rounded-md border px-3 py-2"
-                    value={copy.shelf_location}
-                    onChange={(e) => updateCopy(index, "shelf_location", e.target.value)}
-                    placeholder="Stacks A3"
-                  />
-                </Field>
+                {!form.use_same_shelf && (
+                  <Field label="Shelf Location">
+                    <input
+                      className="w-full rounded-md border px-3 py-2"
+                      value={copy.shelf_location}
+                      onChange={(e) => updateCopy(index, "shelf_location", e.target.value)}
+                      placeholder="Stacks A3"
+                    />
+                  </Field>
+                )}
                 <div className="pb-2">
                   {copies.length > 1 && (
                     <button
@@ -1662,7 +2056,27 @@ function AddItemPanel({ api }) {
                 </div>
               </div>
             ))}
-
+          {/* Shelf location controls */}
+          <div className="space-y-2">
+            <label className="inline-flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={!!form.use_same_shelf}
+                onChange={(e) => update("use_same_shelf", e.target.checked)}
+              />
+              Use same shelf location for all copies
+            </label>
+            {form.use_same_shelf && (
+              <Field label="Shelf Location for All Copies">
+                <input
+                  className="w-full rounded-md border px-3 py-2"
+                  value={form.same_shelf_location}
+                  onChange={(e) => update("same_shelf_location", e.target.value)}
+                  placeholder="e.g., Shelf A-12"
+                />
+              </Field>
+            )}
+          </div>
             <button
               type="button"
               className="text-xs font-medium text-gray-700 hover:underline"
@@ -1676,7 +2090,7 @@ function AddItemPanel({ api }) {
             <button
               type="submit"
               disabled={submitting}
-              className="rounded-md bg-gray-900 text-white px-4 py-2 disabled:opacity-50"
+              className="rounded-md btn-primary px-4 py-2 disabled:opacity-50"
             >
               {submitting ? "Saving…" : "Create Item"}
             </button>
@@ -1710,6 +2124,12 @@ function ReservationsPanel({ api, staffUser }) {
   const [roomMessage, setRoomMessage] = useState("");
   const [roomError, setRoomError] = useState("");
   const [refreshFlag, setRefreshFlag] = useState(0);
+  // Rooms management state
+  const [rooms, setRooms] = useState([]);
+  const [roomsLoading, setRoomsLoading] = useState(false);
+  const [roomsError, setRoomsError] = useState("");
+  const [editingRoomId, setEditingRoomId] = useState(null);
+  const [editRoomForm, setEditRoomForm] = useState({ room_number: "", capacity: "", features: "" });
 
   const fetchReservations = useCallback(async () => {
     setLoading(true);
@@ -1726,7 +2146,20 @@ function ReservationsPanel({ api, staffUser }) {
 
   useEffect(() => {
     fetchReservations();
-  }, [fetchReservations, refreshFlag]);
+    // also refresh rooms list
+    (async () => {
+      setRoomsLoading(true);
+      setRoomsError("");
+      try {
+        const data = await api("rooms");
+        setRooms(Array.isArray(data) ? data : []);
+      } catch (err) {
+        setRoomsError(err.message || "Failed to load rooms");
+      } finally {
+        setRoomsLoading(false);
+      }
+    })();
+  }, [api, fetchReservations, refreshFlag]);
 
   function update(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -1814,7 +2247,7 @@ function ReservationsPanel({ api, staffUser }) {
             />
           </Field>
           <div className="md:col-span-2 flex items-center gap-3">
-            <button type="submit" className="rounded-md bg-gray-900 text-white px-4 py-2 disabled:opacity-50">
+            <button type="submit" className="rounded-md btn-primary px-4 py-2 disabled:opacity-50">
               Create Reservation
             </button>
             {submitMessage && <span className="text-sm text-green-700">{submitMessage}</span>}
@@ -1824,7 +2257,7 @@ function ReservationsPanel({ api, staffUser }) {
       </div>
 
       <div className="rounded-xl border bg-white p-4 shadow-sm">
-        <h3 className="text-md font-semibold mb-2">Quick Add Room</h3>
+        <h3 className="text-md font-semibold mb-2">Add Room</h3>
         <p className="text-xs text-gray-600 mb-3">Creates a room entry that can be used for reservations.</p>
         <form
           className="grid grid-cols-1 md:grid-cols-3 gap-3"
@@ -1885,13 +2318,165 @@ function ReservationsPanel({ api, staffUser }) {
             />
           </Field>
           <div className="md:col-span-3 flex items-center gap-3">
-            <button type="submit" className="rounded-md bg-gray-900 text-white px-4 py-2">
+            <button type="submit" className="rounded-md btn-primary px-4 py-2">
               Add Room
             </button>
             {roomMessage && <span className="text-sm text-green-700">{roomMessage}</span>}
             {roomError && <span className="text-sm text-red-600">{roomError}</span>}
           </div>
         </form>
+      </div>
+
+      {/* Manage Rooms Section */}
+      <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between border-b bg-gray-50 px-5 py-3 text-sm">
+          <span className="text-md font-semibold mb-2">Manage Rooms</span>
+          <button
+            onClick={() => setRefreshFlag((f) => f + 1)}
+            className="text-xs font-medium text-gray-700 hover:underline"
+          >
+            Refresh
+          </button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="bg-gray-100 text-left">
+              <tr>
+                <Th>ID</Th>
+                <Th>Room Number</Th>
+                <Th>Capacity</Th>
+                <Th>Features</Th>
+                <Th>Actions</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {roomsLoading ? (
+                <tr>
+                  <td colSpan={5} className="p-4 text-center">Loading rooms…</td>
+                </tr>
+              ) : roomsError ? (
+                <tr>
+                  <td colSpan={5} className="p-4 text-center text-red-600">{roomsError}</td>
+                </tr>
+              ) : rooms.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="p-4 text-center text-gray-600">No rooms yet.</td>
+                </tr>
+              ) : (
+                rooms.map((r) => {
+                  const isEditing = editingRoomId === r.room_id;
+                  return (
+                    <tr key={r.room_id} className="border-t">
+                      <Td>#{r.room_id}</Td>
+                      <Td>
+                        {isEditing ? (
+                          <input
+                            className="w-full rounded-md border px-2 py-1"
+                            value={editRoomForm.room_number}
+                            onChange={(e) => setEditRoomForm((p) => ({ ...p, room_number: e.target.value }))}
+                          />
+                        ) : (
+                          r.room_number
+                        )}
+                      </Td>
+                      <Td>
+                        {isEditing ? (
+                          <input
+                            type="number"
+                            min={0}
+                            className="w-24 rounded-md border px-2 py-1"
+                            value={editRoomForm.capacity ?? ""}
+                            onChange={(e) => setEditRoomForm((p) => ({ ...p, capacity: e.target.value }))}
+                          />
+                        ) : (
+                          r.capacity ?? "—"
+                        )}
+                      </Td>
+                      <Td>
+                        {isEditing ? (
+                          <input
+                            className="w-full rounded-md border px-2 py-1"
+                            value={editRoomForm.features ?? ""}
+                            onChange={(e) => setEditRoomForm((p) => ({ ...p, features: e.target.value }))}
+                          />
+                        ) : (
+                          r.features ?? "—"
+                        )}
+                      </Td>
+                      <Td className="whitespace-nowrap space-x-2">
+                        {isEditing ? (
+                          <>
+                            <button
+                              className="text-xs px-2 py-1 rounded bg-green-600 text-white hover:bg-green-700"
+                              onClick={async () => {
+                                try {
+                                  const payload = {
+                                    room_number: editRoomForm.room_number,
+                                    capacity: editRoomForm.capacity === "" ? null : Number(editRoomForm.capacity),
+                                    features: editRoomForm.features === "" ? null : editRoomForm.features,
+                                  };
+                                  await api(`staff/rooms/${r.room_id}`, { method: 'PUT', body: payload });
+                                  setEditingRoomId(null);
+                                  setRefreshFlag((f) => f + 1);
+                                } catch (err) {
+                                  const code = err?.data?.error;
+                                  const msg = err?.data?.message || err.message;
+                                  if (code === 'room_exists') alert(msg || 'That room number already exists.');
+                                  else alert(msg || 'Failed to update room');
+                                }
+                              }}
+                            >
+                              Save
+                            </button>
+                            <button
+                              className="text-xs px-2 py-1 rounded bg-gray-200 text-gray-800 hover:bg-gray-300"
+                              onClick={() => setEditingRoomId(null)}
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              className="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
+                              onClick={() => {
+                                setEditingRoomId(r.room_id);
+                                setEditRoomForm({
+                                  room_number: r.room_number || "",
+                                  capacity: r.capacity ?? "",
+                                  features: r.features ?? "",
+                                });
+                              }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="text-xs px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700"
+                              onClick={async () => {
+                                if (!window.confirm(`Permanently delete room ${r.room_number || r.room_id}?`)) return;
+                                try {
+                                  await api(`staff/rooms/${r.room_id}`, { method: 'DELETE' });
+                                  setRefreshFlag((f) => f + 1);
+                                } catch (err) {
+                                  const code = err?.data?.error;
+                                  const msg = err?.data?.message || err.message;
+                                  if (code === 'room_in_use') alert(msg || 'Room has reservations and cannot be deleted.');
+                                  else alert(msg || 'Failed to delete room');
+                                }
+                              }}
+                            >
+                              Delete
+                            </button>
+                          </>
+                        )}
+                      </Td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
@@ -2014,15 +2599,24 @@ function EditItemPanel({ api }) {
   const [form, setForm] = useState({
     title: "",
     subject: "",
-    classification: "",
+    description: "",
+    cover_image_url: "",
     item_type: "book",
     isbn: "",
     publisher: "",
     publication_year: "",
+    model: "",
+    manufacturer: "",
+    media_type: "DVD",
+    length_minutes: "",
+    additional_copies: "0",
+    bulk_shelf_location: "",
   });
   const [authors, setAuthors] = useState([{ name: "" }]);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
+  const [existingCopies, setExistingCopies] = useState([]);
+  const [loadingCopies, setLoadingCopies] = useState(false);
 
   // Debounce search
   useEffect(() => {
@@ -2055,12 +2649,31 @@ function EditItemPanel({ api }) {
     setForm({
       title: item.title || "",
       subject: item.subject || "",
-      classification: item.classification || "",
+      description: item.description || "",
+      cover_image_url: item.cover_image_url || "",
       item_type: item.item_type || "book",
       isbn: item.isbn || "",
       publisher: item.publisher || "",
       publication_year: item.publication_year || "",
+      model: item.model || "",
+      manufacturer: item.manufacturer || "",
+      media_type: item.media_type || "DVD",
+      length_minutes: item.length_minutes || "",
+      additional_copies: "0",
+      bulk_shelf_location: "",
     });
+
+    // Fetch existing copies for this item
+    setLoadingCopies(true);
+    try {
+      const copiesData = await api(`items/${item.item_id}/copies`);
+      setExistingCopies(Array.isArray(copiesData) ? copiesData : []);
+    } catch (err) {
+      console.error("Error fetching copies:", err);
+      setExistingCopies([]);
+    } finally {
+      setLoadingCopies(false);
+    }
 
     // Fetch existing authors for this item
     if (item.item_type === "book") {
@@ -2114,31 +2727,38 @@ function EditItemPanel({ api }) {
         throw new Error("Title is required");
       }
 
-      // Validate authors for books
-      if (form.item_type === "book") {
-        const authorNames = authors.map(a => a.name.trim()).filter(Boolean);
-        if (authorNames.length === 0) {
-          throw new Error("At least one author is required for books");
-        }
-      }
+      // Authors are now optional for all types (including books)
 
       const itemPayload = {
         title,
-        subject: form.subject.trim() || undefined,
-        classification: form.classification.trim() || undefined,
+        subject: form.subject.trim() || null,
+        description: form.description.trim() || null,
+        cover_image_url: form.cover_image_url.trim() || null,
       };
+
+      console.log('[EditItem] Updating item with payload:', itemPayload);
 
       if (form.item_type === "book") {
         if (form.isbn.trim()) itemPayload.isbn = form.isbn.trim();
         if (form.publisher.trim()) itemPayload.publisher = form.publisher.trim();
         if (form.publication_year) itemPayload.publication_year = Number(form.publication_year);
+      } else if (form.item_type === "device") {
+        if (form.model.trim()) itemPayload.model = form.model.trim();
+        if (form.manufacturer.trim()) itemPayload.manufacturer = form.manufacturer.trim();
+      } else if (form.item_type === "media") {
+        if (form.publisher.trim()) itemPayload.publisher = form.publisher.trim();
+        if (form.publication_year) itemPayload.publication_year = Number(form.publication_year);
+        if (form.length_minutes) itemPayload.length_minutes = Number(form.length_minutes);
+        if (form.media_type) itemPayload.media_type = form.media_type;
       }
 
       // Update item
-      await api(`items/${selectedItem.item_id}`, {
+      console.log('[EditItem] Sending PUT request to items/' + selectedItem.item_id);
+      const updateResult = await api(`items/${selectedItem.item_id}`, {
         method: "PUT",
         body: itemPayload,
       });
+      console.log('[EditItem] Update result:', updateResult);
 
       // Update authors if book
       if (form.item_type === "book") {
@@ -2167,7 +2787,27 @@ function EditItemPanel({ api }) {
         }
       }
 
-      setMessage(`✓ Item "${title}" updated successfully.`);
+      // Add additional copies if requested
+      const additionalCopies = parseInt(form.additional_copies, 10) || 0;
+      let createdCopies = 0;
+      if (additionalCopies > 0) {
+        for (let i = 0; i < additionalCopies; i++) {
+          try {
+            await api("copies", {
+              method: "POST",
+              body: { item_id: selectedItem.item_id },
+            });
+            createdCopies += 1;
+          } catch (err) {
+            console.error("Error creating copy:", err);
+            break;
+          }
+        }
+      }
+
+      setMessage(
+        `✓ Item "${title}" updated successfully${createdCopies > 0 ? ` and ${createdCopies} ${createdCopies === 1 ? "copy" : "copies"} added` : ""}.`
+      );
       setSelectedItem(null);
       setSearchQuery("");
       setItems([]);
@@ -2269,13 +2909,42 @@ function EditItemPanel({ api }) {
               />
             </Field>
 
-            <Field label="Classification / Call Number">
-              <input
+            <Field label="Description">
+              <textarea
                 className="w-full rounded-md border px-3 py-2"
-                value={form.classification}
-                onChange={(e) => update("classification", e.target.value)}
-                placeholder="e.g., 813.52 FIT"
+                value={form.description}
+                onChange={(e) => update("description", e.target.value)}
+                placeholder="Enter a description of this item..."
+                rows="4"
               />
+            </Field>
+
+            <Field label="Cover Image URL">
+              <input
+                type="url"
+                className="w-full rounded-md border px-3 py-2"
+                value={form.cover_image_url}
+                onChange={(e) => update("cover_image_url", e.target.value)}
+                placeholder="e.g., https://example.com/cover.jpg"
+              />
+              <small className="text-xs text-gray-500 mt-1 block">
+                Leave blank to use ISBN lookup or default placeholder
+              </small>
+            </Field>
+
+              {/* Classification removed per request */}
+
+            <Field label="Item Type">
+              <select
+                className="w-full rounded-md border px-3 py-2"
+                value={form.item_type}
+                onChange={(e) => update("item_type", e.target.value)}
+              >
+                <option value="general">General</option>
+                <option value="book">Book</option>
+                <option value="device">Device</option>
+                <option value="media">Media</option>
+              </select>
             </Field>
 
             {form.item_type === "book" && (
@@ -2312,10 +2981,10 @@ function EditItemPanel({ api }) {
                 {/* Authors section for books */}
                 <div className="space-y-2 pt-2">
                   <h3 className="text-sm font-semibold text-gray-700">
-                    Authors <span className="text-red-600">*</span>
+                    Authors 
                   </h3>
                   <p className="text-xs text-gray-500">
-                    At least one author is required for books.
+                    Add one or more authors. Leave blank if unknown.
                   </p>
 
                   {authors.map((author, index) => (
@@ -2326,7 +2995,6 @@ function EditItemPanel({ api }) {
                           value={author.name}
                           onChange={(e) => updateAuthor(index, e.target.value)}
                           placeholder="e.g., F. Scott Fitzgerald"
-                          required
                         />
                       </Field>
                       <div className="pb-2">
@@ -2354,11 +3022,235 @@ function EditItemPanel({ api }) {
               </>
             )}
 
+            {form.item_type === "device" && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Field label="Model">
+                  <input
+                    className="w-full rounded-md border px-3 py-2"
+                    value={form.model}
+                    onChange={(e) => update("model", e.target.value)}
+                    placeholder="e.g., iPad Pro"
+                  />
+                </Field>
+                <Field label="Manufacturer">
+                  <input
+                    className="w-full rounded-md border px-3 py-2"
+                    value={form.manufacturer}
+                    onChange={(e) => update("manufacturer", e.target.value)}
+                    placeholder="e.g., Apple"
+                  />
+                </Field>
+              </div>
+            )}
+
+            {form.item_type === "media" && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Field label="Media Type">
+                  <select
+                    className="w-full rounded-md border px-3 py-2"
+                    value={form.media_type}
+                    onChange={(e) => update("media_type", e.target.value)}
+                  >
+                    <option value="DVD">DVD</option>
+                    <option value="CD">CD</option>
+                    <option value="Blu-ray">Blu-ray</option>
+                    <option value="VHS">VHS</option>
+                  </select>
+                </Field>
+                <Field label="Length (minutes)">
+                  <input
+                    type="number"
+                    min="0"
+                    className="w-full rounded-md border px-3 py-2"
+                    value={form.length_minutes}
+                    onChange={(e) => update("length_minutes", e.target.value)}
+                    placeholder="e.g., 120"
+                  />
+                </Field>
+                <Field label="Publisher">
+                  <input
+                    className="w-full rounded-md border px-3 py-2"
+                    value={form.publisher}
+                    onChange={(e) => update("publisher", e.target.value)}
+                    placeholder="e.g., Warner Bros"
+                  />
+                </Field>
+                <Field label="Publication Year">
+                  <input
+                    type="number"
+                    min="0"
+                    className="w-full rounded-md border px-3 py-2"
+                    value={form.publication_year}
+                    onChange={(e) => update("publication_year", e.target.value)}
+                    placeholder="e.g., 2020"
+                  />
+                </Field>
+              </div>
+            )}
+
+            {/* Existing Copies Management */}
+            {selectedItem && (
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold text-gray-800">
+                  Active Copies ({existingCopies.filter(c => c.status !== 'lost').length})
+                </h3>
+                {loadingCopies ? (
+                  <p className="text-sm text-gray-500">Loading copies...</p>
+                ) : existingCopies.filter(c => c.status !== 'lost').length === 0 ? (
+                  <p className="text-sm text-gray-500">No active copies found for this item.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {existingCopies
+                      .filter(c => c.status !== 'lost')
+                      .map((copy) => (
+                        <CopyRow
+                          key={copy.copy_id}
+                          copy={copy}
+                          api={api}
+                          onUpdate={() => selectItem(selectedItem)}
+                          onDelete={async () => {
+                            const confirmed = window.confirm(
+                              `Are you sure you want to delete copy ${copy.barcode}?\n\n` +
+                              `This will permanently remove the copy if it has no loan history, ` +
+                              `or mark it as "lost" if it has been loaned before.`
+                            );
+                            if (!confirmed) return;
+
+                            try {
+                              const result = await api(`copies/${copy.copy_id}`, { method: "DELETE" });
+                              await selectItem(selectedItem);
+                              if (result?.marked_lost) {
+                                setMessage(`✓ Copy ${copy.barcode} marked as lost (has loan history).`);
+                              } else {
+                                setMessage(`✓ Copy ${copy.barcode} deleted successfully.`);
+                              }
+                            } catch (err) {
+                              setMessage(`Failed to delete copy: ${err?.data?.error || err?.message || "Unknown error"}`);
+                            }
+                          }}
+                        />
+                      ))}
+                  </div>
+                )}
+
+                {/* Lost Copies Section */}
+                {existingCopies.filter(c => c.status === 'lost').length > 0 && (
+                  <div className="mt-4 pt-4 border-t">
+                    <h3 className="text-sm font-semibold text-gray-800 mb-2">
+                      Lost Copies ({existingCopies.filter(c => c.status === 'lost').length})
+                    </h3>
+                    <p className="text-xs text-gray-600 mb-3">
+                      These copies are marked as lost. You can permanently remove them from the database.
+                    </p>
+                    <div className="space-y-2">
+                      {existingCopies
+                        .filter(c => c.status === 'lost')
+                        .map((copy) => (
+                          <div key={copy.copy_id} className="flex items-center gap-3 p-3 border rounded bg-red-50 border-red-200">
+                            <div className="flex-1 grid grid-cols-2 gap-3 text-sm">
+                              <div>
+                                <span className="font-medium text-gray-700">Barcode:</span>{" "}
+                                <span className="text-gray-900">{copy.barcode}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-700">Status:</span>{" "}
+                                <span className="text-red-700 font-semibold">LOST</span>
+                              </div>
+                              <div className="col-span-2">
+                                <span className="font-medium text-gray-700">Location:</span>{" "}
+                                <span className="text-gray-900">{copy.shelf_location || "—"}</span>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const confirmed = window.confirm(
+                                  `Permanently delete lost copy ${copy.barcode}?\n\n` +
+                                  `This action cannot be undone. The copy will be removed from the database ` +
+                                  `but loan history will be preserved.`
+                                );
+                                if (!confirmed) return;
+
+                                try {
+                                  await api(`copies/${copy.copy_id}?permanent=true`, { method: "DELETE" });
+                                  await selectItem(selectedItem);
+                                  setMessage(`✓ Lost copy ${copy.barcode} permanently deleted.`);
+                                } catch (err) {
+                                  setMessage(`Failed to delete copy: ${err?.data?.message || err?.message || "Unknown error"}`);
+                                }
+                              }}
+                              className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 whitespace-nowrap"
+                            >
+                              Permanently Delete
+                            </button>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Bulk Shelf Update */}
+            {selectedItem && existingCopies.filter(c => c.status !== 'lost').length > 0 && (
+              <div className="space-y-2 pt-2">
+                <h3 className="text-sm font-semibold text-gray-800">Bulk Shelf Update</h3>
+                <p className="text-xs text-gray-500">Set a new shelf location for all active copies below.</p>
+                <div className="flex gap-2 items-end">
+                  <div className="flex-1">
+                    <Field label="New Shelf Location">
+                      <input
+                        className="w-full rounded-md border px-3 py-2"
+                        value={form.bulk_shelf_location}
+                        onChange={(e) => update("bulk_shelf_location", e.target.value)}
+                        placeholder="e.g., Shelf B-4"
+                      />
+                    </Field>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={!form.bulk_shelf_location.trim() || submitting}
+                    onClick={async () => {
+                      const shelf = form.bulk_shelf_location.trim();
+                      if (!shelf) return;
+                      const activeCopies = existingCopies.filter(c => c.status !== 'lost');
+                      let updated = 0;
+                      for (const copy of activeCopies) {
+                        try {
+                          await api(`copies/${copy.copy_id}`, { method: 'PUT', body: { shelf_location: shelf } });
+                          updated++;
+                        } catch (err) {
+                          console.error('Bulk shelf update error:', err);
+                        }
+                      }
+                      await selectItem(selectedItem); // refresh copies
+                      setMessage(`✓ Updated shelf for ${updated} active ${updated === 1 ? 'copy' : 'copies'}.`);
+                      update('bulk_shelf_location', '');
+                    }}
+                    className="h-[42px] px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium disabled:opacity-50 hover:bg-blue-700"
+                  >
+                    Apply to All
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Additional Copies */}
+            <Field label="Add Additional Copies" helper="Number of new copies to create (leave 0 to not add any)">
+              <input
+                type="number"
+                min="0"
+                value={form.additional_copies}
+                onChange={(e) => setForm((f) => ({ ...f, additional_copies: e.target.value }))}
+                className="w-full rounded border border-gray-300 px-3 py-2"
+              />
+            </Field>
+
             <div className="flex items-center gap-3 pt-2">
               <button
                 type="submit"
                 disabled={submitting}
-                className="rounded-md bg-gray-900 text-white px-4 py-2 disabled:opacity-50"
+                className="rounded-md btn-primary px-4 py-2 disabled:opacity-50"
               >
                 {submitting ? "Saving…" : "Update Item"}
               </button>
@@ -2372,6 +3264,98 @@ function EditItemPanel({ api }) {
         </div>
       )}
     </section>
+  );
+}
+
+function CopyRow({ copy, api, onUpdate, onDelete }) {
+  const [editing, setEditing] = useState(false);
+  const [location, setLocation] = useState(copy.shelf_location || "");
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await api(`copies/${copy.copy_id}`, {
+        method: "PUT",
+        body: { shelf_location: location.trim() || null }
+      });
+      setEditing(false);
+      if (onUpdate) onUpdate();
+    } catch (err) {
+      alert(`Failed to update location: ${err?.data?.error || err?.message || "Unknown error"}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-3 p-3 border rounded bg-gray-50">
+      <div className="flex-1 grid grid-cols-2 gap-3 text-sm">
+        <div>
+          <span className="font-medium text-gray-700">Barcode:</span>{" "}
+          <span className="text-gray-900">{copy.barcode}</span>
+        </div>
+        <div>
+          <span className="font-medium text-gray-700">Status:</span>{" "}
+          <span className="text-gray-900 capitalize">{copy.status}</span>
+        </div>
+        <div className="col-span-2">
+          <span className="font-medium text-gray-700">Location:</span>{" "}
+          {editing ? (
+            <input
+              type="text"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              className="ml-2 px-2 py-1 border rounded text-sm"
+              placeholder="e.g., Shelf A-12"
+            />
+          ) : (
+            <span className="text-gray-900">{copy.shelf_location || "—"}</span>
+          )}
+        </div>
+      </div>
+      <div className="flex gap-2">
+        {editing ? (
+          <>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              className="px-3 py-1 text-xs bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50"
+            >
+              {saving ? "Saving..." : "Save"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setLocation(copy.shelf_location || "");
+                setEditing(false);
+              }}
+              className="px-3 py-1 text-xs bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+            >
+              Cancel
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+            >
+              Edit Location
+            </button>
+            <button
+              type="button"
+              onClick={onDelete}
+              className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+            >
+              Delete
+            </button>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -2474,7 +3458,7 @@ function RemoveItemPanel({ api }) {
       <div className="rounded-xl border bg-white shadow-sm p-5">
         <h2 className="text-lg font-semibold mb-3">Remove Item</h2>
         <p className="text-sm text-gray-600 mb-4">
-          Search for items by title, ISBN, or ID. Be careful — deleting an item will permanently remove it and all its copies.
+          Search for items by title, ISBN, or ID. 
         </p>
 
         <div className="mb-4">
@@ -2566,3 +3550,368 @@ function RemoveItemPanel({ api }) {
   );
 }
 
+
+const DEFAULT_ADMIN_FORM = {
+  first_name: "",
+  last_name: "",
+  email: "",
+  password: "",
+  account_type: "employee",
+  account_role: "student",
+  employee_role: "assistant",
+};
+
+function AdminPanel({ api }) {
+  const [overview, setOverview] = useState(null);
+  const [employees, setEmployees] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [form, setForm] = useState(DEFAULT_ADMIN_FORM);
+  const [submitting, setSubmitting] = useState(false);
+  const [formStatus, setFormStatus] = useState({ type: null, text: "" });
+
+  const accountType = form.account_type;
+
+  useEffect(() => {
+    if (!api) return;
+    let alive = true;
+    setLoading(true);
+    setError("");
+    (async () => {
+      try {
+        const [overviewRes, employeesRes] = await Promise.all([
+          api("admin/overview"),
+          api("admin/employees"),
+        ]);
+        if (!alive) return;
+        setOverview(overviewRes || {});
+        const employeeRows = Array.isArray(employeesRes?.rows)
+          ? employeesRes.rows
+          : Array.isArray(employeesRes)
+            ? employeesRes
+            : [];
+        setEmployees(employeeRows);
+      } catch (err) {
+        if (!alive) return;
+        const msg = err?.data?.error || err?.message || "Failed to load admin data";
+        setError(msg);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [api, refreshKey]);
+
+  const triggerRefresh = () => setRefreshKey((key) => key + 1);
+
+  const updateForm = (name, value) => {
+    setForm((prev) => ({ ...prev, [name]: value }));
+    if (formStatus.type) setFormStatus({ type: null, text: "" });
+  };
+
+  const resetForm = () => setForm({ ...DEFAULT_ADMIN_FORM });
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!api || submitting) return;
+    setSubmitting(true);
+    setFormStatus({ type: null, text: "" });
+    try {
+      const payload = {
+        first_name: form.first_name.trim(),
+        last_name: form.last_name.trim(),
+        email: form.email.trim().toLowerCase(),
+        password: form.password,
+        account_type: accountType,
+        account_role: form.account_role,
+      };
+      if (accountType === "employee") payload.employee_role = form.employee_role;
+
+      await api("admin/accounts", { method: "POST", body: payload });
+      setFormStatus({ type: "success", text: "Account created successfully." });
+      resetForm();
+      triggerRefresh();
+    } catch (err) {
+      const msg = err?.data?.error || err?.message || "Failed to create account";
+      setFormStatus({ type: "error", text: msg });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading && !overview) {
+    return <div style={{ padding: "1rem" }}>Loading admin data…</div>;
+  }
+
+  if (error && !overview) {
+    return <div style={{ padding: "1rem", color: "var(--danger, #b91c1c)" }}>{error}</div>;
+  }
+
+  const roleCounts = Array.isArray(overview?.role_counts) ? overview.role_counts : [];
+  const recentHires = Array.isArray(overview?.recent_hires) ? overview.recent_hires : [];
+  const accountStats = overview?.account_stats || {};
+  const fineStats = overview?.fine_stats || {};
+
+  return (
+    <section className="space-y-4">
+      {error && overview && (
+        <div style={{ padding: "0.75rem", borderRadius: 6, background: "#fef2f2", color: "#b91c1c" }}>
+          {error}
+        </div>
+      )}
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="rounded-lg border bg-white p-4 shadow-sm">
+          <h3 className="font-semibold mb-2">Create Account</h3>
+          <p className="text-sm text-gray-500 mb-4">
+            Provision a new user or staff account directly from the admin portal.
+          </p>
+
+          {formStatus.text && (
+            <div
+              style={{
+                marginBottom: "0.75rem",
+                padding: "0.5rem 0.75rem",
+                borderRadius: 6,
+                fontSize: "0.9rem",
+                background: formStatus.type === "success" ? "#ecfdf5" : "#fef2f2",
+                color: formStatus.type === "success" ? "#065f46" : "#b91c1c",
+              }}
+            >
+              {formStatus.text}
+            </div>
+          )}
+
+          <form className="space-y-3" onSubmit={handleSubmit}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <label className="text-sm text-gray-600">
+                First name
+                <input
+                  className="mt-1 w-full rounded-md border px-3 py-2"
+                  value={form.first_name}
+                  onChange={(e) => updateForm("first_name", e.target.value)}
+                  required
+                />
+              </label>
+              <label className="text-sm text-gray-600">
+                Last name
+                <input
+                  className="mt-1 w-full rounded-md border px-3 py-2"
+                  value={form.last_name}
+                  onChange={(e) => updateForm("last_name", e.target.value)}
+                  required
+                />
+              </label>
+            </div>
+
+            <label className="text-sm text-gray-600">
+              Email
+              <input
+                type="email"
+                className="mt-1 w-full rounded-md border px-3 py-2"
+                value={form.email}
+                onChange={(e) => updateForm("email", e.target.value)}
+                required
+              />
+            </label>
+
+            <label className="text-sm text-gray-600">
+              Temporary password
+              <input
+                className="mt-1 w-full rounded-md border px-3 py-2"
+                type="text"
+                value={form.password}
+                onChange={(e) => updateForm("password", e.target.value)}
+                required
+              />
+            </label>
+
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-1">Account type</p>
+              <div className="flex items-center gap-4 text-sm">
+                {[
+                  { label: "User", value: "user" },
+                  { label: "Employee", value: "employee" },
+                ].map((opt) => (
+                  <label key={opt.value} className="inline-flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="accountType"
+                      value={opt.value}
+                      checked={accountType === opt.value}
+                      onChange={(e) => updateForm("account_type", e.target.value)}
+                    />
+                    {opt.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {accountType === "user" && (
+              <label className="text-sm text-gray-600">
+                Patron role
+                <select
+                  className="mt-1 w-full rounded-md border px-3 py-2"
+                  value={form.account_role}
+                  onChange={(e) => updateForm("account_role", e.target.value)}
+                >
+                  {ACCOUNT_ROLE_OPTIONS.map((role) => (
+                    <option key={role} value={role}>
+                      {role}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
+            {accountType === "employee" && (
+              <label className="text-sm text-gray-600">
+                Employee role
+                <select
+                  className="mt-1 w-full rounded-md border px-3 py-2"
+                  value={form.employee_role}
+                  onChange={(e) => updateForm("employee_role", e.target.value)}
+                >
+                  {EMPLOYEE_ROLE_OPTIONS.map((role) => (
+                    <option key={role} value={role}>
+                      {role}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
+            <button
+              type="submit"
+              className="w-full rounded-md bg-emerald-600 px-4 py-2 text-white font-medium hover:bg-emerald-700 disabled:opacity-50"
+              disabled={submitting}
+            >
+              {submitting ? "Creating…" : "Create Account"}
+            </button>
+          </form>
+        </div>
+        <div className="rounded-lg border bg-white p-4 shadow-sm flex flex-col">
+          <h3 className="font-semibold mb-2">Account Directory</h3>
+          <p className="text-sm text-gray-600 flex-1">
+            Open the dedicated account manager to search, edit, or flag any patron or staff record.
+          </p>
+          <Link
+            to="/manage/accounts"
+            style={{
+              marginTop: "1rem",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.35rem",
+              background: "#2563eb",
+              color: "#fff",
+              padding: "0.5rem 0.9rem",
+              borderRadius: "999px",
+              fontWeight: 600,
+              textDecoration: "none",
+            }}
+          >
+            Open Account Manager →
+          </Link>
+        </div>
+
+        <div className="rounded-lg border bg-white p-4 shadow-sm">
+          <h3 className="font-semibold mb-2">Employee Roles</h3>
+          <ul className="divide-y divide-gray-100">
+            {roleCounts.length === 0 && <li className="py-2 text-sm text-gray-600">No employees found.</li>}
+            {roleCounts.map((row) => (
+              <li key={row.role} className="py-2 flex items-center justify-between text-sm">
+                <span className="capitalize text-gray-700">{row.role}</span>
+                <span className="font-semibold">{row.count}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <StatCard
+          label="Total Accounts"
+          value={accountStats.total_accounts ?? 0}
+          sub={`Staff: ${accountStats.staff_accounts ?? 0}`}
+        />
+        <StatCard
+          label="Patron Accounts"
+          value={accountStats.patron_accounts ?? 0}
+          sub="Students + Faculty"
+        />
+        <StatCard
+          label="Open Fines"
+          value={fineStats.open_fines ?? 0}
+          sub={`$${Number(fineStats.open_fine_amount ?? 0).toFixed(2)}`}
+        />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="rounded-lg border bg-white p-4 shadow-sm">
+          <h3 className="font-semibold mb-2">Recent Hires</h3>
+          <ul className="divide-y divide-gray-100">
+            {recentHires.length === 0 && <li className="py-2 text-sm text-gray-600">No recent hires.</li>}
+            {recentHires.map((emp) => (
+              <li key={emp.employee_id} className="py-2">
+                <div className="font-medium text-gray-800">
+                  {emp.first_name} {emp.last_name}
+                </div>
+                <div className="text-xs text-gray-500">
+                  {emp.role} • {emp.hire_date ? formatDate(emp.hire_date) : "Unknown date"}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="rounded-lg border bg-white p-4 shadow-sm">
+          <h3 className="font-semibold mb-2">Employee Directory</h3>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-50 text-left">
+                <tr>
+                  <th className="px-3 py-2">Name</th>
+                  <th className="px-3 py-2">Role</th>
+                  <th className="px-3 py-2">Hire Date</th>
+                  <th className="px-3 py-2">Email</th>
+                </tr>
+              </thead>
+              <tbody>
+                {employees.length === 0 && (
+                  <tr>
+                    <td className="px-3 py-3 text-center text-gray-500" colSpan={4}>
+                      No employees found.
+                    </td>
+                  </tr>
+                )}
+                {employees.map((emp) => (
+                  <tr key={emp.employee_id} className="border-t">
+                    <td className="px-3 py-2 font-medium text-gray-800">
+                      {emp.first_name} {emp.last_name}
+                    </td>
+                    <td className="px-3 py-2 capitalize text-gray-600">{emp.role}</td>
+                    <td className="px-3 py-2">{emp.hire_date ? formatDate(emp.hire_date) : "—"}</td>
+                    <td className="px-3 py-2">{emp.email || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function StatCard({ label, value, sub }) {
+  return (
+    <div className="rounded-lg border bg-white p-4 shadow-sm">
+      <p className="text-xs uppercase tracking-wide text-gray-500">{label}</p>
+      <p className="text-2xl font-semibold text-gray-900">{value}</p>
+      {sub && <p className="text-sm text-gray-500">{sub}</p>}
+    </div>
+  );
+}

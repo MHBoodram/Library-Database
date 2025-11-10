@@ -60,3 +60,15 @@ export function requireRole(req, res, secret, role) {
   if (user.role !== role) { sendJSON(res, 403, { error: "forbidden" }); return null; }
   return user;
 }
+
+export function requireEmployeeRole(req, res, secret, requiredRoles) {
+  const user = requireAuth(req, res, secret);
+  if (!user) return null;
+  const allowed = Array.isArray(requiredRoles) ? requiredRoles : [requiredRoles];
+  const role = user.employee_role;
+  if (!role || !allowed.includes(role)) {
+    sendJSON(res, 403, { error: "forbidden" });
+    return null;
+  }
+  return user;
+}

@@ -8,6 +8,8 @@ const AuthCtx = createContext({
   logout: () => {},
   register: async () => DEFAULT_AUTH,
   useApi: () => api,
+  refreshProfile: async () => DEFAULT_AUTH.user,
+  updateProfile: async () => DEFAULT_AUTH.user,
 });
 
 function readStored() {
@@ -27,10 +29,14 @@ function readStored() {
 function normalizeUser(user) {
   if (!user) return null;
   const fullName = [user.first_name, user.last_name].filter(Boolean).join(" ").trim();
+  const employeeRole = user.employee_role || null;
   const normalizedRole = user.employee_id ? "staff" : user.role || "student";
   return {
     ...user,
     role: normalizedRole,
+    employee_role: employeeRole,
+    is_employee: Boolean(user.employee_id),
+    is_admin: Boolean(employeeRole === "admin"),
     name: (user.name && typeof user.name === "string" && user.name) || fullName || user.email || "",
   };
 }
@@ -91,10 +97,29 @@ export function AuthProvider({ children }) {
     [login]
   );
 
-  const useApi = useCallback(() => {
+  const useApi = useCallback((path, opts = {}) => {
     const { token } = auth;
-    return (path, opts = {}) => api(path, { ...opts, token });
+    return api(path, { ...opts, token });
   }, [auth]);
+
+  const refreshProfile = useCallback(async () => {
+    if (!auth?.token) return null;
+    const data = await api("me", { token: auth.token });
+    const normalizedUser = normalizeUser(data.user);
+    save({ token: auth.token, user: normalizedUser });
+    return normalizedUser;
+  }, [auth?.token, save]);
+
+  const updateProfile = useCallback(
+    async (payload) => {
+      if (!auth?.token) throw new Error("unauthorized");
+      const data = await api("me", { method: "PATCH", token: auth.token, body: payload });
+      const normalizedUser = normalizeUser(data.user);
+      save({ token: auth.token, user: normalizedUser });
+      return normalizedUser;
+    },
+    [auth?.token, save]
+  );
 
   const value = useMemo(
     () => ({
@@ -104,8 +129,10 @@ export function AuthProvider({ children }) {
       logout,
       register,
       useApi,
+      refreshProfile,
+      updateProfile,
     }),
-    [auth, login, logout, register, useApi]
+    [auth, login, logout, register, useApi, refreshProfile, updateProfile]
   );
 
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;

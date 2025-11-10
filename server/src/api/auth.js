@@ -73,7 +73,8 @@ export function login(JWT_SECRET) {
           a.role,
           u.first_name,
           u.last_name,
-          u.email AS user_email
+          u.email AS user_email,
+          e.role AS employee_role
         FROM account a
         JOIN user u ON u.user_id = a.user_id
         LEFT JOIN employee e ON e.employee_id = a.employee_id
@@ -91,6 +92,7 @@ export function login(JWT_SECRET) {
       if (!ok) return sendJSON(res, 401, { error: "invalid_login" });
 
       const isStaff = Boolean(acc.employee_id);
+      const employeeRole = acc.employee_role || null;
       const role = isStaff ? "staff" : acc.role || "student";
       const name = [acc.first_name, acc.last_name].filter(Boolean).join(" ").trim();
 
@@ -101,6 +103,7 @@ export function login(JWT_SECRET) {
           email: acc.email,
           role,
           employee_id: acc.employee_id,
+          employee_role: employeeRole,
         },
         JWT_SECRET,
         { expiresIn: "7d" }
@@ -116,6 +119,8 @@ export function login(JWT_SECRET) {
           email: acc.email,
           role,
           employee_id: acc.employee_id,
+          employee_role: employeeRole,
+          is_admin: employeeRole === "admin",
           name: name || acc.email,
         },
       });

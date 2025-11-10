@@ -56,8 +56,65 @@ export const updateCopy = (JWT_SECRET) => async (req, res, params) => {
 };
 
 export const deleteCopy = (JWT_SECRET) => async (req, res, params) => {
-  const auth = requireAuth(req, res, JWT_SECRET); if (!auth) return;
+  const auth = requireAuth(req, res, JWT_SECRET); 
+  if (!auth) return;
+  
   const copy_id = Number(params.id);
-  await pool.execute("UPDATE copy SET status='lost' WHERE copy_id=?", [copy_id]);
-  return sendJSON(res, 200, { ok:true });
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const permanent = url.searchParams.get("permanent") === "true";
+  
+  try {
+    // Check copy status
+    const [copies] = await pool.execute(
+      "SELECT status FROM copy WHERE copy_id = ?",
+      [copy_id]
+    );
+    
+    if (copies.length === 0) {
+      return sendJSON(res, 404, { 
+        error: "not_found", 
+        message: "Copy not found" 
+      });
+    }
+    
+    // If permanent delete requested
+    if (permanent) {
+      // Only allow permanent deletion of lost copies
+      if (copies[0].status !== 'lost') {
+        return sendJSON(res, 400, { 
+          error: "invalid_status", 
+          message: "Only lost copies can be permanently deleted" 
+        });
+      }
+      
+      // Force delete the copy
+      await pool.execute("DELETE FROM copy WHERE copy_id = ?", [copy_id]);
+      return sendJSON(res, 200, { 
+        ok: true, 
+        message: "Lost copy permanently deleted" 
+      });
+    }
+    
+    // Regular delete logic
+    const [loans] = await pool.execute(
+      "SELECT COUNT(*) as count FROM loan WHERE copy_id = ?",
+      [copy_id]
+    );
+    
+    if (loans[0].count > 0) {
+      // If copy has loan history, mark as lost instead of deleting
+      await pool.execute("UPDATE copy SET status='lost' WHERE copy_id=?", [copy_id]);
+      return sendJSON(res, 200, { ok: true, marked_lost: true });
+    } else {
+      // If no loan history, actually delete the copy
+      await pool.execute("DELETE FROM copy WHERE copy_id=?", [copy_id]);
+      return sendJSON(res, 200, { ok: true, deleted: true });
+    }
+  } catch (err) {
+    console.error("Delete copy error:", err);
+    return sendJSON(res, 500, { 
+      error: "server_error", 
+      message: err.message || "Failed to delete copy" 
+    });
+  }
 };

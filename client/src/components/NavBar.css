@@ -10,9 +10,9 @@
   gap: 12px;
   padding: 6px 12px;
   box-sizing: border-box;
-  background: rgba(255,255,255,0.95);
+  background: #ffffff;
   z-index: 2000; /* ensure navbar sits above overlays */
-  border-bottom: 1px solid rgba(0,0,0,0.06);
+  border-bottom: 1px solid rgba(15,23,42,0.08);
   height: var(--nav-height);
 }
 
@@ -21,7 +21,7 @@
   align-items: center;
   gap: 8px;
   padding: 0 8px;
-  color: #0d0e0f;
+  color: #0f172a; /* slate-900 for stronger contrast */
 }
 
 .bar-link {
@@ -71,4 +71,73 @@
 .nav-container .bar-link {
   cursor: pointer;
   pointer-events: auto;
+}
+
+.account-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.22);
+  background: #ffffff;
+  color: #0f172a; 
+  font-size: 0.92rem;
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
+}
+
+.account-chip:hover {
+  background: #f8fafc;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.12);
+}
+
+.account-chip__initials {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #3b5074;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+}
+
+.account-chip span:last-child {
+  max-width: 18ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  background: #ffffff;
+  border: 1px solid rgba(15,23,42,0.1);
+  border-radius: 8px;
+  box-shadow: 0 12px 25px rgba(15, 23, 42, 0.12);
+  min-width: 180px;
+  z-index: 2100;
+  overflow: hidden;
+}
+
+.account-menu button,
+.account-menu span {
+  width: 100%;
+  display: block;
+  padding: 0.65rem 1rem;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-size: 0.95rem;
+  color: #0f172a;
+}
+
+.account-menu button:hover,
+.account-menu span:hover {
+  background: #f8fafc;
 }

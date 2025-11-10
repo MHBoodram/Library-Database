@@ -34,15 +34,16 @@ export const listItems = () => async (req, res) => {
       params.push(`%${author}%`);
     }
 
-    // Generic q: numeric → id match; otherwise title/author match
+    // Generic q: If numeric, search by ID OR title/author; else title/author
     if (q) {
       const qNum = Number(q);
       if (Number.isFinite(qNum)) {
-        where.push("i.item_id = ?");
-        params.push(qNum);
+        // Important: Numeric titles like "1984" should still match by title
+        where.push("(i.item_id = ? OR i.title LIKE ? OR COALESCE(a.full_name, '') LIKE ? OR i.subject LIKE ?)");
+        params.push(qNum, `%${q}%`, `%${q}%`, `%${q}%`);
       } else {
-        where.push("(i.title LIKE ? OR a.full_name LIKE ?)");
-        params.push(`%${q}%`, `%${q}%`);
+        where.push("(i.title LIKE ? OR COALESCE(a.full_name, '') LIKE ? OR i.subject LIKE ?)");
+        params.push(`%${q}%`, `%${q}%`, `%${q}%`);
       }
     }
 
@@ -54,25 +55,64 @@ export const listItems = () => async (req, res) => {
         i.title,
         i.subject,
         i.classification,
+        i.description,
+        i.cover_image_url,
+        /* Aggregated copy counts */
+        (SELECT COUNT(*) FROM copy c WHERE c.item_id = i.item_id AND c.status <> 'lost') AS total_copies,
+        (SELECT COUNT(*) FROM copy c WHERE c.item_id = i.item_id AND c.status = 'available') AS available_copies,
+        CASE 
+          WHEN b.item_id IS NOT NULL THEN 'book'
+          WHEN d.item_id IS NOT NULL THEN 'device'
+          WHEN m.item_id IS NOT NULL THEN 'media'
+          ELSE 'general'
+        END AS item_type,
         b.isbn,
-        b.publisher,
-        b.publication_year,
+        b.publisher AS book_publisher,
+        b.publication_year AS book_year,
+        d.model,
+        d.manufacturer,
+        m.media_type,
+        m.length_minutes,
+        m.publisher AS media_publisher,
+        m.publication_year AS media_year,
         GROUP_CONCAT(DISTINCT a.full_name ORDER BY a.full_name SEPARATOR ', ') AS authors
       FROM item i
       LEFT JOIN book b ON b.item_id = i.item_id
+      LEFT JOIN device d ON d.item_id = i.item_id
+      LEFT JOIN media m ON m.item_id = i.item_id
       LEFT JOIN item_author ia ON ia.item_id = i.item_id
       LEFT JOIN author a ON a.author_id = ia.author_id
       ${whereSql}
-      GROUP BY i.item_id
-      ORDER BY i.item_id ASC
+      GROUP BY i.item_id, i.title, i.subject, i.classification, i.description, i.cover_image_url,
+               b.isbn, b.publisher, b.publication_year,
+               d.model, d.manufacturer,
+               m.media_type, m.length_minutes, m.publisher, m.publication_year
+      ORDER BY i.item_id DESC
       LIMIT 200
     `;
 
     const [rows] = await pool.query(sql, params);
-    // normalize authors to array
+    console.log(`[DEBUG] Search query: "${q}", Found ${rows.length} results`);
+    if (rows.length > 0) console.log('[DEBUG] First result:', rows[0]);
+    // normalize authors to array and merge publisher/year fields
     const out = rows.map((r) => ({
-      ...r,
+      item_id: r.item_id,
+      title: r.title,
+      subject: r.subject,
+      classification: r.classification,
+      description: r.description,
+      cover_image_url: r.cover_image_url,
+      item_type: r.item_type,
+      isbn: r.isbn,
+      publisher: r.book_publisher || r.media_publisher,
+      publication_year: r.book_year || r.media_year,
+      model: r.model,
+      manufacturer: r.manufacturer,
+      media_type: r.media_type,
+      length_minutes: r.length_minutes,
       authors: typeof r.authors === "string" && r.authors.length ? r.authors.split(/\s*,\s*/) : [],
+      total_copies: Number(r.total_copies) || 0,
+      available_copies: Number(r.available_copies) || 0,
     }));
     return sendJSON(res, 200, out);
   } catch (err) {
@@ -102,20 +142,25 @@ export const listItemCopies = () => async (_req, res, params) => {
 export const createItem = (JWT_SECRET) => async (req, res) => {
   const auth = requireAuth(req, res, JWT_SECRET); if (!auth) return;
   const b = await readJSONBody(req);
+  console.log('[DEBUG] Creating item with payload:', JSON.stringify(b, null, 2));
   const title = (b.title||"").trim();
   if (!title) return sendJSON(res, 400, { error:"title_required" });
   const subject = (b.subject || "").trim() || null;
   const classification = (b.classification || "").trim() || null;
+  const description = (b.description || "").trim() || null;
+  const cover_image_url = (b.cover_image_url || "").trim() || null;
 
   const itemType = typeof b.item_type === "string" ? b.item_type.trim().toLowerCase() : "";
+  console.log('[DEBUG] Item type:', itemType);
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
     const [itemResult] = await conn.execute(
-      "INSERT INTO item(title, subject, classification) VALUES(?,?,?)",
-      [title, subject, classification]
+      "INSERT INTO item(title, subject, classification, description, cover_image_url) VALUES(?,?,?,?,?)",
+      [title, subject, classification, description, cover_image_url]
     );
     const item_id = itemResult.insertId;
+    console.log('[DEBUG] Created item with ID:', item_id);
 
     if (["book", "device", "media"].includes(itemType)) {
       if (itemType === "book") {
@@ -156,8 +201,10 @@ export const createItem = (JWT_SECRET) => async (req, res) => {
     }
 
     await conn.commit();
+    console.log('[DEBUG] Item creation successful, returning item_id:', item_id);
     return sendJSON(res, 201, { item_id });
   } catch (err) {
+    console.error('[ERROR] Item creation failed:', err.message, err);
     try { await conn.rollback(); } catch {}
     return sendJSON(res, 400, { error: "item_create_failed", details: err.message });
   } finally {
@@ -168,10 +215,48 @@ export const createItem = (JWT_SECRET) => async (req, res) => {
 export const updateItem = (JWT_SECRET) => async (req, res, params) => {
   const auth = requireAuth(req, res, JWT_SECRET); if (!auth) return;
   const b = await readJSONBody(req);
+  const itemId = Number(params.id);
+  
+  console.log('[updateItem] Updating item', itemId, 'with data:', b);
+  
+  // Build update fields - only update fields that are provided in the request
+  const updates = [];
+  const values = [];
+  
+  if (b.title !== undefined) {
+    updates.push('title = ?');
+    values.push(b.title);
+  }
+  if (b.subject !== undefined) {
+    updates.push('subject = ?');
+    values.push(b.subject);
+  }
+  if (b.classification !== undefined) {
+    updates.push('classification = ?');
+    values.push(b.classification);
+  }
+  if (b.description !== undefined) {
+    updates.push('description = ?');
+    values.push(b.description);
+  }
+  if (b.cover_image_url !== undefined) {
+    updates.push('cover_image_url = ?');
+    values.push(b.cover_image_url);
+  }
+  
+  if (updates.length === 0) {
+    return sendJSON(res, 400, { error: 'no_fields_to_update' });
+  }
+  
+  values.push(itemId);
+  
   await pool.execute(
-    "UPDATE item SET title=COALESCE(?,title), subject=COALESCE(?,subject), classification=COALESCE(?,classification) WHERE item_id=?",
-    [b.title||null, b.subject||null, b.classification||null, Number(params.id)]
+    `UPDATE item SET ${updates.join(', ')} WHERE item_id = ?`,
+    values
   );
+  
+  console.log('[updateItem] Item updated successfully');
+  
   return sendJSON(res, 200, { ok:true });
 };
 

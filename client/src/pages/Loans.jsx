@@ -3,10 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
 import { formatDate } from "../utils";
+import "./Loans.css";
 
 export default function Loans() {
   const { token, useApi } = useAuth();
-  const apiWithAuth = useMemo(()=>useApi(),[useApi]);
   const navigate = useNavigate();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -22,7 +22,7 @@ export default function Loans() {
       setLoading(true);
       setError("");
       try {
-        const data = await apiWithAuth("loans/my");
+        const data = await useApi("loans/my");
         const list = Array.isArray(data?.rows) ? data.rows : Array.isArray(data) ? data : [];
         if (!active) return;
         setRows(list);
@@ -34,23 +34,23 @@ export default function Loans() {
       }
     })();
     return () => { active = false; };
-  }, [token, apiWithAuth, navigate]);
+  }, [token, useApi, navigate]);
 
   return (
-    <div style={{ maxWidth: 1000, margin: "2rem auto", padding: 24 }}>
+    <div className="loans-page">
       <NavBar />
       <h1>Your Loans</h1>
-      <p style={{ color: "#666", marginBottom: 16 }}>View your current and past loans. Return actions are handled at the desk.</p>
+      <p>View your current and past loans. Return actions are handled at the desk.</p>
 
-      <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, overflow: "hidden" }}>
-        <div style={{ padding: 12, background: "#f8fafc", display: "flex", justifyContent: "space-between", fontSize: 14 }}>
+      <div className="loans-container">
+        <div className="loans-header">
           <span>Loans: {rows.length}</span>
-          {loading && <span>Loading…</span>}
-          {error && <span style={{ color: "#b91c1c" }}>{error}</span>}
+          {loading && <span className="loading">Loading…</span>}
+          {error && <span className="error">{error}</span>}
         </div>
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-            <thead style={{ background: "#f1f5f9" }}>
+          <table className="loans-table">
+            <thead>
               <tr>
                 <Th>Title</Th>
                 <Th>Due Date</Th>
@@ -60,14 +60,18 @@ export default function Loans() {
             </thead>
             <tbody>
               {rows.length === 0 ? (
-                <tr><td colSpan={4} style={{ padding: 12 }}>{loading ? "" : "No loans found."}</td></tr>
+                <tr><td colSpan={4} className="loans-empty-state">{loading ? "" : "No loans found."}</td></tr>
               ) : (
                 rows.map((r) => (
-                  <tr key={r.loan_id} style={{ borderTop: "1px solid #e5e7eb" }}>
+                  <tr key={r.loan_id}>
                     <Td title={r.item_title}>{r.item_title}</Td>
                     <Td>{formatDate(r.due_date)}</Td>
                     <Td>{formatDate(r.return_date)}</Td>
-                    <Td style={{ textTransform: "capitalize" }}>{r.status}</Td>
+                    <Td>
+                      <span className={`loans-status-badge ${r.status}`}>
+                        {r.status}
+                      </span>
+                    </Td>
                   </tr>
                 ))
               )}
@@ -80,12 +84,8 @@ export default function Loans() {
 }
 
 function Th({ children }) {
-  return (
-    <th style={{ textAlign: "left", padding: 10, borderRight: "1px solid #e5e7eb" }}>{children}</th>
-  );
+  return <th>{children}</th>;
 }
-function Td({ children }) {
-  return (
-    <td style={{ padding: 10, borderRight: "1px solid #f1f5f9" }}>{children}</td>
-  );
+function Td({ children, ...props }) {
+  return <td {...props}>{children}</td>;
 }

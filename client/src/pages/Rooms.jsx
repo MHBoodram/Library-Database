@@ -2,10 +2,10 @@ import { useEffect,useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
+import "./Rooms.css";
 
 export default function Rooms() {
   const { token, useApi } = useAuth();
-  const apiWithAuth = useMemo(()=>useApi(),[useApi]);
   const navigate = useNavigate();
 
   const [rooms, setRooms] = useState([]);
@@ -29,7 +29,7 @@ export default function Rooms() {
     }
     (async () => {
       try {
-        const data = await apiWithAuth("rooms");
+        const data = await useApi("rooms");
         setRooms(Array.isArray(data) ? data : []);
       } catch (err) {
         setError(err?.message || "Failed to load rooms.");
@@ -37,7 +37,7 @@ export default function Rooms() {
         setLoading(false);
       }
     })();
-  }, [token, apiWithAuth, navigate]);
+  }, [token, useApi, navigate]);
 
   // Fetch user's reservations
   useEffect(() => {
@@ -47,7 +47,7 @@ export default function Rooms() {
       setReservationsLoading(true);
       setReservationsError("");
       try {
-        const data = await apiWithAuth("reservations/my");
+        const data = await useApi("reservations/my");
         setMyReservations(Array.isArray(data) ? data : []);
       } catch (err) {
         setReservationsError(err?.message || "Failed to load your reservations.");
@@ -55,14 +55,14 @@ export default function Rooms() {
         setReservationsLoading(false);
       }
     })();
-  }, [token, apiWithAuth, refreshFlag]);
+  }, [token, useApi, refreshFlag]);
 
   async function submit(e) {
     e.preventDefault();
     setError("");
     setMessage("");
     try {
-      await apiWithAuth("reservations", {
+      await useApi("reservations", {
         method: "POST",
         body: { room_id: Number(room_id), start_time, end_time },
       });
@@ -92,7 +92,7 @@ export default function Rooms() {
     }
 
     try {
-      await apiWithAuth(`reservations/${reservationId}/cancel`, { method: "PATCH" });
+      await useApi(`reservations/${reservationId}/cancel`, { method: "PATCH" });
       setMessage("Reservation cancelled successfully.");
       setRefreshFlag((f) => f + 1); // Refresh reservations list
     } catch (err) {
@@ -107,53 +107,32 @@ export default function Rooms() {
     return date.toLocaleString();
   }
 
-  function getStatusBadgeStyle(status) {
-    const baseStyle = {
-      display: "inline-block",
-      padding: "4px 8px",
-      borderRadius: "4px",
-      fontSize: "12px",
-      fontWeight: 500,
-    };
-
-    if (status === "active") {
-      return { ...baseStyle, backgroundColor: "#d1fae5", color: "#065f46" };
-    }
-    if (status === "completed") {
-      return { ...baseStyle, backgroundColor: "#e5e7eb", color: "#374151" };
-    }
-    if (status === "cancelled") {
-      return { ...baseStyle, backgroundColor: "#e5e7eb", color: "#374151" };
-    }
-    return baseStyle;
-  }
-
   return (
-    <div style={{ maxWidth: 720, margin: "2rem auto", padding: 24 }}>
+    <div className="rooms-page">
       <NavBar />
       <h1>Reserve a Study Room</h1>
-      <p style={{ color: "#666", marginBottom: 8 }}>Pick a room and choose a time window</p>
-      <div style={{ backgroundColor: "#eff6ff", padding: 12, borderRadius: 6, marginBottom: 16, fontSize: 14 }}>
+      <p>Pick a room and choose a time window</p>
+      <div className="rooms-info-banner">
         <strong>Library Hours:</strong>
-        <div style={{ marginTop: 4, color: "#1e40af" }}>
+        <div className="hours">
           Monday-Friday: 7:00 AM - 10:00 PM<br />
           Saturday: 9:00 AM - 8:00 PM<br />
           Sunday: 10:00 AM - 6:00 PM
         </div>
-        <div style={{ marginTop: 6, fontSize: 12, color: "#64748b" }}>
+        <div className="note">
           Note: Reservations must be within operating hours and cannot span multiple days.
         </div>
       </div>
 
       {loading ? (
-        <div>Loading…</div>
+        <div className="rooms-loading">Loading…</div>
       ) : error ? (
-        <div style={{ color: "#b91c1c" }}>{error}</div>
+        <div className="rooms-error">{error}</div>
       ) : (
-        <form onSubmit={submit} style={{ display: "grid", gap: 12, alignItems: "end", gridTemplateColumns: "1fr 1fr", maxWidth: 720 }}>
-          <div style={{ gridColumn: "span 2" }}>
-            <label style={{ display: "block", fontSize: 12, color: "#666", marginBottom: 6 }}>Room</label>
-            <select value={room_id} onChange={(e) => setRoomId(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 6, border: "1px solid #ccc" }} required>
+        <form onSubmit={submit} className="rooms-form">
+          <div className="rooms-form-field full-width">
+            <label>Room</label>
+            <select value={room_id} onChange={(e) => setRoomId(e.target.value)} required>
               <option value="" disabled>Select a room…</option>
               {rooms.map((r) => (
                 <option key={r.room_id} value={r.room_id}>
@@ -162,77 +141,63 @@ export default function Rooms() {
               ))}
             </select>
           </div>
-          <div>
-            <label style={{ display: "block", fontSize: 12, color: "#666", marginBottom: 6 }}>Start</label>
-            <input type="datetime-local" value={start_time} onChange={(e) => setStart(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 6, border: "1px solid #ccc" }} required />
+          <div className="rooms-form-field">
+            <label>Start</label>
+            <input type="datetime-local" value={start_time} onChange={(e) => setStart(e.target.value)} required />
           </div>
-          <div>
-            <label style={{ display: "block", fontSize: 12, color: "#666", marginBottom: 6 }}>End</label>
-            <input type="datetime-local" value={end_time} onChange={(e) => setEnd(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 6, border: "1px solid #ccc" }} required />
+          <div className="rooms-form-field">
+            <label>End</label>
+            <input type="datetime-local" value={end_time} onChange={(e) => setEnd(e.target.value)} required />
           </div>
-          <div style={{ gridColumn: "span 2" }}>
-            <button type="submit" style={{ padding: "10px 16px", borderRadius: 6, border: "1px solid #0b7", background: "#111", color: "#fff" }}>Reserve</button>
-            {message && <span style={{ marginLeft: 12, color: "#065f46" }}>{message}</span>}
-            {error && <span style={{ marginLeft: 12, color: "#b91c1c" }}>{error}</span>}
+          <div className="rooms-form-field full-width">
+            <button type="submit" className="rooms-reserve-btn">Reserve</button>
+            {message && <span className="rooms-form-message success">{message}</span>}
+            {error && <span className="rooms-form-message error">{error}</span>}
           </div>
         </form>
       )}
 
       {/* My Reservations Section */}
-      <div style={{ marginTop: 48 }}>
-        <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 12 }}>My Reservations</h2>
-        <p style={{ fontSize: 14, color: "#666", marginBottom: 16 }}>View and manage your room reservations.</p>
+      <div className="rooms-reservations-section">
+        <h2>My Reservations</h2>
+        <p>View and manage your room reservations.</p>
 
         {reservationsLoading ? (
-          <div>Loading your reservations…</div>
+          <div className="rooms-loading">Loading your reservations…</div>
         ) : reservationsError ? (
-          <div style={{ color: "#b91c1c" }}>{reservationsError}</div>
+          <div className="rooms-error">{reservationsError}</div>
         ) : myReservations.length === 0 ? (
-          <div style={{ padding: 16, backgroundColor: "#f9fafb", borderRadius: 8, color: "#6b7280" }}>
+          <div className="rooms-empty-state">
             You have no reservations yet.
           </div>
         ) : (
-          <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, overflow: "hidden" }}>
-            <table style={{ width: "100%", fontSize: 14 }}>
-              <thead style={{ backgroundColor: "#f9fafb", textAlign: "left" }}>
+          <div className="rooms-reservations-container">
+            <table className="rooms-reservations-table">
+              <thead>
                 <tr>
-                  <th style={{ padding: 12, fontWeight: 600 }}>Room</th>
-                  <th style={{ padding: 12, fontWeight: 600 }}>Start</th>
-                  <th style={{ padding: 12, fontWeight: 600 }}>End</th>
-                  <th style={{ padding: 12, fontWeight: 600 }}>Status</th>
-                  <th style={{ padding: 12, fontWeight: 600 }}>Actions</th>
+                  <th>Room</th>
+                  <th>Start</th>
+                  <th>End</th>
+                  <th>Status</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {myReservations.map((res) => (
-                  <tr key={res.reservation_id} style={{ borderTop: "1px solid #e5e7eb" }}>
-                    <td style={{ padding: 12 }}>
-                      Room {res.room_number || res.room_id}
-                    </td>
-                    <td style={{ padding: 12 }}>
-                      {formatDateTime(res.start_time)}
-                    </td>
-                    <td style={{ padding: 12 }}>
-                      {formatDateTime(res.end_time)}
-                    </td>
-                    <td style={{ padding: 12 }}>
-                      <span style={getStatusBadgeStyle(res.computed_status || res.status)}>
+                  <tr key={res.reservation_id}>
+                    <td>Room {res.room_number || res.room_id}</td>
+                    <td>{formatDateTime(res.start_time)}</td>
+                    <td>{formatDateTime(res.end_time)}</td>
+                    <td>
+                      <span className={`rooms-status-badge ${res.computed_status || res.status}`}>
                         {res.computed_status || res.status}
                       </span>
                     </td>
-                    <td style={{ padding: 12 }}>
+                    <td>
                       {(res.computed_status || res.status) === "active" && (
                         <button
                           onClick={() => cancelReservation(res.reservation_id)}
-                          style={{
-                            padding: "6px 12px",
-                            borderRadius: 4,
-                            border: "1px solid #fbbf24",
-                            background: "#fef3c7",
-                            color: "#92400e",
-                            fontSize: 12,
-                            cursor: "pointer",
-                          }}
+                          className="rooms-cancel-btn"
                         >
                           Cancel
                         </button>

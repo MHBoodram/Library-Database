@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import NavBar from '../components/NavBar';
 import './Home.css';
 
-// Featured books data with placeholder covers, descriptions, and reviews
-const featuredBooks = [
+// Featured books metadata (availability loaded dynamically)
+const featuredBooksSeed = [
   {
     id: 1,
     title: "To Kill a Mockingbird",
@@ -119,20 +119,120 @@ const featuredBooks = [
 ];
 
 export default function Home() {
-  const { user, token, useApi } = useAuth();
-  const apiWithAuth = useApi();
+  const { user, useApi } = useAuth();
   const navigate = useNavigate();
   const [selectedBook, setSelectedBook] = useState(null);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
+  const [availabilityError, setAvailabilityError] = useState("");
+  const [dynamicFeatured, setDynamicFeatured] = useState(featuredBooksSeed.map(b => ({ ...b, available: null, total: null })));
+  const [availabilityLoaded, setAvailabilityLoaded] = useState(false);
+  const [preloadComplete, setPreloadComplete] = useState(false);
+  // Removed per-user request (no longer listing individual copies in modal)
+  // Keep placeholder state if future quick-checkout per copy is reintroduced.
+  // const [availableCopies, setAvailableCopies] = useState([]);
+  // Preload dynamic availability for featured books (best-effort; silent failures)
+  useEffect(() => {
+    if (preloadComplete) return; // Only run once
+    let cancel = false;
+    async function loadAll() {
+      const updated = [];
+      for (const book of featuredBooksSeed) {
+        try {
+          const params = new URLSearchParams({ title: book.title });
+          const items = await useApi(`items?${params.toString()}`);
+          const list = Array.isArray(items?.rows) ? items.rows : Array.isArray(items) ? items : [];
+          const exact = list.find(it => (it.title || "").toLowerCase() === book.title.toLowerCase());
+          const item = exact || list[0];
+          if (item) {
+            const copies = await useApi(`items/${item.item_id}/copies`);
+            const copyList = Array.isArray(copies) ? copies : [];
+            const totalInStock = copyList.filter(c => (c.status || '').toLowerCase() !== 'lost').length;
+            const availableCount = copyList.filter(c => (c.status || '').toLowerCase() === 'available').length;
+            updated.push({ ...book, available: availableCount, total: totalInStock, item_id: item.item_id });
+          } else {
+            updated.push({ ...book, available: 0, total: 0 });
+          }
+        } catch { // individual book load failure
+          // Ignore individual book load errors; mark counts as zero
+          updated.push({ ...book, available: 0, total: 0 });
+        }
+      }
+      if (!cancel) {
+        setDynamicFeatured(updated);
+        setPreloadComplete(true);
+      }
+    }
+    loadAll();
+    return () => { cancel = true; };
+  }, [useApi, preloadComplete]);
 
   const handleBookClick = (book) => {
-    setSelectedBook(book);
+    // Reset modal state and initiate a fresh availability fetch
+    setAvailabilityLoading(true);
+    setAvailabilityError("");
+    setAvailabilityLoaded(false);
+  // setAvailableCopies([]);
+    setSelectedBook({ ...book, available: undefined, total: undefined });
   };
 
   const closeModal = () => {
     setSelectedBook(null);
+    setAvailabilityLoading(false);
+    setAvailabilityError("");
+    setAvailabilityLoaded(false);
+  // setAvailableCopies([]);
   };
+
+  // When a featured book is selected, refresh its availability from live data
+  useEffect(() => {
+    let cancelled = false;
+    async function loadAvailability() {
+      if (!selectedBook) return;
+      // Guard: if we've already computed availability, skip
+      if (availabilityLoaded) return;
+      setAvailabilityLoading(true);
+      setAvailabilityError("");
+      try {
+        // Find the item by title (prefer exact title match; fall back to first result)
+        const params = new URLSearchParams({ title: selectedBook.title });
+        const items = await useApi(`items?${params.toString()}`);
+        const list = Array.isArray(items?.rows) ? items.rows : Array.isArray(items) ? items : [];
+        if (list.length === 0) {
+          if (!cancelled) {
+            setAvailabilityError("Title not found in catalog");
+            setAvailabilityLoaded(true);
+          }
+          return;
+        }
+        // Pick best match: exact title or first
+        const exact = list.find(it => (it.title || "").toLowerCase() === selectedBook.title.toLowerCase());
+        const item = exact || list[0];
+        // Get copies and compute counts
+        const copies = await useApi(`items/${item.item_id}/copies`);
+        const copyList = Array.isArray(copies) ? copies : [];
+        const totalInStock = copyList.filter(c => (c.status || '').toLowerCase() !== 'lost').length;
+        const avail = copyList.filter(c => (c.status || '').toLowerCase() === 'available');
+        const availableCount = avail.length;
+        if (!cancelled) {
+          // Merge back into selectedBook for display
+          setSelectedBook(prev => prev ? { ...prev, available: availableCount, total: totalInStock, item_id: item.item_id } : prev);
+          // setAvailableCopies(avail); // no longer used visually
+          setAvailabilityLoaded(true);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setAvailabilityError(err?.message || 'Failed to load availability');
+          setAvailabilityLoaded(true);
+        }
+      } finally {
+        if (!cancelled) setAvailabilityLoading(false);
+      }
+    }
+    loadAvailability();
+    return () => { cancelled = true; };
+  }, [selectedBook, availabilityLoaded, useApi]);
 
   const handleCheckout = async () => {
     if (!user) {
@@ -141,43 +241,41 @@ export default function Home() {
       return;
     }
 
-    if (!selectedBook) return;
+    if (!selectedBook || !selectedBook.item_id) {
+      alert('Book information not loaded. Please try again.');
+      return;
+    }
 
     setCheckoutLoading(true);
     try {
-      // Simulate finding a copy
-      const params = new URLSearchParams({ q: selectedBook.title });
-      const items = await apiWithAuth(`items?${params.toString()}`);
-      const item = Array.isArray(items) ? items[0] : null;
-
-      if (!item) {
-        alert('Book not found in catalog. Please use the Browse Collection page.');
-        return;
-      }
-
-      // Get available copies
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/items/${item.item_id}/copies`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const copies = await response.json();
-      const availableCopy = copies.find(c => c.status === 'available');
+      // Get available copies using the item_id we already have
+      const copies = await useApi(`items/${selectedBook.item_id}/copies`);
+      const copyList = Array.isArray(copies) ? copies : [];
+      const availableCopy = copyList.find(c => c.status === 'available');
 
       if (!availableCopy) {
         alert('No copies available right now. Please try again later.');
+        setCheckoutLoading(false);
         return;
       }
 
-      // Checkout the copy
-      await apiWithAuth('loans/checkout', {
+      // Checkout the copy with user_id
+      const checkoutData = { 
+        copy_id: availableCopy.copy_id,
+        user_id: user.user_id,
+        identifier_type: 'copy_id'
+      };
+      
+      await useApi('loans/checkout', {
         method: 'POST',
-        body: { copy_id: availableCopy.copy_id }
+        body: checkoutData
       });
 
       alert(`Successfully checked out "${selectedBook.title}"! View it in My Loans.`);
       closeModal();
     } catch (err) {
-      const msg = err?.data?.message || err?.message || 'Checkout failed';
-      alert(msg);
+      const msg = err?.data?.details || err?.data?.message || err?.message || 'Checkout failed';
+      alert(`Checkout failed: ${msg}`);
     } finally {
       setCheckoutLoading(false);
     }
@@ -186,7 +284,7 @@ export default function Home() {
   const handleSearch = (e) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      navigate(`/books?q=${encodeURIComponent(searchQuery.trim())}`);
+      navigate(`/books?title=${encodeURIComponent(searchQuery.trim())}`);
     }
   };
 
@@ -245,7 +343,7 @@ export default function Home() {
           <p className="section-subtitle">Popular titles among students and faculty</p>
           
           <div className="books-grid">
-            {featuredBooks.map((book) => (
+            {dynamicFeatured.map((book) => (
               <div 
                 key={book.id} 
                 className="book-card"
@@ -266,6 +364,9 @@ export default function Home() {
                   <h3 className="book-title">{book.title}</h3>
                   <p className="book-author">{book.author}</p>
                   <span className="book-genre">{book.genre}</span>
+                  <div style={{marginTop:4,fontSize:12,color:'#444'}}>
+                    {book.available == null ? 'Loading copies…' : `${book.available} / ${book.total} available`}
+                  </div>
                 </div>
               </div>
             ))}
@@ -368,10 +469,18 @@ export default function Home() {
                 <div className="availability-box">
                   <h4>Availability</h4>
                   <div className="availability-status">
-                    <span className={selectedBook.available > 0 ? 'status-available' : 'status-unavailable'}>
-                      {selectedBook.available > 0 ? '✓ Available' : '✗ Unavailable'}
-                    </span>
-                    <p>{selectedBook.available} of {selectedBook.total} copies available</p>
+                    {availabilityLoading ? (
+                      <p>Loading availability…</p>
+                    ) : availabilityError ? (
+                      <p className="status-unavailable">{availabilityError}</p>
+                    ) : (
+                      <>
+                        <span className={selectedBook.available > 0 ? 'status-available' : 'status-unavailable'}>
+                          {selectedBook.available > 0 ? '✓ Available' : '✗ Unavailable'}
+                        </span>
+                        <p>{Number(selectedBook.available || 0)} of {Number(selectedBook.total || 0)} copies available</p>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -392,7 +501,11 @@ export default function Home() {
                 </div>
 
                 <div className="modal-actions">
-                  {selectedBook.available > 0 ? (
+                  {availabilityLoading ? (
+                    <button className="btn-checkout" disabled>
+                      Checking availability…
+                    </button>
+                  ) : (Number(selectedBook.available || 0) > 0 ? (
                     <button 
                       className="btn-checkout" 
                       onClick={handleCheckout}
@@ -404,8 +517,8 @@ export default function Home() {
                     <button className="btn-checkout" disabled>
                       Currently Unavailable
                     </button>
-                  )}
-                  <button className="btn-browse" onClick={() => navigate('/books')}>
+                  ))}
+                  <button className="btn-browse" onClick={() => navigate(`/books?title=${encodeURIComponent(selectedBook.title)}`)}>
                     Browse All Copies
                   </button>
                 </div>

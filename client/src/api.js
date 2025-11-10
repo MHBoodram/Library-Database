@@ -72,8 +72,25 @@ export const listReservations = (token, params = {}) => {
   return api(path, { token });
 };
 
+export const createAdminManagedAccount = (token, payload) =>
+  api("/admin/accounts", { method: "POST", token, body: payload });
+
+export const updateManagedAccount = (token, accountId, payload) =>
+  api(`/manage/accounts/${accountId}`, { method: "PATCH", token, body: payload });
+
+export const flagManagedAccount = (token, accountId) =>
+  api(`/manage/accounts/${accountId}/flag`, { method: "POST", token });
+
+export const searchPatrons = (token, q) =>
+  api(`/staff/patrons/search?q=${encodeURIComponent(q)}`, { token });
+
 export const createRoom = (token, payload) =>
   api("/staff/rooms", { method: "POST", token, body: payload });
+
+export const fetchProfile = (token) => api("/me", { token });
+
+export const updateProfile = (token, payload) =>
+  api("/me", { method: "PATCH", token, body: payload });
 
 // copies per item
 export const getItemCopies = (token, item_id) =>
@@ -81,6 +98,8 @@ export const getItemCopies = (token, item_id) =>
 
 // my loans
 export const getMyLoans = (token) => api("/loans/my", { token });
+
+export const getAccounts = (token) => api("/manage/accounts", { token })
 
 export default api;
 export { api, API_BASE };

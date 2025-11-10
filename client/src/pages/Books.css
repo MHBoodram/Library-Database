@@ -1,0 +1,633 @@
+/* 
+   Modern E-Library Catalog Styles
+   A stunning visual catalog with card-based layout
+ */
+
+:root {
+  --primary-main: #187772;
+  --primary-dark: #115852;
+  --primary-light: #78a24b;
+  --secondary-main: #78a24b;
+  --success-main: #059669;
+  --warning-main: #d97706;
+  --error-main: #dc2626;
+  --info-main: #0891b2;
+  
+  --gray-50: #fafafa;
+  --gray-100: #f5f5f9;
+  --gray-200: #eeeeee;
+  --gray-300: #e0e0e0;
+  --gray-400: #bdbdbd;
+  --gray-500: #9e9e9e;
+  --gray-600: #757575;
+  --gray-700: #616161;
+  --gray-800: #424242;
+  --gray-900: #212121;
+  
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+/* Main Page Container */
+.catalog-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, var(--gray-50) 0%, #ffffff 100%);
+  padding-bottom: 60px;
+  padding-top: 60px; /* Account for fixed navbar */
+}
+
+/* Header Section */
+.catalog-header {
+  background: linear-gradient(135deg, var(--primary-main) 0%, var(--primary-dark) 100%);
+  color: white;
+  padding: 20px 20px 24px;
+  box-shadow: var(--shadow-lg);
+  margin-top: -60px; /* Pull header up to sit under navbar */
+  padding-top: 80px; /* Add padding to push content below navbar */
+}
+
+.catalog-hero {
+  max-width: 1200px;
+  margin: 0 auto 24px;
+  text-align: center;
+}
+
+.catalog-hero h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 0 0 8px 0;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.catalog-hero p {
+  font-size: 1rem;
+  opacity: 0.95;
+  margin: 0;
+}
+
+/* Search Bar */
+.catalog-search-bar {
+  max-width: 800px;
+  margin: 0 auto;
+  display: flex;
+  gap: 12px;
+  background: white;
+  padding: 8px;
+  border-radius: 50px;
+  box-shadow: var(--shadow-xl);
+}
+
+.catalog-search-input {
+  flex: 1;
+  border: none;
+  padding: 12px 24px;
+  font-size: 1rem;
+  border-radius: 50px;
+  outline: none;
+}
+
+.catalog-search-btn {
+  padding: 12px 32px;
+  background: var(--primary-main);
+  color: white;
+  border: none;
+  border-radius: 50px;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.catalog-search-btn:hover {
+  background: var(--primary-dark);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Filters Section */
+.catalog-filters {
+  max-width: 1200px;
+  margin: 30px auto 20px;
+  padding: 0 20px;
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.catalog-type-tabs {
+  display: flex;
+  gap: 10px;
+  background: white;
+  padding: 6px;
+  border-radius: 50px;
+  box-shadow: var(--shadow-sm);
+}
+
+.catalog-tab {
+  padding: 10px 24px;
+  border: none;
+  background: transparent;
+  color: var(--gray-700);
+  font-weight: 500;
+  font-size: 0.95rem;
+  border-radius: 50px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.catalog-tab:hover {
+  background: var(--gray-100);
+  color: var(--primary-main);
+}
+
+.catalog-tab.active {
+  background: var(--primary-main);
+  color: white;
+  box-shadow: var(--shadow-sm);
+}
+
+.catalog-subject-filter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: white;
+  padding: 10px 20px;
+  border-radius: 50px;
+  box-shadow: var(--shadow-sm);
+}
+
+.catalog-subject-filter label {
+  font-weight: 500;
+  color: var(--gray-700);
+  white-space: nowrap;
+}
+
+.catalog-select {
+  padding: 6px 16px;
+  border: 1px solid var(--gray-300);
+  border-radius: 20px;
+  font-size: 0.95rem;
+  background: white;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.3s ease;
+}
+
+.catalog-select:focus {
+  border-color: var(--primary-main);
+  box-shadow: 0 0 0 3px rgba(24, 119, 114, 0.1);
+}
+
+/* Results Section */
+.catalog-results {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+.catalog-results-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding: 0 4px;
+}
+
+.catalog-results-header span {
+  font-weight: 600;
+  color: var(--gray-700);
+  font-size: 1.1rem;
+}
+
+.catalog-loading {
+  color: var(--info-main);
+  font-size: 0.95rem;
+}
+
+.catalog-error {
+  color: var(--error-main);
+  font-size: 0.95rem;
+}
+
+.catalog-empty {
+  text-align: center;
+  padding: 80px 20px;
+  color: var(--gray-500);
+  font-size: 1.1rem;
+}
+
+/* Card Grid */
+.catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 30px;
+  margin-bottom: 40px;
+}
+
+.catalog-card {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.catalog-card:hover {
+  transform: translateY(-8px);
+  box-shadow: var(--shadow-xl);
+}
+
+.catalog-card-cover {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 2/3;
+  background: var(--gray-100);
+  overflow: hidden;
+}
+
+.catalog-card-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.catalog-card:hover .catalog-card-cover img {
+  transform: scale(1.05);
+}
+
+.catalog-card-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: rgba(255, 255, 255, 0.95);
+  padding: 6px 10px;
+  border-radius: 20px;
+  font-size: 1.2rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.catalog-card-status {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  box-shadow: var(--shadow-sm);
+}
+
+.catalog-card-status.available {
+  background: var(--success-main);
+  color: white;
+}
+
+.catalog-card-status.unavailable {
+  background: var(--gray-500);
+  color: white;
+}
+
+.catalog-card-body {
+  padding: 16px;
+}
+
+.catalog-card-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--gray-900);
+  margin: 0 0 6px 0;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+.catalog-card-author {
+  font-size: 0.85rem;
+  color: var(--gray-600);
+  margin: 0 0 10px 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  overflow: hidden;
+}
+
+.catalog-card-subject {
+  display: inline-block;
+  background: var(--primary-light);
+  color: white;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  margin-bottom: 10px;
+}
+
+.catalog-card-footer {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--gray-200);
+}
+
+.catalog-card-copies {
+  font-size: 0.85rem;
+  color: var(--gray-600);
+  font-weight: 500;
+}
+
+/* Modal */
+.catalog-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.catalog-modal {
+  background: white;
+  border-radius: 16px;
+  max-width: 900px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-xl);
+  position: relative;
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(50px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.catalog-modal-close {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: var(--gray-100);
+  color: var(--gray-700);
+  font-size: 1.5rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+.catalog-modal-close:hover {
+  background: var(--error-main);
+  color: white;
+  transform: rotate(90deg);
+}
+
+.catalog-modal-content {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 30px;
+  padding: 30px;
+}
+
+.catalog-modal-left img {
+  width: 100%;
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+}
+
+.catalog-modal-right {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.catalog-modal-header h2 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--gray-900);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+.catalog-modal-author {
+  font-size: 1.1rem;
+  color: var(--gray-600);
+  margin: 0 0 12px 0;
+}
+
+.catalog-modal-subject {
+  display: inline-block;
+  background: var(--primary-light);
+  color: white;
+  padding: 6px 16px;
+  border-radius: 16px;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.catalog-modal-description {
+  margin-bottom: 8px;
+}
+
+.catalog-modal-description h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--gray-900);
+  margin: 0 0 12px 0;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--primary-main);
+}
+
+.catalog-modal-description p {
+  font-size: 0.95rem;
+  color: var(--gray-700);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.catalog-modal-details h3,
+.catalog-modal-copies h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--gray-900);
+  margin: 0 0 12px 0;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--primary-main);
+}
+
+.catalog-modal-details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.catalog-modal-details-grid div {
+  font-size: 0.95rem;
+  color: var(--gray-700);
+}
+
+.catalog-modal-details-grid strong {
+  color: var(--gray-900);
+  font-weight: 600;
+}
+
+/* Availability Section */
+.catalog-availability-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.catalog-availability-text {
+  font-size: 1rem;
+  color: var(--success-main);
+  margin: 0;
+}
+
+.catalog-unavailable-text {
+  font-size: 0.95rem;
+  color: var(--gray-600);
+  margin: 0;
+}
+
+.catalog-checkout-btn-large {
+  padding: 12px 24px;
+  border-radius: 8px;
+  border: none;
+  background: var(--success-main);
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: var(--shadow-sm);
+}
+
+.catalog-checkout-btn-large:hover:not(:disabled) {
+  background: #047857;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.catalog-checkout-btn-large:disabled {
+  background: var(--gray-400);
+  cursor: not-allowed;
+}
+
+/* Legacy styles - keep for backward compatibility */
+.catalog-copies-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.catalog-copy-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--gray-50);
+  border-radius: 8px;
+  border: 1px solid var(--gray-200);
+}
+
+.catalog-copy-item strong {
+  color: var(--gray-900);
+  font-weight: 600;
+}
+
+.catalog-checkout-btn {
+  padding: 8px 20px;
+  background: var(--primary-main);
+  color: white;
+  border: none;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.catalog-checkout-btn:hover:not(:disabled) {
+  background: var(--primary-dark);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.catalog-checkout-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .catalog-hero h1 {
+    font-size: 2rem;
+  }
+
+  .catalog-search-bar {
+    flex-direction: column;
+  }
+
+  .catalog-search-btn {
+    width: 100%;
+  }
+
+  .catalog-filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .catalog-type-tabs {
+    justify-content: center;
+  }
+
+  .catalog-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 20px;
+  }
+
+  .catalog-modal-content {
+    grid-template-columns: 1fr;
+  }
+
+  .catalog-modal-left img {
+    max-width: 300px;
+    margin: 0 auto;
+    display: block;
+  }
+}

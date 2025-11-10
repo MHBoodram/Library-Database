@@ -14,19 +14,19 @@ import Reports from "./pages/Reports.jsx";
 import Loans from "./pages/Loans.jsx";
 import Rooms from "./pages/Rooms.jsx";
 import BookPage from "./pages/BookPage.jsx";
+import ManageAccounts from "./pages/ManageAccounts.jsx";
 
 import "./index.css";
 
 // Lightweight wrapper to supply data fetchers for BookPage
 function BookRoute() {
   const { useApi, user, token } = useAuth();
-  const api = useApi();
-
+  
   const fetchBookById = async (id) => {
-    const rows = await api(`items?id=${encodeURIComponent(id)}`);
+    const rows = await useApi(`items?id=${encodeURIComponent(id)}`);
     const row = Array.isArray(rows) ? rows[0] : rows;
     if (!row) return null;
-    const copies = await api(`items/${id}/copies`);
+    const copies = await useApi(`items/${id}/copies`);
     const availableCount = Array.isArray(copies)
       ? copies.filter((c) => c.status === "available").length
       : 0;
@@ -45,11 +45,11 @@ function BookRoute() {
   };
 
   const fetchRecommendations = async (id) => {
-    const rows = await api(`items?id=${encodeURIComponent(id)}`);
+    const rows = await useApi(`items?id=${encodeURIComponent(id)}`);
     const row = Array.isArray(rows) ? rows[0] : rows;
     const firstAuthor = Array.isArray(row?.authors) ? row.authors[0] : row?.authors;
     if (!firstAuthor) return [];
-    const recs = await api(`items?author=${encodeURIComponent(firstAuthor)}`);
+    const recs = await useApi(`items?author=${encodeURIComponent(firstAuthor)}`);
     return (Array.isArray(recs) ? recs : [])
       .filter((r) => r.item_id !== Number(id))
       .slice(0, 10)
@@ -62,7 +62,7 @@ function BookRoute() {
       return;
     }
     try {
-      const copies = await api(`items/${id}/copies`);
+      const copies = await useApi(`items/${id}/copies`);
       const available = (copies || []).filter((c) => c.status === "available");
       if (!available.length) {
         alert("No available copies");
@@ -73,7 +73,7 @@ function BookRoute() {
       let count = 0;
       for (const c of toCheckout) {
         try {
-          await api("loans/checkout", { method: "POST", body: { copy_id: c.copy_id, user_id: user?.user_id } });
+          await useApi("loans/checkout", { method: "POST", body: { copy_id: c.copy_id, user_id: user?.user_id } });
           count++;
         } catch (e) {
           const code = e?.data?.error || e?.message || "checkout_failed";
@@ -129,6 +129,14 @@ ReactDOM.createRoot(document.getElementById("root")).render(
             element={
               <Protected role="staff">
                 <EmployeeHome />
+              </Protected>
+            }
+          />
+          <Route
+            path="/manage/accounts"
+            element={
+              <Protected role="staff" employeeRole="admin">
+                <ManageAccounts />
               </Protected>
             }
           />

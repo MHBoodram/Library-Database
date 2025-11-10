@@ -10,7 +10,6 @@ export default function Reports() {
   const [topItems, setTopItems] = useState([]);
   const navigate = useNavigate();
   const { token, user, useApi } = useAuth();
-  const apiWithAuth = useApi();
 
   useEffect(() => {
     if (!token) {
@@ -34,9 +33,9 @@ export default function Reports() {
       setError('');
       try {
         const [overdueRes, balancesRes, topItemsRes] = await Promise.all([
-          apiWithAuth('reports/overdue'),
-          apiWithAuth('reports/balances'),
-          apiWithAuth('reports/top-items'),
+          useApi('reports/overdue'),
+          useApi('reports/balances'),
+          useApi('reports/top-items'),
         ]);
 
         if (!active) return;
@@ -54,7 +53,7 @@ export default function Reports() {
     return () => {
       active = false;
     };
-  }, [token, user, navigate, apiWithAuth]);
+  }, [token, user, navigate, useApi]);
 
   if (loading) {
     return <div style={{ padding: 16 }}>Loading reports...</div>;
