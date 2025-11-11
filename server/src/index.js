@@ -71,7 +71,6 @@ r.add("GET", "/api/admin/overview", adminOverview(JWT_SECRET));
 r.add("GET", "/api/admin/employees", adminEmployees(JWT_SECRET));
 r.add("POST", "/api/admin/accounts", adminCreateAccount(JWT_SECRET));
 r.add("GET", "/api/admin/accounts/creations", listAccountCreations(JWT_SECRET));
-r.add("GET", "/api/admin/activity", listActivity(JWT_SECRET));
 
 r.add("GET", "/api/me", getProfile(JWT_SECRET));
 r.add("PATCH", "/api/me", updateProfile(JWT_SECRET));
