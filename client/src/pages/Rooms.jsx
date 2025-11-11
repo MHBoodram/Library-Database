@@ -344,14 +344,6 @@ export default function Rooms() {
     })();
   }, [token, api, refreshFlag]);
 
-  // Auto-refresh: periodically refresh both availability (child component handles via selectedDate change trigger)
-  // and the user's reservations list every 45s.
-  useEffect(() => {
-    if (!token) return;
-    const id = setInterval(() => setRefreshFlag(f => f + 1), 45000);
-    return () => clearInterval(id);
-  }, [token]);
-
   async function cancelReservation(reservationId) {
     if (!confirm("Are you sure you want to cancel this reservation?")) {
       return;

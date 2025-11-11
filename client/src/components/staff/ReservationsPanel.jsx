@@ -51,12 +51,6 @@ export default function ReservationsPanel({ api, staffUser }) {
     })();
   }, [api, fetchReservations, refreshFlag]);
 
-  // Auto-refresh every 30 seconds so staff see updates without manual reload
-  useEffect(() => {
-    const id = setInterval(() => setRefreshFlag((f) => f + 1), 30000);
-    return () => clearInterval(id);
-  }, []);
-
   function update(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }));
   }

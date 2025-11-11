@@ -57,13 +57,6 @@ export default function EmployeeDashboard() {
     loadCounts();
   }, [api, loadCounts]);
 
-  // Auto-refresh counts periodically so dashboard updates without manual reload
-  useEffect(() => {
-    if (!api) return;
-    const id = setInterval(() => { loadCounts(); }, 20000); // 20s
-    return () => clearInterval(id);
-  }, [api, loadCounts]);
-
   // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
