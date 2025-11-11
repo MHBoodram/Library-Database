@@ -1563,6 +1563,8 @@ function TransactionReportTable({data,loading}){
   }
   return (
     <div className="overflow-x-auto">
+      <span className="transactions-table-label">Total Transactions: {data.length}</span>
+      {loading && <span className="loading">Loading…</span>}
       <table className="min-w-full text-sm">
         <thead className="bg-gray-100 text-left">
           <tr>
