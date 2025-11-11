@@ -1,6 +1,8 @@
 import { sendJSON, readJSONBody, requireRole, requireAuth } from "../lib/http.js";
 import { pool } from "../lib/db.js";
 
+const LIBRARY_TZ = process.env.LIBRARY_TZ || "America/Chicago";
+
 function normalizeDateInput(value) {
   if (!value) return null;
   const date = new Date(value);
@@ -103,6 +105,8 @@ export const listReservations = (JWT_SECRET) => async (req, res) => {
   }
 };
 
+// Format a JS Date using local components for storage in MySQL DATETIME.
+// With session time_zone set to LIBRARY_TZ on the DB connection, this aligns with library wall time.
 function toMySQLDateTime(date) {
   const pad = (n) => String(n).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
@@ -116,60 +120,75 @@ function toMySQLDateTime(date) {
  */
 function validateLibraryHours(startDate, endDate) {
   const errors = [];
-  
-  // Check start time
-  const startDay = startDate.getDay(); // 0 = Sunday, 1 = Monday, etc.
-  const startHour = startDate.getHours();
-  const startMinutes = startDate.getMinutes();
-  const startTime = startHour + startMinutes / 60;
-  
-  // Check end time
-  const endDay = endDate.getDay();
-  const endHour = endDate.getHours();
-  const endMinutes = endDate.getMinutes();
-  const endTime = endHour + endMinutes / 60;
-  
+
+  // Helper to get day/hour/min in the library's timezone using Intl
+  const getTzParts = (d) => {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: LIBRARY_TZ,
+      weekday: "short",
+      hour12: false,
+      hour: "2-digit",
+      minute: "2-digit",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(d);
+    const map = Object.fromEntries(parts.map(p => [p.type, p.value]));
+    // weekday short to number: Sun=0..Sat=6
+    const weekdayMap = { Sun:0, Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6 };
+    const day = weekdayMap[map.weekday] ?? 0;
+    const hour = Number(map.hour);
+    const minute = Number(map.minute);
+    const ymd = `${map.year}-${map.month}-${map.day}`;
+    return { day, hour, minute, ymd };
+  };
+
+  const s = getTzParts(startDate);
+  const e = getTzParts(endDate);
+  const startTime = s.hour + s.minute / 60;
+  const endTime = e.hour + e.minute / 60;
+
   // Monday - Friday: 7:00 AM - 10:00 PM
-  if (startDay >= 1 && startDay <= 5) {
+  if (s.day >= 1 && s.day <= 5) {
     if (startTime < 7 || startTime >= 22) {
       errors.push("Monday-Friday library hours are 7:00 AM - 10:00 PM. Start time is outside these hours.");
     }
   }
-  if (endDay >= 1 && endDay <= 5) {
+  if (e.day >= 1 && e.day <= 5) {
     if (endTime > 22) {
       errors.push("Monday-Friday library hours are 7:00 AM - 10:00 PM. End time is outside these hours.");
     }
   }
-  
+
   // Saturday: 9:00 AM - 8:00 PM
-  if (startDay === 6) {
+  if (s.day === 6) {
     if (startTime < 9 || startTime >= 20) {
       errors.push("Saturday library hours are 9:00 AM - 8:00 PM. Start time is outside these hours.");
     }
   }
-  if (endDay === 6) {
+  if (e.day === 6) {
     if (endTime > 20) {
       errors.push("Saturday library hours are 9:00 AM - 8:00 PM. End time is outside these hours.");
     }
   }
-  
+
   // Sunday: 10:00 AM - 6:00 PM
-  if (startDay === 0) {
+  if (s.day === 0) {
     if (startTime < 10 || startTime >= 18) {
       errors.push("Sunday library hours are 10:00 AM - 6:00 PM. Start time is outside these hours.");
     }
   }
-  if (endDay === 0) {
+  if (e.day === 0) {
     if (endTime > 18) {
       errors.push("Sunday library hours are 10:00 AM - 6:00 PM. End time is outside these hours.");
     }
   }
-  
-  // Check if reservation spans across multiple days
-  if (startDay !== endDay) {
+
+  // Enforce same-day in library timezone
+  if (s.ymd !== e.ymd) {
     errors.push("Reservations cannot span multiple days. Please book within the same day's operating hours.");
   }
-  
+
   return errors;
 }
 

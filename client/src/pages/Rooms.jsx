@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
+import { formatLibraryDateTime, localDateTimeToUTCISOString } from "../utils";
 import "./Rooms.css";
 
-function RoomCalendarViewPatron({ useApi, onReservationCreated }) {
+function RoomCalendarViewPatron({ api, onReservationCreated }) {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -18,7 +19,7 @@ function RoomCalendarViewPatron({ useApi, onReservationCreated }) {
       setLoading(true);
       setError("");
       try {
-        const data = await useApi(`reservations/availability?date=${selectedDate}`);
+  const data = await api(`reservations/availability?date=${selectedDate}`);
         setRooms(data.rooms || []);
       } catch (err) {
         setError(err.message || "Failed to load room availability");
@@ -27,7 +28,7 @@ function RoomCalendarViewPatron({ useApi, onReservationCreated }) {
       }
     };
     fetchAvailability();
-  }, [useApi, selectedDate]);
+  }, [api, selectedDate]);
 
   // Navigation helpers
   const changeDate = (days) => {
@@ -133,14 +134,17 @@ function RoomCalendarViewPatron({ useApi, onReservationCreated }) {
 
   // Handle slot click for booking
   const handleSlotClick = async (room, hour) => {
-    const startTime = `${selectedDate}T${String(hour).padStart(2, '0')}:00:00`;
-    const endHour = hour + 1; // Changed to 1-hour booking
-    const endTime = `${selectedDate}T${String(endHour).padStart(2, '0')}:00:00`;
+    const startLocal = `${selectedDate}T${String(hour).padStart(2, '0')}:00:00`;
+    const endHour = hour + 1; // 1-hour booking
+    const endLocal = `${selectedDate}T${String(endHour).padStart(2, '0')}:00:00`;
+    // Convert to UTC ISO for consistent server handling regardless of server timezone
+    const startTime = localDateTimeToUTCISOString(startLocal);
+    const endTime = localDateTimeToUTCISOString(endLocal);
 
     if (!confirm(`Book ${room.room_number} from ${hour}:00 to ${endHour}:00?`)) return;
 
     try {
-      await useApi("reservations", {
+      await api("reservations", {
         method: "POST",
         body: {
           room_id: room.room_id,
@@ -150,7 +154,7 @@ function RoomCalendarViewPatron({ useApi, onReservationCreated }) {
       });
       alert("Reservation created successfully!");
       // Refresh availability
-      const data = await useApi(`reservations/availability?date=${selectedDate}`);
+      const data = await api(`reservations/availability?date=${selectedDate}`);
       setRooms(data.rooms || []);
       if (onReservationCreated) onReservationCreated();
     } catch (err) {
@@ -306,7 +310,7 @@ function RoomCalendarViewPatron({ useApi, onReservationCreated }) {
 }
 
 export default function Rooms() {
-  const { token, useApi } = useAuth();
+  const { token, useApi: api } = useAuth();
   const navigate = useNavigate();
 
   // My reservations state
@@ -330,7 +334,7 @@ export default function Rooms() {
       setReservationsLoading(true);
       setReservationsError("");
       try {
-        const data = await useApi("reservations/my");
+  const data = await api("reservations/my");
         setMyReservations(Array.isArray(data) ? data : []);
       } catch (err) {
         setReservationsError(err?.message || "Failed to load your reservations.");
@@ -338,7 +342,7 @@ export default function Rooms() {
         setReservationsLoading(false);
       }
     })();
-  }, [token, useApi, refreshFlag]);
+  }, [token, api, refreshFlag]);
 
   async function cancelReservation(reservationId) {
     if (!confirm("Are you sure you want to cancel this reservation?")) {
@@ -346,7 +350,7 @@ export default function Rooms() {
     }
 
     try {
-      await useApi(`reservations/${reservationId}/cancel`, { method: "PATCH" });
+  await api(`reservations/${reservationId}/cancel`, { method: "PATCH" });
       alert("Reservation cancelled successfully.");
       setRefreshFlag((f) => f + 1); // Refresh reservations list
     } catch (err) {
@@ -355,10 +359,9 @@ export default function Rooms() {
     }
   }
 
+  // Use shared util to format in the library's timezone for clarity
   function formatDateTime(dateStr) {
-    if (!dateStr) return "";
-    const date = new Date(dateStr);
-    return date.toLocaleString();
+    return formatLibraryDateTime(dateStr);
   }
 
   return (
@@ -380,7 +383,7 @@ export default function Rooms() {
       </div>
 
       {/* Room Calendar Grid */}
-      <RoomCalendarViewPatron useApi={useApi} onReservationCreated={() => setRefreshFlag((f) => f + 1)} />
+  <RoomCalendarViewPatron api={api} onReservationCreated={() => setRefreshFlag((f) => f + 1)} />
 
       {/* My Reservations Section */}
       <div className="rooms-reservations-section">

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Field, Th, Td } from "./shared/CommonComponents";
-import { formatDateTime } from "../../utils";
+import { formatLibraryDateTime, localDateTimeToUTCISOString } from "../../utils";
 
 export default function ReservationsPanel({ api, staffUser }) {
   const [rows, setRows] = useState([]);
@@ -63,8 +63,9 @@ export default function ReservationsPanel({ api, staffUser }) {
       const payload = {
         user_id: Number(form.user_id),
         room_id: Number(form.room_id),
-        start_time: form.start_time,
-        end_time: form.end_time,
+        // Convert naive local datetime values to UTC ISO for consistent server handling
+        start_time: localDateTimeToUTCISOString(form.start_time),
+        end_time: localDateTimeToUTCISOString(form.end_time),
         employee_id: staffUser?.employee_id,
       };
       await api("staff/reservations", { method: "POST", body: payload });
@@ -417,8 +418,8 @@ export default function ReservationsPanel({ api, staffUser }) {
                       <Td>
                         {r.first_name} {r.last_name}
                       </Td>
-                      <Td>{formatDateTime(r.start_time)}</Td>
-                      <Td>{formatDateTime(r.end_time)}</Td>
+                      <Td>{formatLibraryDateTime(r.start_time)}</Td>
+                      <Td>{formatLibraryDateTime(r.end_time)}</Td>
                       <Td>
                         <span
                           className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium capitalize ${

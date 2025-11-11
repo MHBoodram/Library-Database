@@ -45,6 +45,20 @@ export const pool = mysql.createPool({
   ssl,
 });
 
+// Ensure each new connection uses the library timezone for server-side NOW() and comparisons
+const LIBRARY_TZ = process.env.LIBRARY_TZ || 'America/Chicago';
+try {
+  // Set on the first acquired connection (may only affect that session)
+  pool.query("SET time_zone = ?", [LIBRARY_TZ]).catch(() => {});
+  // Also set on every new pooled connection
+  if (typeof pool.on === 'function') {
+    pool.on('connection', (conn) => {
+      // Underlying conn is callback-style; ignore errors
+      try { conn.query("SET time_zone = ?", [LIBRARY_TZ], () => {}); } catch {}
+    });
+  }
+} catch {}
+
 
 
 // Optional: call this from your server startup to verify DB connectivity
