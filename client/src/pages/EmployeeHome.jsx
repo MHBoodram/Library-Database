@@ -1588,7 +1588,11 @@ function TransactionReportTable({data,loading}){
               <Td>{row.item_title || "—"}</Td>
               <Td>{row.copy_id ? `#${row.copy_id}` : "—"}</Td>
               <Td>#{row.loan_id}</Td>
-              <Td>{(row.type || "").toUpperCase()}</Td>
+              <Td>
+                <span className={`td-action-label td-action-label-${row.type}`}>
+                {(row.type || "").toUpperCase()}
+                </span>
+              </Td>
               <Td>{formatDate(row.date)}</Td>
               <Td>{row.employee_first_name && row.employee_last_name? `${row.employee_first_name} ${row.employee_last_name}`: "—"}</Td>
             </tr>

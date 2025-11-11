@@ -787,3 +787,13 @@ tr.border-t {
   color: var(--gray-700);
   border-bottom: 1px solid var(--gray-200);
 }
+
+.td-action-label{
+  padding: 5px;
+}
+.td-action-label-checkout{
+  color:#02bd3d;
+}
+.td-action-label-return{
+  color:#01a5eb;
+}
