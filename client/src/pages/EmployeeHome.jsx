@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
@@ -28,36 +28,41 @@ export default function EmployeeDashboard() {
   // valid states: "checkout" | "activeLoans" | "reservations" | "addItem" | "removeItem" | "admin" (only available to admins)
   const [counts, setCounts] = useState({ fines: 0, activeLoans: 0, reservations: 0 });
   const [countsLoading, setCountsLoading] = useState(false);
-  const [countsLoaded, setCountsLoaded] = useState(false);
+  // removed countsLoaded state (no longer needed)
+
+  const loadCounts = React.useCallback(async () => {
+    if (!api) return;
+    setCountsLoading(true);
+    try {
+      const [finesRes, loansRes, resvRes] = await Promise.all([
+        api('staff/fines?&pageSize=1000'),
+        api('staff/loans/active?&pageSize=1000'),
+        api('staff/reservations?&pageSize=1000'),
+      ]);
+      const finesList = Array.isArray(finesRes?.rows) ? finesRes.rows : Array.isArray(finesRes) ? finesRes : [];
+      const loansList = Array.isArray(loansRes?.rows) ? loansRes.rows : Array.isArray(loansRes) ? loansRes : [];
+      const resvList = Array.isArray(resvRes?.rows) ? resvRes.rows : Array.isArray(resvRes) ? resvRes : [];
+      setCounts({ fines: finesList.length, activeLoans: loansList.length, reservations: resvList.length });
+  // counts loaded
+    } catch (err) {
+      if (typeof console !== 'undefined') console.debug(err);
+    } finally {
+      setCountsLoading(false);
+    }
+  }, [api]);
   const [manageItemsOpen, setManageItemsOpen] = useState(false);
   const [manageLoansOpen, setManageLoansOpen] = useState(false);
   useEffect(() => {
-  if (!api || countsLoaded) return;
-    
-    let alive = true;
-    async function loadCounts() {
-      setCountsLoading(true);
-      try {
-        const [finesRes, loansRes, resvRes] = await Promise.all([
-          api('staff/fines?&pageSize=1000'),
-          api('staff/loans/active?&pageSize=1000'),
-          api('staff/reservations?&pageSize=1000'),
-        ]);
-        if (!alive) return;
-        const finesList = Array.isArray(finesRes?.rows) ? finesRes.rows : Array.isArray(finesRes) ? finesRes : [];
-        const loansList = Array.isArray(loansRes?.rows) ? loansRes.rows : Array.isArray(loansRes) ? loansRes : [];
-        const resvList = Array.isArray(resvRes?.rows) ? resvRes.rows : Array.isArray(resvRes) ? resvRes : [];
-        setCounts({ fines: finesList.length, activeLoans: loansList.length, reservations: resvList.length });
-        setCountsLoaded(true);
-      } catch (err) {
-        if (typeof console !== 'undefined') console.debug(err);
-      } finally {
-        if (alive) setCountsLoading(false);
-      }
-    }
+    if (!api) return;
     loadCounts();
-    return () => { alive = false; };
-  }, [api, countsLoaded]);
+  }, [api, loadCounts]);
+
+  // Auto-refresh counts periodically so dashboard updates without manual reload
+  useEffect(() => {
+    if (!api) return;
+    const id = setInterval(() => { loadCounts(); }, 20000); // 20s
+    return () => clearInterval(id);
+  }, [api, loadCounts]);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -221,13 +226,13 @@ export default function EmployeeDashboard() {
 
       <main style={{ maxWidth: 1200, margin: '0 auto', padding: '1.5rem' }}>
   {tab === "fines" && <FinesPanel api={api} />}
-  {tab === "checkout" && <CheckoutPanel api={api} staffUser={user} />}
-  {tab === "return" && <ReturnLoanPanel api={api} staffUser={user} />}
+  {tab === "checkout" && <CheckoutPanel api={api} staffUser={user} onChanged={loadCounts} />}
+  {tab === "return" && <ReturnLoanPanel api={api} staffUser={user} onChanged={loadCounts} />}
   {tab === "activeLoans" && <ActiveLoansPanel api={api} />}
-  {tab === "holds" && <HoldsPanel api={api} />}
+  {tab === "holds" && <HoldsPanel api={api} onChanged={loadCounts} />}
   {tab === "reservations" && <ReservationsPanel api={api} staffUser={user} />}
   {tab === "reports" && <ReportsPanel api={api} />}
-  {tab === "pendingCheckouts" && <PendingCheckoutsPanel api={api} />}
+  {tab === "pendingCheckouts" && <PendingCheckoutsPanel api={api} onChanged={loadCounts} />}
   {tab === "addItem" && <AddItemPanel api={api} />}
   {tab === "editItem" && <EditItemPanel api={api} />}
   {tab === "removeItem" && <RemoveItemPanel api={api} />}
@@ -237,7 +242,7 @@ export default function EmployeeDashboard() {
   );
 }
 
-function PendingCheckoutsPanel({ api }) {
+function PendingCheckoutsPanel({ api, onChanged }) {
   const [rows, setRows] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
@@ -260,6 +265,9 @@ function PendingCheckoutsPanel({ api }) {
     try {
       await api('staff/loans/approve', { method: 'POST', body: { transaction_id } });
       await load();
+      if (typeof onChanged === 'function') {
+        try { onChanged(); } catch { /* no-op */ }
+      }
       alert('Approved');
     } catch (e) {
       alert(e?.data?.message || e?.message || 'Approval failed');

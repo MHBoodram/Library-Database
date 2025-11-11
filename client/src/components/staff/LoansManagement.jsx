@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Field } from "./shared/CommonComponents";
 import { formatDate } from "../../utils";
 
-export function CheckoutPanel({ api, staffUser }) {
+export function CheckoutPanel({ api, staffUser, onChanged }) {
   const [patronQuery, setPatronQuery] = useState("");
   const [patronResults, setPatronResults] = useState([]);
   const [patronLoading, setPatronLoading] = useState(false);
@@ -86,6 +86,9 @@ export function CheckoutPanel({ api, staffUser }) {
       setSelectedItem(null);
       setCopyOptions([]);
       setManualForm({ user_id: "", identifier_type: manualForm.identifier_type, identifier_value: "" });
+      if (typeof onChanged === 'function') {
+        try { onChanged(); } catch { /* no-op */ }
+      }
     } catch (err) {
       const code = err?.data?.error;
       const serverMessage = err?.data?.message;
@@ -305,7 +308,7 @@ export function CheckoutPanel({ api, staffUser }) {
   );
 }
 
-export function ReturnLoanPanel({ api, staffUser }) {
+export function ReturnLoanPanel({ api, staffUser, onChanged }) {
   const [form, setForm] = useState({ loan_id: "" });
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
@@ -364,6 +367,9 @@ export function ReturnLoanPanel({ api, staffUser }) {
       setForm({ loan_id: "" });
       setSearchResults([]);
       setSearchQuery("");
+      if (typeof onChanged === 'function') {
+        try { onChanged(); } catch { /* no-op */ }
+      }
     } catch (err) {
       const code = err?.data?.error;
       const serverMessage = err?.data?.message;
