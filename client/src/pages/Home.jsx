@@ -119,7 +119,7 @@ const featuredBooksSeed = [
 ];
 
 export default function Home() {
-  const { user, useApi } = useAuth();
+  const { user, useApi: api } = useAuth();
   const navigate = useNavigate();
   const [selectedBook, setSelectedBook] = useState(null);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
@@ -137,12 +137,12 @@ export default function Home() {
       for (const book of featuredBooksSeed) {
         try {
           const params = new URLSearchParams({ title: book.title });
-          const items = await useApi(`items?${params.toString()}`);
+          const items = await api(`items?${params.toString()}`);
           const list = Array.isArray(items?.rows) ? items.rows : Array.isArray(items) ? items : [];
           const exact = list.find(it => (it.title || "").toLowerCase() === book.title.toLowerCase());
           const item = exact || list[0];
           if (item) {
-            const copies = await useApi(`items/${item.item_id}/copies`);
+            const copies = await api(`items/${item.item_id}/copies`);
             const copyList = Array.isArray(copies) ? copies : [];
             const totalInStock = copyList.filter(c => (c.status || '').toLowerCase() !== 'lost').length;
             const availableCount = copyList.filter(c => (c.status || '').toLowerCase() === 'available').length;
@@ -162,7 +162,7 @@ export default function Home() {
     }
     loadAll();
     return () => { cancel = true; };
-  }, [useApi, preloadComplete]);
+  }, [api, preloadComplete]);
 
   const handleBookClick = (book) => {
     // Reset modal state and initiate a fresh availability fetch
@@ -193,7 +193,7 @@ export default function Home() {
       try {
         // Find the item by title (prefer exact title match; fall back to first result)
         const params = new URLSearchParams({ title: selectedBook.title });
-        const items = await useApi(`items?${params.toString()}`);
+        const items = await api(`items?${params.toString()}`);
         const list = Array.isArray(items?.rows) ? items.rows : Array.isArray(items) ? items : [];
         if (list.length === 0) {
           if (!cancelled) {
@@ -206,7 +206,7 @@ export default function Home() {
         const exact = list.find(it => (it.title || "").toLowerCase() === selectedBook.title.toLowerCase());
         const item = exact || list[0];
         // Get copies and compute counts
-        const copies = await useApi(`items/${item.item_id}/copies`);
+        const copies = await api(`items/${item.item_id}/copies`);
         const copyList = Array.isArray(copies) ? copies : [];
         const totalInStock = copyList.filter(c => (c.status || '').toLowerCase() !== 'lost').length;
         const avail = copyList.filter(c => (c.status || '').toLowerCase() === 'available');
@@ -228,7 +228,7 @@ export default function Home() {
     }
     loadAvailability();
     return () => { cancelled = true; };
-  }, [selectedBook, availabilityLoaded, useApi]);
+  }, [selectedBook, availabilityLoaded, api]);
 
   const handleCheckout = async () => {
     if (!user) {
@@ -245,7 +245,7 @@ export default function Home() {
     setCheckoutLoading(true);
     try {
       // Get available copies using the item_id we already have
-      const copies = await useApi(`items/${selectedBook.item_id}/copies`);
+      const copies = await api(`items/${selectedBook.item_id}/copies`);
       const copyList = Array.isArray(copies) ? copies : [];
       const availableCopy = copyList.find(c => c.status === 'available');
 
@@ -262,7 +262,7 @@ export default function Home() {
         identifier_type: 'copy_id'
       };
       
-      await useApi('loans/checkout', {
+      await api('loans/checkout', {
         method: 'POST',
         body: checkoutData
       });
