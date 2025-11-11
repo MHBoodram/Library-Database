@@ -18,6 +18,8 @@ import {
   listMyReservations,
   cancelReservation,
   deleteReservation,
+  getRoomAvailability,
+  getRoomAvailabilityPatron,
 } from "./api/reservations.js";
 import { createRoom, listRooms } from "./api/rooms.js";
 import { createAuthor, getItemAuthors, deleteItemAuthor } from "./api/authors.js";
@@ -76,6 +78,7 @@ r.add("GET", "/api/staff/patrons/search", searchPatrons(JWT_SECRET));
 r.add("GET", "/api/staff/fines", listFines(JWT_SECRET));
 r.add("GET", "/api/staff/loans/active", listActiveLoans(JWT_SECRET));
 r.add("GET", "/api/staff/reservations", listReservations(JWT_SECRET));
+r.add("GET", "/api/staff/reservations/availability", getRoomAvailability(JWT_SECRET));
 r.add("POST", "/api/staff/reservations", createReservation(JWT_SECRET));
 r.add("DELETE", "/api/staff/reservations/:id", deleteReservation(JWT_SECRET));
 r.add("POST", "/api/staff/rooms", createRoom(JWT_SECRET));
@@ -88,6 +91,7 @@ r.add("POST", "/api/manage/accounts/:id/flag", flagAccount(JWT_SECRET));
 
 r.add("POST", "/api/reservations", createReservationSelf(JWT_SECRET));
 r.add("GET", "/api/reservations/my", listMyReservations(JWT_SECRET));
+r.add("GET", "/api/reservations/availability", getRoomAvailabilityPatron(JWT_SECRET));
 r.add("PATCH", "/api/reservations/:id/cancel", cancelReservation(JWT_SECRET));
 
 r.add("GET", "/api/rooms", listRooms());

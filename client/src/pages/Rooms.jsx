@@ -1,20 +1,313 @@
-import { useEffect,useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
 import "./Rooms.css";
 
+function RoomCalendarViewPatron({ useApi, onReservationCreated }) {
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [rooms, setRooms] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [filterCapacity, setFilterCapacity] = useState("");
+  const [filterFeatures, setFilterFeatures] = useState("");
+
+  // Fetch room availability for selected date
+  useEffect(() => {
+    const fetchAvailability = async () => {
+      setLoading(true);
+      setError("");
+      try {
+        const data = await useApi(`reservations/availability?date=${selectedDate}`);
+        setRooms(data.rooms || []);
+      } catch (err) {
+        setError(err.message || "Failed to load room availability");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchAvailability();
+  }, [useApi, selectedDate]);
+
+  // Navigation helpers
+  const changeDate = (days) => {
+    const current = new Date(selectedDate);
+    current.setDate(current.getDate() + days);
+    setSelectedDate(current.toISOString().split('T')[0]);
+  };
+
+  // Filter rooms
+  const filteredRooms = rooms.filter(room => {
+    if (filterCapacity && room.capacity < Number(filterCapacity)) return false;
+    if (filterFeatures && !(room.features || "").toLowerCase().includes(filterFeatures.toLowerCase())) return false;
+    return true;
+  });
+
+  // Generate time slots based on library operation hours for the selected date
+  const timeSlots = [];
+  const dateObj = new Date(selectedDate);
+  const dayOfWeek = dateObj.getDay();
+  
+  let startHour, endHour;
+  
+  // Monday - Friday: 7:00 AM - 6:00 PM
+  if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+    startHour = 7;
+    endHour = 18;
+  }
+  // Saturday: 9:00 AM - 6:00 PM
+  else if (dayOfWeek === 6) {
+    startHour = 9;
+    endHour = 18;
+  }
+  // Sunday: 10:00 AM - 6:00 PM
+  else if (dayOfWeek === 0) {
+    startHour = 10;
+    endHour = 18;
+  }
+  
+  for (let hour = startHour; hour <= endHour; hour++) {
+    timeSlots.push(hour);
+  }
+
+  // Check if a time slot is reserved
+  const isReserved = (reservations, hour) => {
+    const slotStart = new Date(`${selectedDate}T${String(hour).padStart(2, '0')}:00:00`);
+    const slotEnd = new Date(`${selectedDate}T${String(hour + 1).padStart(2, '0')}:00:00`);
+    
+    return reservations.some(res => {
+      const resStart = new Date(res.start_time);
+      const resEnd = new Date(res.end_time);
+      // Check if reservation overlaps with this hour slot
+      return resStart < slotEnd && resEnd > slotStart;
+    });
+  };
+
+  // Check if reservation belongs to current user
+  const isMine = (reservations, hour) => {
+    const slotStart = new Date(`${selectedDate}T${String(hour).padStart(2, '0')}:00:00`);
+    const slotEnd = new Date(`${selectedDate}T${String(hour + 1).padStart(2, '0')}:00:00`);
+    
+    return reservations.some(res => {
+      const resStart = new Date(res.start_time);
+      const resEnd = new Date(res.end_time);
+      return res.is_mine && resStart < slotEnd && resEnd > slotStart;
+    });
+  };
+
+  // Check if time slot is in the past or outside operation hours
+  const isSlotBookable = (hour) => {
+    const now = new Date();
+    const slotStart = new Date(`${selectedDate}T${String(hour).padStart(2, '0')}:00:00`);
+    
+    // Check if slot is in the past
+    if (slotStart < now) {
+      return false;
+    }
+
+    // Get day of week (0 = Sunday, 1 = Monday, etc.)
+    const dayOfWeek = slotStart.getDay();
+    
+    // Check library operation hours
+    // Monday - Friday: 7:00 AM - 6:00 PM
+    if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+      if (hour < 7 || hour > 18) {
+        return false;
+      }
+    }
+    // Saturday: 9:00 AM - 6:00 PM
+    else if (dayOfWeek === 6) {
+      if (hour < 9 || hour > 18) {
+        return false;
+      }
+    }
+    // Sunday: 10:00 AM - 6:00 PM
+    else if (dayOfWeek === 0) {
+      if (hour < 10 || hour > 18) {
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  // Handle slot click for booking
+  const handleSlotClick = async (room, hour) => {
+    const startTime = `${selectedDate}T${String(hour).padStart(2, '0')}:00:00`;
+    const endHour = hour + 1; // Changed to 1-hour booking
+    const endTime = `${selectedDate}T${String(endHour).padStart(2, '0')}:00:00`;
+
+    if (!confirm(`Book ${room.room_number} from ${hour}:00 to ${endHour}:00?`)) return;
+
+    try {
+      await useApi("reservations", {
+        method: "POST",
+        body: {
+          room_id: room.room_id,
+          start_time: startTime,
+          end_time: endTime,
+        },
+      });
+      alert("Reservation created successfully!");
+      // Refresh availability
+      const data = await useApi(`reservations/availability?date=${selectedDate}`);
+      setRooms(data.rooms || []);
+      if (onReservationCreated) onReservationCreated();
+    } catch (err) {
+      const code = err?.data?.error;
+      const msg = err?.data?.message || err.message;
+      if (code === "reservation_conflict") {
+        alert(msg || "Room already booked for that time.");
+      } else if (code === "duration_exceeded") {
+        alert(msg || "Reservation exceeds 2-hour limit.");
+      } else if (code === "outside_library_hours") {
+        alert(msg || "Outside library hours.");
+      } else {
+        alert(msg || "Failed to create reservation.");
+      }
+    }
+  };
+
+  return (
+    <div className="calendar-container">
+      <div className="calendar-header">
+        <h2 className="calendar-title">Room Availability Calendar</h2>
+        
+        {/* Date Navigation */}
+        <div className="calendar-nav">
+          <button 
+            onClick={() => changeDate(-1)} 
+            className="calendar-btn"
+            disabled={selectedDate <= new Date().toISOString().split('T')[0]}
+          >
+            ← Previous Day
+          </button>
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            min={new Date().toISOString().split('T')[0]}
+            className="calendar-date-input"
+          />
+          <button onClick={() => changeDate(1)} className="calendar-btn">
+            Next Day →
+          </button>
+          <button
+            onClick={() => setSelectedDate(new Date().toISOString().split('T')[0])}
+            className="calendar-btn calendar-btn-primary"
+          >
+            Today
+          </button>
+        </div>
+
+        {/* Filters */}
+        <div className="calendar-filters">
+          <div className="filter-group">
+            <label>Min Capacity</label>
+            <input
+              type="number"
+              min="0"
+              placeholder="Any"
+              value={filterCapacity}
+              onChange={(e) => setFilterCapacity(e.target.value)}
+              className="filter-input"
+            />
+          </div>
+          <div className="filter-group">
+            <label>Features</label>
+            <input
+              type="text"
+              placeholder="Search..."
+              value={filterFeatures}
+              onChange={(e) => setFilterFeatures(e.target.value)}
+              className="filter-input"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Calendar Grid */}
+      <div className="calendar-body">
+        {loading ? (
+          <div className="calendar-loading">Loading availability...</div>
+        ) : error ? (
+          <div className="calendar-error">{error}</div>
+        ) : filteredRooms.length === 0 ? (
+          <div className="calendar-empty">No rooms available</div>
+        ) : (
+          <div className="calendar-grid">
+            {/* Time header */}
+            <div className="calendar-grid-header">
+              <div className="calendar-cell-room-label">Room</div>
+              {timeSlots.map(hour => (
+                <div key={hour} className="calendar-cell-time">
+                  {hour > 12 ? `${hour - 12}PM` : hour === 12 ? '12PM' : `${hour}AM`}
+                </div>
+              ))}
+            </div>
+
+            {/* Room rows */}
+            {filteredRooms.map(room => (
+              <div key={room.room_id} className="calendar-grid-row">
+                <div className="calendar-cell-room">
+                  <div className="room-number">{room.room_number}</div>
+                  {room.capacity && <div className="room-capacity">Cap: {room.capacity}</div>}
+                </div>
+                {timeSlots.map(hour => {
+                  const reserved = isReserved(room.reservations, hour);
+                  const mine = isMine(room.reservations, hour);
+                  const bookable = isSlotBookable(hour);
+                  const disabled = reserved || !bookable;
+                  
+                  return (
+                    <button
+                      key={hour}
+                      onClick={() => !disabled && handleSlotClick(room, hour)}
+                      className={`calendar-cell-slot ${
+                        mine
+                          ? 'slot-mine'
+                          : reserved
+                          ? 'slot-reserved'
+                          : !bookable
+                          ? 'slot-unavailable'
+                          : 'slot-available'
+                      }`}
+                      disabled={disabled}
+                      title={
+                        mine 
+                          ? 'Your reservation' 
+                          : reserved 
+                          ? 'Reserved' 
+                          : !bookable 
+                          ? 'Past time or outside library hours' 
+                          : 'Click to book'
+                      }
+                    >
+                      {mine ? '★' : reserved ? '✗' : !bookable ? '—' : '✓'}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="calendar-legend">
+        <strong>Legend:</strong>{' '}
+        <span className="legend-item legend-available">✓ Available</span>{' '}
+        <span className="legend-item legend-reserved">✗ Reserved</span>{' '}
+        <span className="legend-item legend-mine">★ Your Reservation</span>{' '}
+        <span className="legend-item legend-unavailable">— Unavailable</span>{' '}
+        | Click available slots to create 1-hour reservations
+      </div>
+    </div>
+  );
+}
+
 export default function Rooms() {
   const { token, useApi } = useAuth();
   const navigate = useNavigate();
-
-  const [rooms, setRooms] = useState([]);
-  const [room_id, setRoomId] = useState("");
-  const [start_time, setStart] = useState("");
-  const [end_time, setEnd] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
 
   // My reservations state
   const [myReservations, setMyReservations] = useState([]);
@@ -27,17 +320,7 @@ export default function Rooms() {
       navigate("/login");
       return;
     }
-    (async () => {
-      try {
-        const data = await useApi("rooms");
-        setRooms(Array.isArray(data) ? data : []);
-      } catch (err) {
-        setError(err?.message || "Failed to load rooms.");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [token, useApi, navigate]);
+  }, [token, navigate]);
 
   // Fetch user's reservations
   useEffect(() => {
@@ -57,35 +340,6 @@ export default function Rooms() {
     })();
   }, [token, useApi, refreshFlag]);
 
-  async function submit(e) {
-    e.preventDefault();
-    setError("");
-    setMessage("");
-    try {
-      await useApi("reservations", {
-        method: "POST",
-        body: { room_id: Number(room_id), start_time, end_time },
-      });
-      setMessage("Reservation created.");
-      setRoomId("");
-      setStart("");
-      setEnd("");
-      setRefreshFlag((f) => f + 1); // Refresh reservations list
-    } catch (err) {
-      const code = err?.data?.error;
-      const msg = err?.data?.message || err?.message;
-      if (code === "reservation_conflict") {
-        setError(msg || "That room is already booked for that time.");
-      } else if (code === "invalid_timespan") {
-        setError(msg || "End time must be after start time.");
-      } else if (code === "outside_library_hours") {
-        setError(msg || "Reservation is outside library operating hours.");
-      } else {
-        setError(msg || "Failed to create reservation.");
-      }
-    }
-  }
-
   async function cancelReservation(reservationId) {
     if (!confirm("Are you sure you want to cancel this reservation?")) {
       return;
@@ -93,11 +347,11 @@ export default function Rooms() {
 
     try {
       await useApi(`reservations/${reservationId}/cancel`, { method: "PATCH" });
-      setMessage("Reservation cancelled successfully.");
+      alert("Reservation cancelled successfully.");
       setRefreshFlag((f) => f + 1); // Refresh reservations list
     } catch (err) {
       const msg = err?.data?.message || err?.message;
-      setError(msg || "Failed to cancel reservation.");
+      alert(msg || "Failed to cancel reservation.");
     }
   }
 
@@ -111,7 +365,8 @@ export default function Rooms() {
     <div className="rooms-page">
       <NavBar />
       <h1>Reserve a Study Room</h1>
-      <p>Pick a room and choose a time window</p>
+      
+      {/* Library Hours Info */}
       <div className="rooms-info-banner">
         <strong>Library Hours:</strong>
         <div className="hours">
@@ -120,42 +375,12 @@ export default function Rooms() {
           Sunday: 10:00 AM - 6:00 PM
         </div>
         <div className="note">
-          Note: Reservations must be within operating hours and cannot span multiple days.
+          Note: Reservations must be within operating hours, cannot span multiple days, and are limited to a maximum of 2 hours.
         </div>
       </div>
 
-      {loading ? (
-        <div className="rooms-loading">Loading…</div>
-      ) : error ? (
-        <div className="rooms-error">{error}</div>
-      ) : (
-        <form onSubmit={submit} className="rooms-form">
-          <div className="rooms-form-field full-width">
-            <label>Room</label>
-            <select value={room_id} onChange={(e) => setRoomId(e.target.value)} required>
-              <option value="" disabled>Select a room…</option>
-              {rooms.map((r) => (
-                <option key={r.room_id} value={r.room_id}>
-                  {r.room_number} {r.capacity ? `(cap ${r.capacity})` : ""}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="rooms-form-field">
-            <label>Start</label>
-            <input type="datetime-local" value={start_time} onChange={(e) => setStart(e.target.value)} required />
-          </div>
-          <div className="rooms-form-field">
-            <label>End</label>
-            <input type="datetime-local" value={end_time} onChange={(e) => setEnd(e.target.value)} required />
-          </div>
-          <div className="rooms-form-field full-width">
-            <button type="submit" className="rooms-reserve-btn">Reserve</button>
-            {message && <span className="rooms-form-message success">{message}</span>}
-            {error && <span className="rooms-form-message error">{error}</span>}
-          </div>
-        </form>
-      )}
+      {/* Room Calendar Grid */}
+      <RoomCalendarViewPatron useApi={useApi} onReservationCreated={() => setRefreshFlag((f) => f + 1)} />
 
       {/* My Reservations Section */}
       <div className="rooms-reservations-section">

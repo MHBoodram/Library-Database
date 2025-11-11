@@ -2200,7 +2200,6 @@ function Field({ label, children }) {
   );
 }
 
-
 function ReservationsPanel({ api, staffUser }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -2275,6 +2274,8 @@ function ReservationsPanel({ api, staffUser }) {
       const msg = err?.data?.message || err.message;
       if (code === "reservation_conflict") {
         setSubmitError(msg || "That room is already booked for the selected time.");
+      } else if (code === "duration_exceeded") {
+        setSubmitError(msg || "Reservations cannot exceed 2 hours.");
       } else if (code === "invalid_payload" || code === "invalid_timespan") {
         setSubmitError(msg || "Please check the form inputs.");
       } else if (code === "outside_library_hours") {
@@ -2295,7 +2296,7 @@ function ReservationsPanel({ api, staffUser }) {
             Mon-Fri: 7:00 AM - 10:00 PM | Sat: 9:00 AM - 8:00 PM | Sun: 10:00 AM - 6:00 PM
           </div>
           <div className="mt-1 text-xs text-gray-600">
-            Reservations must be within operating hours and cannot span multiple days.
+            Reservations must be within operating hours, cannot span multiple days, and are limited to a maximum of 2 hours.
           </div>
         </div>
         <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
