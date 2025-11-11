@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
-import { getItemCopies } from "../api";
+import { getItemCopies, placeHold } from "../api";
 import "./Books.css";
 
 // Helper to generate cover image URL
@@ -39,6 +39,8 @@ export default function Books() {
   const [copies, setCopies] = useState([]);
   const [copiesLoading, setCopiesLoading] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [holdLoading, setHoldLoading] = useState(false);
+  const [holdMessage, setHoldMessage] = useState("");
 
   // Get unique subjects for filter
   const subjects = [...new Set(items.map(i => i.subject).filter(Boolean))].sort();
@@ -123,6 +125,8 @@ export default function Books() {
   function closeModal() {
     setSelectedItem(null);
     setCopies([]);
+    setHoldMessage("");
+    setHoldLoading(false);
   }
 
   async function checkoutCopy(copy_id) {
@@ -146,6 +150,21 @@ export default function Books() {
       }
     } finally {
       setCheckoutLoading(false);
+    }
+  }
+
+  async function placeHoldForItem(item) {
+    if (!item) return;
+    setHoldLoading(true);
+    setHoldMessage("");
+    try {
+      await placeHold(token, item.item_id);
+      setHoldMessage("Hold placed! We'll notify you when a copy is ready.");
+    } catch (err) {
+      const msg = err?.data?.message || err?.message || "Failed to place hold.";
+      setHoldMessage(msg);
+    } finally {
+      setHoldLoading(false);
     }
   }
 
@@ -357,7 +376,19 @@ export default function Books() {
                       </button>
                     </div>
                   ) : (
-                    <p className="catalog-unavailable-text">No copies currently available for checkout</p>
+                    <div className="catalog-availability-section">
+                      <p className="catalog-unavailable-text">No copies currently available for checkout.</p>
+                      <button
+                        onClick={() => placeHoldForItem(selectedItem)}
+                        disabled={holdLoading}
+                        className="catalog-hold-btn"
+                      >
+                        {holdLoading ? "Placing hold..." : "Place Hold"}
+                      </button>
+                      {holdMessage && (
+                        <p className="catalog-hold-message">{holdMessage}</p>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>

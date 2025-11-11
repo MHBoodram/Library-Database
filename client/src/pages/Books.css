@@ -515,8 +515,36 @@
 
 .catalog-unavailable-text {
   font-size: 0.95rem;
-  color: var(--gray-600);
+  color: var(--error-main);
   margin: 0;
+}
+
+.catalog-hold-btn {
+  padding: 12px 24px;
+  border-radius: 999px;
+  border: 1px solid var(--primary-main);
+  background: white;
+  color: var(--primary-main);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  align-self: flex-start;
+}
+
+.catalog-hold-btn:hover:not(:disabled) {
+  background: var(--primary-main);
+  color: white;
+}
+
+.catalog-hold-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.catalog-hold-message {
+  font-size: 0.9rem;
+  color: var(--gray-700);
 }
 
 .catalog-checkout-btn-large {

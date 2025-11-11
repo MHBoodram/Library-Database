@@ -56,6 +56,13 @@ export const deleteItem = (token, id) =>
 export const login = (email, password) =>
   api("/auth/login", { method: "POST", body: { email, password } });
 
+export const placeHold = (token, item_id) =>
+  api("/holds/place", {
+    method: "POST",
+    token,
+    body: { item_id },
+  });
+
 export const createReservation = (token, payload) =>
   api("/staff/reservations", { method: "POST", token, body: payload });
 
