@@ -24,7 +24,6 @@ import {
 import { createRoom, listRooms } from "./api/rooms.js";
 import { createAuthor, getItemAuthors, deleteItemAuthor } from "./api/authors.js";
 import { adminOverview, listEmployees as adminEmployees, createAccount as adminCreateAccount, listAccountCreations } from "./api/admin.js";
-import { listActivity, logRequestActivity } from "./api/activity.js";
 import { getProfile, updateProfile } from "./api/profile.js";
 import { listAccounts, updateAccount as updateManagedAccount, flagAccount } from "./api/manageAcc.js";
 import { searchPatrons } from "./api/patrons.js";
@@ -107,24 +106,11 @@ const server = http.createServer(async (req, res) => {
   const match = r.match(req.method, url.pathname);
   if (!match) return sendJSON(res, 404, { error: "not_found" });
 
-  let status = 200;
   try {
     await match.handler(req, res, match.params);
-    status = res.statusCode;
   } catch (err) {
     console.error("Server error:", err);
-    status = 500;
     sendJSON(res, 500, { error: "server_error" });
-  } finally {
-    // Fire-and-forget logging (doesn't block response)
-    const user = getAuthUser(req, JWT_SECRET);
-    logRequestActivity({
-      method: req.method,
-      path: url.pathname,
-      status,
-      ip: req.headers["x-forwarded-for"]?.split(",")[0] || req.socket.remoteAddress || "",
-      user,
-    }).catch(() => {});
   }
 });
 
