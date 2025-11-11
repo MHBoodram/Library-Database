@@ -436,25 +436,57 @@ export const fetchUserLoans = (JWT_SECRET) => async (req, res) => {
   if (!userId) return sendJSON(res, 400, { error: "invalid_user" });
 
   try {
+    // Include outstanding fine totals per loan so the UI can surface what each borrower still owes.
     const sql = `
-    SELECT i.title AS item_title , l.due_date, l.return_date, l.status
-    FROM user u
-    INNER JOIN loan l ON l.user_id = u.user_id
-    INNER JOIN copy c ON c.copy_id = l.copy_id
-    INNER JOIN item i ON i.item_id = c.item_id
-    WHERE u.user_id = ?
-    ORDER BY
-      CASE
-        WHEN l.return_date IS NULL and l.due_date < NOW() THEN 1
-        WHEN l.return_date IS NULL and l.due_date >= NOW() THEN 2
-        WHEN l.return_date IS NOT NULL THEN 3
-      END,
-      l.due_date ASC
-    LIMIT 50
-    `
+      SELECT 
+        l.loan_id,
+        i.title AS item_title,
+        l.due_date,
+        l.return_date,
+        l.status,
+        COALESCE(fines.outstanding_amount, 0) AS outstanding_fine
+      FROM user u
+      INNER JOIN loan l ON l.user_id = u.user_id
+      INNER JOIN copy c ON c.copy_id = l.copy_id
+      INNER JOIN item i ON i.item_id = c.item_id
+      LEFT JOIN (
+        SELECT
+          f.loan_id,
+          SUM(
+            GREATEST(
+              COALESCE(f.amount_assessed, 0) - COALESCE(pay.paid_total, 0),
+              0
+            )
+          ) AS outstanding_amount
+        FROM fine f
+        LEFT JOIN (
+          SELECT
+            fine_id,
+            SUM(
+              CASE 
+                WHEN type = 'refund' THEN -COALESCE(amount, 0)
+                ELSE COALESCE(amount, 0)
+              END
+            ) AS paid_total
+          FROM fine_payment
+          GROUP BY fine_id
+        ) pay ON pay.fine_id = f.fine_id
+        WHERE f.status NOT IN ('paid', 'waived', 'written_off')
+        GROUP BY f.loan_id
+      ) fines ON fines.loan_id = l.loan_id
+      WHERE u.user_id = ?
+      ORDER BY
+        CASE
+          WHEN l.return_date IS NULL AND l.due_date < NOW() THEN 1
+          WHEN l.return_date IS NULL AND l.due_date >= NOW() THEN 2
+          WHEN l.return_date IS NOT NULL THEN 3
+        END,
+        l.due_date ASC
+      LIMIT 50
+    `;
     const [rows] = await pool.query(sql, [userId]);
     return sendJSON(res, 200, { rows });
-    }catch (err) {
+  } catch (err) {
       console.error("Failed to list user loans:", err.message);
       return sendJSON(res, 500, { error: "user_loans_query_failed" });
   }

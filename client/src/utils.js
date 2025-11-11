@@ -15,3 +15,10 @@ export function formatDateTime(value) {
   if (Number.isNaN(date.getTime())) return String(value);
   return date.toLocaleString();
 }
+
+export function formatCurrency(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "$0.00";
+  return num.toLocaleString(undefined, { style: "currency", currency: "USD" });
+}
+

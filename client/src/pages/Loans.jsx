@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
-import { formatDate, formatDateTime } from "../utils";
+import { formatDate, formatDateTime, formatCurrency } from "../utils";
 import "./Loans.css";
 import { listMyHolds, cancelMyHold } from "../api";
 
@@ -99,11 +99,12 @@ export default function Loans() {
                 <Th>Due Date</Th>
                 <Th>Return Date</Th>
                 <Th>Status</Th>
+                <Th>Fine Amount</Th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
-                <tr><td colSpan={4} className="loans-empty-state">{loading ? "" : "No loans found."}</td></tr>
+                <tr><td colSpan={5} className="loans-empty-state">{loading ? "" : "No loans found."}</td></tr>
               ) : (
                 rows.map((r) => (
                   <tr key={r.loan_id}>
@@ -115,6 +116,7 @@ export default function Loans() {
                         {r.status}
                       </span>
                     </Td>
+                    <Td>{formatCurrency(r.outstanding_fine ?? 0)}</Td>
                   </tr>
                 ))
               )}
