@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { StatCard } from "./shared/CommonComponents";
 import { ACCOUNT_ROLE_OPTIONS, EMPLOYEE_ROLE_OPTIONS } from "./shared/constants";
@@ -23,6 +23,18 @@ export default function AdminPanel({ api }) {
   const [form, setForm] = useState(DEFAULT_ADMIN_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [formStatus, setFormStatus] = useState({ type: null, text: "" });
+  const [adminTab, setAdminTab] = useState("overview"); // "overview" | "activity"
+  const [activityRows, setActivityRows] = useState([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityStartDate, setActivityStartDate] = useState(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 1);
+    return d.toISOString().slice(0, 10);
+  });
+  const [activityEndDate, setActivityEndDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [activityStaffFilter, setActivityStaffFilter] = useState("all");
+  const [activityPage, setActivityPage] = useState(1);
+  const ITEMS_PER_PAGE = 50;
 
   const accountType = form.account_type;
 
@@ -53,10 +65,94 @@ export default function AdminPanel({ api }) {
         if (alive) setLoading(false);
       }
     })();
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
   }, [api, refreshKey]);
+
+  // Load activity when tab is opened - using new comprehensive activity endpoint
+  useEffect(() => {
+    if (!api || adminTab !== "activity") return;
+    let alive = true;
+    setActivityLoading(true);
+    (async () => {
+      try {
+        const params = new URLSearchParams({ start_date: activityStartDate, end_date: activityEndDate });
+        const activityData = await api(`admin/activity?${params.toString()}`);
+        if (!alive) return;
+        
+        // Map activity rows from the new comprehensive endpoint
+        const rows = Array.isArray(activityData?.rows) ? activityData.rows : [];
+        const mapped = rows.map(r => ({
+          ts: r.activity_date,
+          staff: [r.staff_first_name, r.staff_last_name].filter(Boolean).join(" ") || "—",
+          staff_role: r.staff_role || "staff",
+          action: r.activity_type,
+          patron: [r.patron_first_name, r.patron_last_name].filter(Boolean).join(" ") || `#${r.patron_id}`,
+          item_title: r.item_title,
+          copy_id: r.copy_id,
+          loan_id: r.loan_id,
+          room_number: r.room_number,
+          reservation_id: r.reservation_id,
+        }));
+
+        setActivityRows(mapped);
+        setActivityPage(1); // Reset to first page when data reloads
+      } catch (err) {
+        if (!alive) return;
+        setError(err?.data?.error || err?.message || "Failed to load activity log");
+      } finally {
+        if (alive) setActivityLoading(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, [api, adminTab, activityStartDate, activityEndDate, refreshKey]);
+
+  // Reset page when filter changes
+  useEffect(() => {
+    setActivityPage(1);
+  }, [activityStaffFilter]);
+
+  const activitySummary = useMemo(() => {
+    const filtered = activityStaffFilter === "all" 
+      ? activityRows 
+      : activityRows.filter(r => r.staff_role === activityStaffFilter);
+    
+    const byStaff = new Map();
+    let checkouts = 0, returns = 0, accountsCreated = 0, reservations = 0, copiesAdded = 0;
+    for (const r of filtered) {
+      const key = r.staff || '—';
+      const acc = byStaff.get(key) || { staff: key, total: 0, checkouts: 0, returns: 0, accounts: 0, reservations: 0, copies: 0 };
+      acc.total += 1;
+      if (r.action === 'CHECKOUT') { acc.checkouts += 1; checkouts += 1; }
+      if (r.action === 'RETURN') { acc.returns += 1; returns += 1; }
+      if (r.action === 'ACCOUNT_CREATED') { acc.accounts += 1; accountsCreated += 1; }
+      if (r.action === 'RESERVATION_CREATED') { acc.reservations += 1; reservations += 1; }
+      if (r.action === 'COPY_ADDED') { acc.copies += 1; copiesAdded += 1; }
+      byStaff.set(key, acc);
+    }
+    
+    const staffRoles = new Set(activityRows.map(r => r.staff_role).filter(Boolean));
+    
+    // Pagination
+    const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+    const startIdx = (activityPage - 1) * ITEMS_PER_PAGE;
+    const endIdx = startIdx + ITEMS_PER_PAGE;
+    const paginatedRows = filtered.slice(startIdx, endIdx);
+    
+    return { 
+      total: filtered.length, 
+      checkouts, 
+      returns, 
+      accountsCreated,
+      reservations,
+      copiesAdded,
+      byStaff: Array.from(byStaff.values()).sort((a,b)=>b.total-a.total).slice(0,10),
+      filteredRows: paginatedRows,
+      allFilteredRows: filtered,
+      availableRoles: Array.from(staffRoles).sort(),
+      totalPages,
+      currentPage: activityPage,
+    };
+  }, [activityRows, activityStaffFilter, activityPage, ITEMS_PER_PAGE]);
 
   const triggerRefresh = () => setRefreshKey((key) => key + 1);
 
@@ -110,6 +206,151 @@ export default function AdminPanel({ api }) {
 
   return (
     <section className="space-y-4">
+      {/* Sub-tabs */}
+      <div className="flex gap-2">
+        {[{k:"overview",label:"Overview"},{k:"activity",label:"Activity Log"}].map(t => (
+          <button
+            key={t.k}
+            onClick={() => setAdminTab(t.k)}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${adminTab===t.k?"bg-blue-600 text-white":"bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
+          >
+            {t.label}
+          </button>
+        ))}
+        {adminTab === "activity" && (
+          <div className="ml-auto flex items-end gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Staff Role</label>
+              <select value={activityStaffFilter} onChange={(e)=>setActivityStaffFilter(e.target.value)} className="rounded-md border-2 bg-white px-3 py-2 text-sm">
+                <option value="all">All Roles</option>
+                {activitySummary.availableRoles.map(role => (
+                  <option key={role} value={role}>{role}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
+              <input type="date" value={activityStartDate} onChange={(e)=>setActivityStartDate(e.target.value)} className="rounded-md border-2 bg-white px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
+              <input type="date" value={activityEndDate} onChange={(e)=>setActivityEndDate(e.target.value)} className="rounded-md border-2 bg-white px-3 py-2 text-sm" />
+            </div>
+            <button
+              onClick={() => setRefreshKey(k=>k+1)}
+              className="px-3 py-2 rounded-md bg-gray-100 hover:bg-gray-200 text-sm"
+              disabled={activityLoading}
+            >
+              {activityLoading?"Refreshing…":"Refresh"}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {adminTab === "activity" ? (
+        <div className="rounded-lg border bg-white p-4 shadow-sm">
+          <h3 className="font-semibold mb-2">Recent Staff Activity</h3>
+          <p className="text-sm text-gray-500 mb-3">Comprehensive activity log including loans, reservations, item management, and accounts.</p>
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-3">
+            <div className="rounded-md border bg-white p-3 text-sm"><div className="text-gray-500">Total</div><div className="text-xl font-semibold">{activitySummary.total}</div></div>
+            <div className="rounded-md border bg-white p-3 text-sm"><div className="text-gray-500">Checkouts</div><div className="text-xl font-semibold">{activitySummary.checkouts}</div></div>
+            <div className="rounded-md border bg-white p-3 text-sm"><div className="text-gray-500">Returns</div><div className="text-xl font-semibold">{activitySummary.returns}</div></div>
+            <div className="rounded-md border bg-white p-3 text-sm"><div className="text-gray-500">Reservations</div><div className="text-xl font-semibold">{activitySummary.reservations}</div></div>
+            <div className="rounded-md border bg-white p-3 text-sm"><div className="text-gray-500">Copies Added</div><div className="text-xl font-semibold">{activitySummary.copiesAdded}</div></div>
+            <div className="rounded-md border bg-white p-3 text-sm"><div className="text-gray-500">Accounts</div><div className="text-xl font-semibold">{activitySummary.accountsCreated}</div></div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-50 text-left">
+                <tr>
+                  <th className="px-3 py-2">Time</th>
+                  <th className="px-3 py-2">Staff</th>
+                  <th className="px-3 py-2">Role</th>
+                  <th className="px-3 py-2">Action</th>
+                  <th className="px-3 py-2">Patron/Details</th>
+                  <th className="px-3 py-2">Item/Type</th>
+                  <th className="px-3 py-2">Copy/Room</th>
+                  <th className="px-3 py-2">ID</th>
+                </tr>
+              </thead>
+              <tbody>
+                {activitySummary.filteredRows.length === 0 && (
+                  <tr>
+                    <td className="px-3 py-3 text-center text-gray-500" colSpan={8}>
+                      {activityLoading ? "Loading…" : "No activity found."}
+                    </td>
+                  </tr>
+                )}
+                {activitySummary.filteredRows.map((r, idx) => (
+                  <tr key={idx} className="border-t">
+                    <td className="px-3 py-2">{r.ts ? new Date(r.ts).toLocaleString() : "—"}</td>
+                    <td className="px-3 py-2">{r.staff}</td>
+                    <td className="px-3 py-2 capitalize text-xs">{r.staff_role}</td>
+                    <td className="px-3 py-2">
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+                        r.action==='CHECKOUT'?'bg-blue-100 text-blue-800':
+                        r.action==='RETURN'?'bg-amber-100 text-amber-800':
+                        r.action==='RESERVATION_CREATED'?'bg-purple-100 text-purple-800':
+                        r.action==='COPY_ADDED'?'bg-cyan-100 text-cyan-800':
+                        'bg-green-100 text-green-800'
+                      }`}>
+                        {r.action.replace(/_/g, ' ')}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2">{r.patron}</td>
+                    <td className="px-3 py-2 max-w-[30ch] truncate" title={r.item_title}>{r.item_title}</td>
+                    <td className="px-3 py-2">{r.copy_id ? `#${r.copy_id}` : (r.room_number ? `Room ${r.room_number}` : '—')}</td>
+                    <td className="px-3 py-2">{r.loan_id ? `#${r.loan_id}` : (r.reservation_id ? `#${r.reservation_id}` : '—')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          
+          {/* Pagination Controls */}
+          {activitySummary.totalPages > 1 && (
+            <div className="mt-4 flex items-center justify-between border-t pt-4">
+              <div className="text-sm text-gray-600">
+                Showing {((activitySummary.currentPage - 1) * ITEMS_PER_PAGE) + 1} to {Math.min(activitySummary.currentPage * ITEMS_PER_PAGE, activitySummary.total)} of {activitySummary.total} activities
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setActivityPage(1)}
+                  disabled={activitySummary.currentPage === 1}
+                  className="px-3 py-1 rounded-md border text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                >
+                  First
+                </button>
+                <button
+                  onClick={() => setActivityPage(p => Math.max(1, p - 1))}
+                  disabled={activitySummary.currentPage === 1}
+                  className="px-3 py-1 rounded-md border text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                >
+                  Previous
+                </button>
+                <span className="px-3 py-1 text-sm font-medium">
+                  Page {activitySummary.currentPage} of {activitySummary.totalPages}
+                </span>
+                <button
+                  onClick={() => setActivityPage(p => Math.min(activitySummary.totalPages, p + 1))}
+                  disabled={activitySummary.currentPage === activitySummary.totalPages}
+                  className="px-3 py-1 rounded-md border text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                >
+                  Next
+                </button>
+                <button
+                  onClick={() => setActivityPage(activitySummary.totalPages)}
+                  disabled={activitySummary.currentPage === activitySummary.totalPages}
+                  className="px-3 py-1 rounded-md border text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                >
+                  Last
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
       {error && overview && (
         <div style={{ padding: "0.75rem", borderRadius: 6, background: "#fef2f2", color: "#b91c1c" }}>
           {error}
@@ -356,6 +597,8 @@ export default function AdminPanel({ api }) {
           </div>
         </div>
       </div>
+        </>
+      )}
     </section>
   );
 }

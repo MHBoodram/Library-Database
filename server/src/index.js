@@ -1,7 +1,7 @@
 import "dotenv/config";
 import http from "node:http";
 import { URL } from "node:url";
-import { setCors, sendJSON } from "./lib/http.js";
+import { setCors, sendJSON, getAuthUser } from "./lib/http.js";
 import { router } from "./lib/router.js";
 
 import { login } from "./api/auth.js";
@@ -23,7 +23,7 @@ import {
 } from "./api/reservations.js";
 import { createRoom, listRooms } from "./api/rooms.js";
 import { createAuthor, getItemAuthors, deleteItemAuthor } from "./api/authors.js";
-import { adminOverview, listEmployees as adminEmployees, createAccount as adminCreateAccount } from "./api/admin.js";
+import { adminOverview, listEmployees as adminEmployees, createAccount as adminCreateAccount, listAccountCreations, listAllActivity } from "./api/admin.js";
 import { getProfile, updateProfile } from "./api/profile.js";
 import { listAccounts, updateAccount as updateManagedAccount, flagAccount } from "./api/manageAcc.js";
 import { searchPatrons } from "./api/patrons.js";
@@ -70,6 +70,8 @@ r.add("GET","/api/reports/transactions",listTransactions(JWT_SECRET));
 r.add("GET", "/api/admin/overview", adminOverview(JWT_SECRET));
 r.add("GET", "/api/admin/employees", adminEmployees(JWT_SECRET));
 r.add("POST", "/api/admin/accounts", adminCreateAccount(JWT_SECRET));
+r.add("GET", "/api/admin/accounts/creations", listAccountCreations(JWT_SECRET));
+r.add("GET", "/api/admin/activity", listAllActivity(JWT_SECRET));
 
 r.add("GET", "/api/me", getProfile(JWT_SECRET));
 r.add("PATCH", "/api/me", updateProfile(JWT_SECRET));

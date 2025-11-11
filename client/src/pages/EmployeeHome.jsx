@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useCallback } from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
@@ -214,7 +214,7 @@ export default function EmployeeDashboard() {
       </header>
 
       <main style={{ maxWidth: 1200, margin: '0 auto', padding: '1.5rem' }}>
-  {/* Fines moved under Reports tab */}
+  {tab === "fines" && <FinesPanel api={api} />}
   {tab === "checkout" && <CheckoutPanel api={api} staffUser={user} />}
   {tab === "return" && <ReturnLoanPanel api={api} staffUser={user} />}
   {tab === "activeLoans" && <ActiveLoansPanel api={api} />}
