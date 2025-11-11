@@ -129,10 +129,6 @@ export default function Home() {
   const [dynamicFeatured, setDynamicFeatured] = useState(featuredBooksSeed.map(b => ({ ...b, available: null, total: null })));
   const [availabilityLoaded, setAvailabilityLoaded] = useState(false);
   const [preloadComplete, setPreloadComplete] = useState(false);
-  // Removed per-user request (no longer listing individual copies in modal)
-  // Keep placeholder state if future quick-checkout per copy is reintroduced.
-  // const [availableCopies, setAvailableCopies] = useState([]);
-  // Preload dynamic availability for featured books (best-effort; silent failures)
   useEffect(() => {
     if (preloadComplete) return; // Only run once
     let cancel = false;
@@ -190,7 +186,7 @@ export default function Home() {
     let cancelled = false;
     async function loadAvailability() {
       if (!selectedBook) return;
-      // Guard: if we've already computed availability, skip
+      // if we've already computed availability, skip
       if (availabilityLoaded) return;
       setAvailabilityLoading(true);
       setAvailabilityError("");

@@ -1864,7 +1864,7 @@ function AddItemPanel({ api }) {
                 body: JSON.stringify({ item_id, author_name: authorName }),
               });
               if (!res.ok && res.status !== 409) {
-                // 409 means author already exists, which is fine
+                // 409 means author already exists
                 const msg = await safeError(res);
                 console.warn(`Author creation warning: ${msg}`);
               }
