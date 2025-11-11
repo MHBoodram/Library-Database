@@ -104,9 +104,6 @@ function NavBar() {
                                 <NavLink to="/login" className = {({ isActive }) => (isActive? 'bar-link active' : 'bar-link')}>
                                     Log in
                                 </NavLink>
-                                <NavLink to="/register" className = {({ isActive }) => (isActive? 'bar-link active' : 'bar-link')}>
-                                    Register
-                                </NavLink>
                             </>
                         )}
                     </div>

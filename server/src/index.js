@@ -4,7 +4,7 @@ import { URL } from "node:url";
 import { setCors, sendJSON } from "./lib/http.js";
 import { router } from "./lib/router.js";
 
-import { register, login } from "./api/auth.js";
+import { login } from "./api/auth.js";
 import { createItem, updateItem, deleteItem, listItems, listItemCopies } from "./api/items.js";
 import { createCopy, updateCopy, deleteCopy } from "./api/copies.js";
 import { checkout, returnLoan, fetchUserLoans } from "./api/loans.js";
@@ -36,7 +36,6 @@ const r = router();
 
 r.add("GET", "/api/health", async (_req, res) => sendJSON(res, 200, { ok: true, node: process.version }));
 
-r.add("POST", "/api/auth/register", register());
 r.add("POST", "/api/auth/login", login(JWT_SECRET));
 
 r.add("GET", "/api/items", listItems());

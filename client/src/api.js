@@ -56,13 +56,6 @@ export const deleteItem = (token, id) =>
 export const login = (email, password) =>
   api("/auth/login", { method: "POST", body: { email, password } });
 
-// add this next to login()
-export const register = ({ first_name, last_name, email, password, make_employee = false }) =>
-  api("/auth/register", {
-    method: "POST",
-    body: { first_name, last_name, email, password, make_employee },
-  });
-
 export const createReservation = (token, payload) =>
   api("/staff/reservations", { method: "POST", token, body: payload });
 

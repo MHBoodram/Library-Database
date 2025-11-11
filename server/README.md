@@ -24,9 +24,9 @@ Load schema to MySQL:
 
 ## Auth
 
-- POST /api/auth/register { first_name,last_name,email,password,role }
 - POST /api/auth/login { email,password } -> { token }
-- GET /api/auth/me (Bearer token)
+- GET /api/me (Bearer token)
+- POST /api/admin/accounts (admin-only) to provision new users/staff
 
 ## Data Entry (examples)
 
