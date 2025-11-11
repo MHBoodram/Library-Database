@@ -244,7 +244,6 @@ export default function ReportsPanel({ api }) {
   const [overdueMediaType, setOverdueMediaType] = useState("all");
   const [overdueGraceMode, setOverdueGraceMode] = useState('all'); // beyond | within | all
   const [overdueSortMode, setOverdueSortMode] = useState('most'); // most | least
-  const [borrowersView, setBorrowersView] = useState("overall"); // overall | monthly
 
   // Fines report state
   const [finesStartDate, setFinesStartDate] = useState(() => {
@@ -516,70 +515,7 @@ export default function ReportsPanel({ api }) {
     loadReport('fines');
   }
 
-  // Trend bucketing (week vs month)
-  const trendSeries = useMemo(() => {
-    if (activeReport !== 'overdue') return [];
-    const rows = overdueFilteredRows;
-    if (!rows.length) return [];
-    const parse = (s)=> new Date(s + 'T00:00:00');
-    const minDate = rows.reduce((m,r)=> (m && m < parse(r.due_date) ? m : parse(r.due_date)), null);
-    const maxDate = rows.reduce((m,r)=> (m && m > parse(r.due_date) ? m : parse(r.due_date)), null);
-    const rangeDays = Math.max(1, Math.round((maxDate - minDate)/86400000));
-    const mode = rangeDays <= 90 ? 'week' : 'month';
-    const fmtMonth = (d)=> `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-    const weekStart = (d)=> { const x = new Date(d); const day = (x.getDay()+6)%7; x.setDate(x.getDate()-day); x.setHours(0,0,0,0); return x; };
-    const fmtWeek = (d)=> { const ws = weekStart(d); const y = ws.getFullYear(); const m = String(ws.getMonth()+1).padStart(2,'0'); const dd = String(ws.getDate()).padStart(2,'0'); return `${y}-W${m}-${dd}`; };
-    const buckets = new Map();
-    rows.forEach(r=>{
-      const d = parse(r.due_date);
-      const key = mode === 'week' ? fmtWeek(d) : fmtMonth(d);
-      buckets.set(key, (buckets.get(key)||0)+1);
-    });
-    const labels = Array.from(buckets.keys()).sort();
-    return labels.map(label=>({ label, count: buckets.get(label) }));
-  }, [activeReport, overdueFilteredRows]);
-
-  // Top borrowers overall and by month
-  const topBorrowersData = useMemo(() => {
-    if (activeReport !== 'overdue') return { overall: [], monthly: [] };
-    const rows = overdueFilteredRows;
-    const byBorrower = new Map();
-    rows.forEach(r=>{
-      const id = String(r.patron_id ?? r.user_id);
-      const name = `${r.first_name || ''} ${r.last_name || ''}`.trim() || `#${id}`;
-      const val = byBorrower.get(id) || { id, name, count: 0 };
-      val.count += 1;
-      byBorrower.set(id, val);
-    });
-    const overall = Array.from(byBorrower.values()).sort((a,b)=> b.count - a.count).slice(0,10);
-
-    const fmtMonth = (s)=> { const d = new Date(s + 'T00:00:00'); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; };
-    const byMonth = new Map();
-    rows.forEach(r=>{
-      const m = fmtMonth(r.due_date);
-      const id = String(r.patron_id ?? r.user_id);
-      const name = `${r.first_name || ''} ${r.last_name || ''}`.trim() || `#${id}`;
-      const key = `${m}::${id}`;
-      byMonth.set(key, (byMonth.get(key)||0)+1);
-      if (!byMonth.has(m)) byMonth.set(m, new Map());
-    });
-    // Build monthly list of top borrower
-    const monthlyAgg = new Map();
-    rows.forEach(r=>{
-      const m = fmtMonth(r.due_date);
-      const id = String(r.patron_id ?? r.user_id);
-      const name = `${r.first_name || ''} ${r.last_name || ''}`.trim() || `#${id}`;
-      const monthMap = monthlyAgg.get(m) || new Map();
-      const cur = monthMap.get(id) || { id, name, count: 0 };
-      cur.count += 1; monthMap.set(id, cur); monthlyAgg.set(m, monthMap);
-    });
-    const monthly = Array.from(monthlyAgg.keys()).sort().map(m=>{
-      const list = Array.from(monthlyAgg.get(m).values()).sort((a,b)=>b.count-a.count);
-      const top = list[0] || null;
-      return { month: m, top, list: list.slice(0,5) };
-    });
-    return { overall, monthly };
-  }, [activeReport, overdueFilteredRows]);
+  // Removed trend and top-borrowers computations to simplify and avoid unused variables
 
   // Actions
   function validateOverdueDates() {
@@ -600,7 +536,7 @@ export default function ReportsPanel({ api }) {
     setOverduePatronId("");
     setOverdueMinDays(1);
     setOverdueMediaType('all');
-    setBorrowersView('overall');
+  // no-op: borrowers view removed
     loadReport('overdue');
   }
 
@@ -611,7 +547,7 @@ export default function ReportsPanel({ api }) {
     setOverduePatronId("");
     setOverdueMinDays(0);
     setOverdueMediaType('all');
-    setBorrowersView('overall');
+  // no-op: borrowers view removed
     loadReport('overdue');
   }
 
@@ -619,9 +555,7 @@ export default function ReportsPanel({ api }) {
     loadReport(activeReport);
   }, [activeReport, loadReport]);
 
-  function handleRefresh() {
-    loadReport(activeReport);
-  }
+  // handleRefresh removed (unused)
 
   function handleExport() {
     const exportRows = activeReport === 'overdue' ? overdueFilteredRows : (activeReport === 'fines' ? finesFilteredRows : reportData);
@@ -725,137 +659,48 @@ export default function ReportsPanel({ api }) {
             </div>
 
             <div className="flex items-start gap-4">
+              {/* Right-side date filters for each report type */}
               {activeReport === "overdue" && (
-                <div className="ml-auto w-full md:w-72">
-                  <div className="rounded-md border bg-white p-3 space-y-3">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
-                      <input type="date" value={overdueStartDate} onChange={(e)=>setOverdueStartDate(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
-                      <input type="date" value={overdueEndDate} onChange={(e)=>setOverdueEndDate(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Borrower</label>
-                      <input type="text" placeholder="Search borrower name" value={overdueBorrower} onChange={(e)=>setOverdueBorrower(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Patron ID</label>
-                      <input type="text" placeholder="partial match" value={overduePatronId} onChange={(e)=>setOverduePatronId(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Min Days Overdue</label>
-                      <input type="number" min="0" value={overdueMinDays} onChange={(e)=>setOverdueMinDays(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Media Type</label>
-                      <select value={overdueMediaType} onChange={(e)=>setOverdueMediaType(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm">
-                        {mediaTypeOptions.map(opt => (<option key={opt} value={opt}>{opt === 'all' ? 'All' : opt.toUpperCase()}</option>))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Grace Window</label>
-                      <select value={overdueGraceMode} onChange={(e)=>setOverdueGraceMode(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm">
-                        <option value="beyond">Beyond grace (overdue)</option>
-                        <option value="within">Within grace</option>
-                        <option value="all">All past due</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Sort By</label>
-                      <select value={overdueSortMode} onChange={(e)=>setOverdueSortMode(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm">
-                        <option value="most">Most overdue → least</option>
-                        <option value="least">Least overdue → most</option>
-                      </select>
-                    </div>
-                    <div className="pt-1 space-y-2">
-                      <button onClick={onGenerate} disabled={loading} className="w-full px-3 py-2 rounded-md bg-gray-700 text-white text-sm font-medium hover:bg-gray-800 disabled:opacity-50">{loading ? 'Loading...' : 'Generate Report'}</button>
-                      <div className="flex gap-2">
-                        <button onClick={onReset} disabled={loading} className="flex-1 px-3 py-2 rounded-md bg-gray-200 text-gray-800 text-sm font-medium hover:bg-gray-300 disabled:opacity-50">Reset</button>
-                        <button onClick={onClear} disabled={loading} className="flex-1 px-3 py-2 rounded-md bg-white border text-sm font-medium hover:bg-gray-50 disabled:opacity-50">Clear</button>
-                      </div>
-                      <button onClick={handleExport} disabled={loading || overdueFilteredRows.length===0} className="w-full px-3 py-2 rounded-md bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-50">Export CSV</button>
-                    </div>
+                <div className="flex flex-wrap items-end gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
+                    <input
+                      type="date"
+                      value={overdueStartDate}
+                      onChange={(e) => setOverdueStartDate(e.target.value)}
+                      className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
+                    <input
+                      type="date"
+                      value={overdueEndDate}
+                      onChange={(e) => setOverdueEndDate(e.target.value)}
+                      className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                    />
                   </div>
                 </div>
               )}
               {activeReport === "fines" && (
-                <div className="ml-auto w-full md:w-72">
-                  <div className="rounded-md border bg-white p-3 space-y-3">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Assessed From</label>
-                      <input type="date" value={finesStartDate} onChange={(e)=>setFinesStartDate(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Assessed To</label>
-                      <input type="date" value={finesEndDate} onChange={(e)=>setFinesEndDate(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
-                      <select value={finesStatus} onChange={(e)=>setFinesStatus(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm">
-                        <option value="all">All</option>
-                        <option value="active">Active</option>
-                        <option value="closed">Closed</option>
-                      </select>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Amount Min</label>
-                        <input type="number" value={finesAmountMin} onChange={(e)=>setFinesAmountMin(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Amount Max</label>
-                        <input type="number" value={finesAmountMax} onChange={(e)=>setFinesAmountMax(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm" />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Borrower</label>
-                      <input type="text" value={finesBorrower} onChange={(e)=>setFinesBorrower(e.target.value)} placeholder="partial match" className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Patron ID</label>
-                      <input type="text" value={finesPatronId} onChange={(e)=>setFinesPatronId(e.target.value)} placeholder="partial match" className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Item Title</label>
-                      <input type="text" value={finesItemTitle} onChange={(e)=>setFinesItemTitle(e.target.value)} placeholder="partial match" className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Media Type</label>
-                      <select value={finesMediaType} onChange={(e)=>setFinesMediaType(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm">
-                        {finesMediaOptions.map(opt => (<option key={opt} value={opt}>{opt==='all'?'All':opt.toUpperCase()}</option>))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Reason</label>
-                      <select value={finesReason} onChange={(e)=>setFinesReason(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm">
-                        {finesReasonOptions.map(opt => (<option key={opt} value={opt}>{opt==='all'?'All':opt}</option>))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Aging</label>
-                      <select value={finesAging} onChange={(e)=>setFinesAging(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm">
-                        <option value="all">All</option>
-                        <option value="0-7">0–7 days</option>
-                        <option value="8-30">8–30 days</option>
-                        <option value="31-60">31–60 days</option>
-                        <option value="61-90">61–90 days</option>
-                        <option value="90+">90+ days</option>
-                      </select>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <label className="inline-flex items-center gap-2 text-xs"><input type="checkbox" checked={finesOnlyActive} onChange={(e)=>setFinesOnlyActive(e.target.checked)} /> Only active fines</label>
-                      <label className="inline-flex items-center gap-2 text-xs"><input type="checkbox" checked={finesIncludeWaived} onChange={(e)=>setFinesIncludeWaived(e.target.checked)} /> Include waived</label>
-                    </div>
-                    <div className="pt-1 space-y-2">
-                      <button onClick={onFinesGenerate} disabled={loading} className="w-full px-3 py-2 rounded-md bg-gray-700 text-white text-sm font-medium hover:bg-gray-800 disabled:opacity-50">{loading ? 'Loading...' : 'Generate Report'}</button>
-                      <div className="flex gap-2">
-                        <button onClick={onFinesReset} disabled={loading} className="flex-1 px-3 py-2 rounded-md bg-gray-200 text-gray-800 text-sm font-medium hover:bg-gray-300 disabled:opacity-50">Reset</button>
-                        <button onClick={onFinesClear} disabled={loading} className="flex-1 px-3 py-2 rounded-md bg-white border text-sm font-medium hover:bg-gray-50 disabled:opacity-50">Clear</button>
-                      </div>
-                      <button onClick={handleExport} disabled={loading || finesFilteredRows.length===0} className="w-full px-3 py-2 rounded-md bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-50">Export CSV</button>
-                    </div>
+                <div className="flex flex-wrap items-end gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
+                    <input
+                      type="date"
+                      value={finesStartDate}
+                      onChange={(e) => setFinesStartDate(e.target.value)}
+                      className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
+                    <input
+                      type="date"
+                      value={finesEndDate}
+                      onChange={(e) => setFinesEndDate(e.target.value)}
+                      className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                    />
                   </div>
                 </div>
               )}
@@ -947,44 +792,147 @@ export default function ReportsPanel({ api }) {
                   </div>
                 </div>
               )}
-            {activeReport !== 'overdue' && activeReport !== 'fines' && (
             <div className="flex gap-2 ml-auto">
-              {activeReport === 'overdue' && (
-                <>
-                  <button
-                    onClick={onGenerate}
-                    disabled={loading}
-                    className="px-4 py-2 rounded-md bg-gray-700 text-white text-sm font-medium hover:bg-gray-800 disabled:opacity-50"
-                  >
-                    {loading ? 'Loading...' : 'Generate Report'}
-                  </button>
-                  <button
-                    onClick={onReset}
-                    disabled={loading}
-                    className="px-4 py-2 rounded-md bg-gray-200 text-gray-800 text-sm font-medium hover:bg-gray-300 disabled:opacity-50"
-                  >
-                    Reset
-                  </button>
-                  <button
-                    onClick={onClear}
-                    disabled={loading}
-                    className="px-4 py-2 rounded-md bg-white border text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
-                  >
-                    Clear Filters
-                  </button>
-                </>
-              )}
               <button
                 onClick={handleExport}
-                disabled={loading || (activeReport === 'overdue' ? overdueFilteredRows.length === 0 : reportData.length === 0)}
+                disabled={
+                  loading || (
+                    activeReport === 'overdue' ? overdueFilteredRows.length === 0 :
+                    activeReport === 'fines' ? finesFilteredRows.length === 0 :
+                    reportData.length === 0
+                  )
+                }
                 className="px-4 py-2 rounded-md bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-50"
               >
                 Export CSV
               </button>
             </div>
-            )}
             </div>
           </div>
+
+          {/* Right-aligned filter block shown under the panel bar for Overdue Loans and Fines (dates moved to toolbar; export moved to toolbar) */}
+          {activeReport === "overdue" && (
+            <div className="flex justify-end">
+              <div className="w-full md:w-72">
+                <div className="rounded-md border bg-white p-3 space-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Borrower</label>
+                    <input type="text" placeholder="Search borrower name" value={overdueBorrower} onChange={(e)=>setOverdueBorrower(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Patron ID</label>
+                    <input type="text" placeholder="partial match" value={overduePatronId} onChange={(e)=>setOverduePatronId(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Min Days Overdue</label>
+                    <input type="number" min="0" value={overdueMinDays} onChange={(e)=>setOverdueMinDays(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Media Type</label>
+                    <select value={overdueMediaType} onChange={(e)=>setOverdueMediaType(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm">
+                      {mediaTypeOptions.map(opt => (<option key={opt} value={opt}>{opt === 'all' ? 'All' : opt.toUpperCase()}</option>))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Grace Window</label>
+                    <select value={overdueGraceMode} onChange={(e)=>setOverdueGraceMode(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm">
+                      <option value="beyond">Beyond grace (overdue)</option>
+                      <option value="within">Within grace</option>
+                      <option value="all">All past due</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Sort By</label>
+                    <select value={overdueSortMode} onChange={(e)=>setOverdueSortMode(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm">
+                      <option value="most">Most overdue → least</option>
+                      <option value="least">Least overdue → most</option>
+                    </select>
+                  </div>
+                  <div className="pt-1 space-y-2">
+                    <button onClick={onGenerate} disabled={loading} className="w-full px-3 py-2 rounded-md bg-gray-700 text-white text-sm font-medium hover:bg-gray-800 disabled:opacity-50">{loading ? 'Loading...' : 'Generate Report'}</button>
+                    <div className="flex gap-2">
+                      <button onClick={onReset} disabled={loading} className="flex-1 px-3 py-2 rounded-md bg-gray-200 text-gray-800 text-sm font-medium hover:bg-gray-300 disabled:opacity-50">Reset</button>
+                      <button onClick={onClear} disabled={loading} className="flex-1 px-3 py-2 rounded-md bg-white border text-sm font-medium hover:bg-gray-50 disabled:opacity-50">Clear</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeReport === "fines" && (
+            <div className="flex justify-end">
+              <div className="w-full md:w-72">
+                <div className="rounded-md border bg-white p-3 space-y-3">
+                  
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
+                    <select value={finesStatus} onChange={(e)=>setFinesStatus(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm">
+                      <option value="all">All</option>
+                      <option value="active">Active</option>
+                      <option value="closed">Closed</option>
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Amount Min</label>
+                      <input type="number" value={finesAmountMin} onChange={(e)=>setFinesAmountMin(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Amount Max</label>
+                      <input type="number" value={finesAmountMax} onChange={(e)=>setFinesAmountMax(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Borrower</label>
+                    <input type="text" value={finesBorrower} onChange={(e)=>setFinesBorrower(e.target.value)} placeholder="partial match" className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Patron ID</label>
+                    <input type="text" value={finesPatronId} onChange={(e)=>setFinesPatronId(e.target.value)} placeholder="partial match" className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Item Title</label>
+                    <input type="text" value={finesItemTitle} onChange={(e)=>setFinesItemTitle(e.target.value)} placeholder="partial match" className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Media Type</label>
+                    <select value={finesMediaType} onChange={(e)=>setFinesMediaType(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm">
+                      {finesMediaOptions.map(opt => (<option key={opt} value={opt}>{opt==='all'?'All':opt.toUpperCase()}</option>))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Reason</label>
+                    <select value={finesReason} onChange={(e)=>setFinesReason(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm">
+                      {finesReasonOptions.map(opt => (<option key={opt} value={opt}>{opt==='all'?'All':opt}</option>))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Aging</label>
+                    <select value={finesAging} onChange={(e)=>setFinesAging(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm">
+                      <option value="all">All</option>
+                      <option value="0-7">0–7 days</option>
+                      <option value="8-30">8–30 days</option>
+                      <option value="31-60">31–60 days</option>
+                      <option value="61-90">61–90 days</option>
+                      <option value="90+">90+ days</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <label className="inline-flex items-center gap-2 text-xs"><input type="checkbox" checked={finesOnlyActive} onChange={(e)=>setFinesOnlyActive(e.target.checked)} /> Only active fines</label>
+                    <label className="inline-flex items-center gap-2 text-xs"><input type="checkbox" checked={finesIncludeWaived} onChange={(e)=>setFinesIncludeWaived(e.target.checked)} /> Include waived</label>
+                  </div>
+                  <div className="pt-1 space-y-2">
+                    <button onClick={onFinesGenerate} disabled={loading} className="w-full px-3 py-2 rounded-md bg-gray-700 text-white text-sm font-medium hover:bg-gray-800 disabled:opacity-50">{loading ? 'Loading...' : 'Generate Report'}</button>
+                    <div className="flex gap-2">
+                      <button onClick={onFinesReset} disabled={loading} className="flex-1 px-3 py-2 rounded-md bg-gray-200 text-gray-800 text-sm font-medium hover:bg-gray-300 disabled:opacity-50">Reset</button>
+                      <button onClick={onFinesClear} disabled={loading} className="flex-1 px-3 py-2 rounded-md bg-white border text-sm font-medium hover:bg-gray-50 disabled:opacity-50">Clear</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {activeReport === 'overdue' && (
             <div className="space-y-3">
