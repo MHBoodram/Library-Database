@@ -10,6 +10,7 @@ import ActiveLoansPanel from "../components/staff/ActiveLoansPanel";
 import { CheckoutPanel, ReturnLoanPanel } from "../components/staff/LoansManagement";
 import HoldsPanel from "../components/staff/HoldsPanel";
 import ReportsPanel from "../components/staff/ReportsPanel";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { AddItemPanel, EditItemPanel, RemoveItemPanel } from "../components/staff/ItemsManagement";
 import ReservationsPanel from "../components/staff/ReservationsPanel";
 import AdminPanel from "../components/staff/AdminPanel";
@@ -168,6 +169,12 @@ export default function EmployeeDashboard() {
             >
               Reports
             </button>
+            <button
+              className={`tab-btn ${tab === "pendingCheckouts" ? "active" : ""}`}
+              onClick={() => setTab("pendingCheckouts")}
+            >
+              Pending Checkouts
+            </button>
             
             {/* Manage Items Dropdown */}
             <div className="dropdown-container">
@@ -221,11 +228,87 @@ export default function EmployeeDashboard() {
   {tab === "holds" && <HoldsPanel api={api} />}
   {tab === "reservations" && <ReservationsPanel api={api} staffUser={user} />}
   {tab === "reports" && <ReportsPanel api={api} />}
+  {tab === "pendingCheckouts" && <PendingCheckoutsPanel api={api} />}
   {tab === "addItem" && <AddItemPanel api={api} />}
   {tab === "editItem" && <EditItemPanel api={api} />}
   {tab === "removeItem" && <RemoveItemPanel api={api} />}
   {tab === "admin" && isAdmin && <AdminPanel api={api} />}
       </main>
     </div>
+  );
+}
+
+function PendingCheckoutsPanel({ api }) {
+  const [rows, setRows] = React.useState([]);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState('');
+
+  const load = React.useCallback(async () => {
+    setLoading(true); setError('');
+    try {
+      const res = await api('staff/loans/pending');
+      const list = Array.isArray(res?.rows) ? res.rows : Array.isArray(res) ? res : [];
+      setRows(list);
+    } catch (e) {
+      setError(e?.message || 'Failed to load pending');
+    } finally { setLoading(false); }
+  }, [api]);
+
+  React.useEffect(() => { load(); }, [load]);
+
+  const approve = async (transaction_id) => {
+    if (!transaction_id) return;
+    try {
+      await api('staff/loans/approve', { method: 'POST', body: { transaction_id } });
+      await load();
+      alert('Approved');
+    } catch (e) {
+      alert(e?.data?.message || e?.message || 'Approval failed');
+    }
+  };
+
+  return (
+    <section className="space-y-4">
+      <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+        <div className="border-b bg-gray-50 px-5 py-3"><h2 className="text-lg font-semibold">Pending Checkouts</h2></div>
+        <div className="p-4">
+          {loading && <div>Loading…</div>}
+          {error && <div className="text-red-700">{error}</div>}
+          {!loading && rows.length === 0 && <div className="text-gray-600">No pending requests.</div>}
+          {rows.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-100 text-left">
+                  <tr>
+                    <Th>Patron</Th>
+                    <Th>Patron ID</Th>
+                    <Th>Copy ID</Th>
+                    <Th>Loan ID</Th>
+                    <Th>Requested</Th>
+                    <Th>Item</Th>
+                    <Th>Type</Th>
+                    <Th></Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map(r => (
+                    <tr key={r.transaction_id} className="border-t">
+                      <Td>{r.first_name} {r.last_name}</Td>
+                      <Td>{r.user_id}</Td>
+                      <Td>{r.copy_id}</Td>
+                      <Td>{r.loan_id || '—'}</Td>
+                      <Td>{new Date(r.request_date).toLocaleString()}</Td>
+                      <Td className="max-w-[30ch] truncate" title={r.item_title}>{r.item_title}</Td>
+                      <Td>{(r.media_type || 'book').toUpperCase()}</Td>
+                      <Td><button className="px-2 py-1 rounded bg-green-600 text-white" onClick={() => approve(r.transaction_id)}>Approve</button></Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }

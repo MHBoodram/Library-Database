@@ -60,9 +60,14 @@ function NavBar() {
                         <NavLink to="/books" className = {({ isActive }) => (isActive? 'sub-nav-link active' : 'sub-nav-link')}>
                             Library Catalog
                         </NavLink>
-                        {user && (user.role === 'student' || user.role === 'teacher') && (
+                        {user && (user.role === 'student' || user.role === 'teacher' || user.role === 'faculty') && (
                             <NavLink to="/loans" className = {({ isActive }) => (isActive? 'sub-nav-link active' : 'sub-nav-link')}>
                                 Manage Loans
+                            </NavLink>
+                        )}
+                        {user && user.role !== 'staff' && (
+                            <NavLink to="/pending-loans" className = {({ isActive }) => (isActive? 'sub-nav-link active' : 'sub-nav-link')}>
+                                Pending Loans
                             </NavLink>
                         )}
                         <NavLink to="/rooms" className = {({ isActive }) => (isActive? 'sub-nav-link active' : 'sub-nav-link')}>

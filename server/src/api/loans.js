@@ -1,4 +1,4 @@
-import { sendJSON, readJSONBody, requireAuth } from "../lib/http.js";
+import { sendJSON, readJSONBody, requireAuth, requireRole } from "../lib/http.js";
 import { pool } from "../lib/db.js";
 
 export const checkout = (JWT_SECRET) => async (req, res) => {
@@ -43,6 +43,115 @@ export const checkout = (JWT_SECRET) => async (req, res) => {
     }
     console.error("Checkout failed:", e);
     return sendJSON(res, 400, { error: "checkout_failed", details: e.message });
+  }
+};
+
+// Patrons submit a checkout request instead of immediate checkout
+export const requestCheckout = (JWT_SECRET) => async (req, res) => {
+  const auth = requireAuth(req, res, JWT_SECRET); if (!auth) return;
+  const b = await readJSONBody(req);
+  const user_id = Number(auth.uid || auth.user_id);
+  const copy_id = Number(b.copy_id);
+  if (!user_id || !copy_id) {
+    return sendJSON(res, 400, { error: "invalid_payload", message: "copy_id is required" });
+  }
+  try {
+    const sql = `INSERT INTO transaction (loan_id, user_id, employee_id, copy_id, type, date)
+                 VALUES (NULL, ?, NULL, ?, 'checkout_request', NOW())`;
+    await pool.query(sql, [user_id, copy_id]);
+    return sendJSON(res, 201, { ok: true });
+  } catch (err) {
+    console.error("checkout request failed:", err.message);
+    return sendJSON(res, 500, { error: "checkout_request_failed" });
+  }
+};
+
+// Patron: list my pending checkout requests
+export const listMyPendingCheckouts = (JWT_SECRET) => async (req, res) => {
+  const auth = requireAuth(req, res, JWT_SECRET); if (!auth) return;
+  const user_id = Number(auth.uid || auth.user_id);
+  try {
+    const sql = `
+      SELECT t.transaction_id, t.date AS request_date, t.copy_id, t.loan_id,
+             u.user_id, u.first_name, u.last_name,
+             i.title AS item_title,
+             CASE WHEN d.item_id IS NOT NULL THEN 'device'
+                  WHEN m.item_id IS NOT NULL THEN LOWER(m.media_type)
+                  ELSE 'book' END AS media_type
+      FROM transaction t
+      JOIN user u ON u.user_id = t.user_id
+      JOIN copy c ON c.copy_id = t.copy_id
+      JOIN item i ON i.item_id = c.item_id
+      LEFT JOIN device d ON d.item_id = i.item_id
+      LEFT JOIN media m ON m.item_id = i.item_id
+      WHERE t.type = 'checkout_request' AND t.user_id = ?
+      ORDER BY t.date DESC
+      LIMIT 500`;
+    const [rows] = await pool.query(sql, [user_id]);
+    return sendJSON(res, 200, { rows });
+  } catch (err) {
+    console.error("list my pending failed:", err.message);
+    return sendJSON(res, 500, { error: "pending_list_failed" });
+  }
+};
+
+// Staff: list all pending checkout requests
+export const listPendingCheckouts = (JWT_SECRET) => async (req, res) => {
+  const auth = requireRole(req, res, JWT_SECRET, 'staff'); if (!auth) return;
+  try {
+    const sql = `
+      SELECT t.transaction_id, t.date AS request_date, t.copy_id, t.loan_id,
+             u.user_id, u.first_name, u.last_name,
+             i.title AS item_title,
+             CASE WHEN d.item_id IS NOT NULL THEN 'device'
+                  WHEN m.item_id IS NOT NULL THEN LOWER(m.media_type)
+                  ELSE 'book' END AS media_type
+      FROM transaction t
+      JOIN user u ON u.user_id = t.user_id
+      JOIN copy c ON c.copy_id = t.copy_id
+      JOIN item i ON i.item_id = c.item_id
+      LEFT JOIN device d ON d.item_id = i.item_id
+      LEFT JOIN media m ON m.item_id = i.item_id
+      WHERE t.type = 'checkout_request'
+      ORDER BY t.date DESC
+      LIMIT 500`;
+    const [rows] = await pool.query(sql);
+    return sendJSON(res, 200, { rows });
+  } catch (err) {
+    console.error("list pending failed:", err.message);
+    return sendJSON(res, 500, { error: "pending_list_failed" });
+  }
+};
+
+// Staff: approve a checkout request and create a real loan
+export const approveCheckout = (JWT_SECRET) => async (req, res) => {
+  const auth = requireRole(req, res, JWT_SECRET, 'staff'); if (!auth) return;
+  const b = await readJSONBody(req);
+  const transaction_id = Number(b.transaction_id);
+  if (!transaction_id) return sendJSON(res, 400, { error: 'invalid_payload', message: 'transaction_id required' });
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [rows] = await conn.query(`SELECT transaction_id, user_id, copy_id, type FROM transaction WHERE transaction_id = ? FOR UPDATE`, [transaction_id]);
+    if (!rows.length || rows[0].type !== 'checkout_request') {
+      await conn.rollback();
+      return sendJSON(res, 404, { error: 'not_found' });
+    }
+    const user_id = rows[0].user_id;
+    const copy_id = rows[0].copy_id;
+    // perform checkout (outside helper due to connection differences)
+    await conn.commit();
+    // Use shared helper which manages its own transaction
+    const result = await performCheckout({ user_id, copy_id, barcode: '', employee_id: null });
+    // Mark transaction as approved and link loan
+    await pool.query(`UPDATE transaction SET type='checkout_approved', loan_id = ? WHERE transaction_id = ?`, [result.loan_id, transaction_id]);
+    return sendJSON(res, 200, { ok: true, loan_id: result.loan_id, due_date: result.due_date });
+  } catch (err) {
+    try { await conn.rollback(); } catch {}
+    console.error('approve checkout failed:', err.message);
+    return sendJSON(res, 500, { error: 'approve_failed' });
+  } finally {
+    conn.release();
   }
 };
 

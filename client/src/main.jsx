@@ -13,6 +13,7 @@ import Reports from "./pages/Reports.jsx";
 import Loans from "./pages/Loans.jsx";
 import Rooms from "./pages/Rooms.jsx";
 import BookPage from "./pages/BookPage.jsx";
+import PendingLoans from "./pages/PendingLoans.jsx";
 import ManageAccounts from "./pages/ManageAccounts.jsx";
 
 import "./index.css";
@@ -68,22 +69,9 @@ function BookRoute() {
         alert("No available copies");
         return;
       }
-      const toCheckout = available.slice(0, Math.max(1, Number(qty) || 1));
-
-      let count = 0;
-      for (const c of toCheckout) {
-        try {
-          await useApi("loans/checkout", { method: "POST", body: { copy_id: c.copy_id, user_id: user?.user_id } });
-          count++;
-        } catch (e) {
-          const code = e?.data?.error || e?.message || "checkout_failed";
-          const details = e?.data?.message || e?.data?.details || "";
-          console.error("Checkout error:", code, details);
-          alert(details || code);
-          return; // stop on first error and do not show success
-        }
-      }
-      alert(count > 1 ? `Checked out ${count} copies.` : "Checked out! Your loan will appear in Loans.");
+      const first = available[0];
+      await useApi('loans/request', { method: 'POST', body: { copy_id: first.copy_id } });
+      alert('Checkout request submitted. You can track it under Pending Loans.');
     } catch (err) {
       const code = err?.data?.error || err?.message || "checkout_failed";
       const details = err?.data?.message || err?.data?.details || "";
@@ -112,6 +100,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           <Route path="/books" element={<Books />} />
           <Route path="/books/:id" element={<Protected><BookRoute /></Protected>} />
           <Route path="/loans" element={<Loans />} />
+          <Route path="/pending-loans" element={<PendingLoans />} />
           <Route path="/rooms" element={<Rooms />} />
           <Route path="/reports" element={<Reports />} />
 
