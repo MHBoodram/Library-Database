@@ -217,3 +217,162 @@ export const createAccount = (JWT_SECRET) => async (req, res) => {
     conn.release();
   }
 };
+
+export const listAllActivity = (JWT_SECRET) => async (req, res) => {
+  const auth = requireEmployeeRole(req, res, JWT_SECRET, "admin");
+  if (!auth) return;
+
+  try {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const startDateParam = (url.searchParams.get("start_date") || "").trim();
+    const endDateParam = (url.searchParams.get("end_date") || "").trim();
+
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    let startDate = startDateParam;
+    let endDate = endDateParam;
+
+    if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
+      const now = new Date();
+      endDate = now.toISOString().slice(0, 10);
+      const monthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+      startDate = monthAgo.toISOString().slice(0, 10);
+    }
+
+    if (new Date(startDate) > new Date(endDate)) {
+      [startDate, endDate] = [endDate, startDate];
+    }
+
+    // Build a comprehensive activity log from multiple sources
+    const sql = `
+      -- Loan checkouts
+      SELECT
+        l.checkout_date AS activity_date,
+        'CHECKOUT' AS activity_type,
+        e.first_name AS staff_first_name,
+        e.last_name AS staff_last_name,
+        e.role AS staff_role,
+        u.first_name AS patron_first_name,
+        u.last_name AS patron_last_name,
+        u.user_id AS patron_id,
+        i.title AS item_title,
+        c.copy_id,
+        l.loan_id,
+        NULL AS room_number,
+        NULL AS reservation_id
+      FROM loan l
+      JOIN user u ON u.user_id = l.user_id
+      JOIN copy c ON c.copy_id = l.copy_id
+      JOIN item i ON i.item_id = c.item_id
+      LEFT JOIN employee e ON e.employee_id = l.employee_id
+      WHERE l.checkout_date BETWEEN ? AND ?
+
+      UNION ALL
+
+      -- Loan returns
+      SELECT
+        l.return_date AS activity_date,
+        'RETURN' AS activity_type,
+        e.first_name AS staff_first_name,
+        e.last_name AS staff_last_name,
+        e.role AS staff_role,
+        u.first_name AS patron_first_name,
+        u.last_name AS patron_last_name,
+        u.user_id AS patron_id,
+        i.title AS item_title,
+        c.copy_id,
+        l.loan_id,
+        NULL AS room_number,
+        NULL AS reservation_id
+      FROM loan l
+      JOIN user u ON u.user_id = l.user_id
+      JOIN copy c ON c.copy_id = l.copy_id
+      JOIN item i ON i.item_id = c.item_id
+      LEFT JOIN employee e ON e.employee_id = l.employee_id
+      WHERE l.return_date IS NOT NULL
+        AND l.return_date BETWEEN ? AND ?
+
+      UNION ALL
+
+      -- Room reservations (created)
+      SELECT
+        r.start_time AS activity_date,
+        'RESERVATION_CREATED' AS activity_type,
+        e.first_name AS staff_first_name,
+        e.last_name AS staff_last_name,
+        e.role AS staff_role,
+        u.first_name AS patron_first_name,
+        u.last_name AS patron_last_name,
+        u.user_id AS patron_id,
+        CONCAT('Room ', rm.room_number) AS item_title,
+        NULL AS copy_id,
+        NULL AS loan_id,
+        rm.room_number,
+        r.reservation_id
+      FROM reservation r
+      JOIN user u ON u.user_id = r.user_id
+      JOIN room rm ON rm.room_id = r.room_id
+      LEFT JOIN employee e ON e.employee_id = r.employee_id
+      WHERE r.start_time BETWEEN ? AND ?
+
+      UNION ALL
+
+      -- Copy acquisitions (item management)
+      SELECT
+        c.acquired_at AS activity_date,
+        'COPY_ADDED' AS activity_type,
+        'Staff' AS staff_first_name,
+        '' AS staff_last_name,
+        'staff' AS staff_role,
+        '' AS patron_first_name,
+        '' AS patron_last_name,
+        NULL AS patron_id,
+        i.title AS item_title,
+        c.copy_id,
+        NULL AS loan_id,
+        NULL AS room_number,
+        NULL AS reservation_id
+      FROM copy c
+      JOIN item i ON i.item_id = c.item_id
+      WHERE c.acquired_at IS NOT NULL
+        AND c.acquired_at BETWEEN ? AND ?
+
+      UNION ALL
+
+      -- Account creations
+      SELECT
+        u.joined_at AS activity_date,
+        'ACCOUNT_CREATED' AS activity_type,
+        'Admin' AS staff_first_name,
+        '' AS staff_last_name,
+        'admin' AS staff_role,
+        u.first_name AS patron_first_name,
+        u.last_name AS patron_last_name,
+        u.user_id AS patron_id,
+        CONCAT(a.role, CASE WHEN e.role IS NOT NULL THEN CONCAT(' (', e.role, ')') ELSE '' END) AS item_title,
+        NULL AS copy_id,
+        NULL AS loan_id,
+        NULL AS room_number,
+        NULL AS reservation_id
+      FROM user u
+      JOIN account a ON a.user_id = u.user_id
+      LEFT JOIN employee e ON e.employee_id = a.employee_id
+      WHERE u.joined_at BETWEEN ? AND ?
+
+      ORDER BY activity_date DESC
+      LIMIT 1000
+    `;
+
+    const [rows] = await pool.query(sql, [
+      startDate, endDate,  // checkouts
+      startDate, endDate,  // returns
+      startDate, endDate,  // reservations
+      startDate, endDate,  // copy acquisitions
+      startDate, endDate   // accounts
+    ]);
+
+    return sendJSON(res, 200, { rows });
+  } catch (err) {
+    console.error("Failed to load activity log:", err.message);
+    return sendJSON(res, 500, { error: "activity_log_failed" });
+  }
+};

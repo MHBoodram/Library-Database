@@ -33,6 +33,8 @@ export default function AdminPanel({ api }) {
   });
   const [activityEndDate, setActivityEndDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [activityStaffFilter, setActivityStaffFilter] = useState("all");
+  const [activityPage, setActivityPage] = useState(1);
+  const ITEMS_PER_PAGE = 50;
 
   const accountType = form.account_type;
 
@@ -66,7 +68,7 @@ export default function AdminPanel({ api }) {
     return () => { alive = false; };
   }, [api, refreshKey]);
 
-  // Load activity when tab is opened (derived from Transactions report)
+  // Load activity when tab is opened - using new comprehensive activity endpoint
   useEffect(() => {
     if (!api || adminTab !== "activity") return;
     let alive = true;
@@ -74,42 +76,26 @@ export default function AdminPanel({ api }) {
     (async () => {
       try {
         const params = new URLSearchParams({ start_date: activityStartDate, end_date: activityEndDate });
-        const [transData, accountsData] = await Promise.all([
-          api(`reports/transactions?${params.toString()}`),
-          api(`admin/accounts/creations?${params.toString()}`),
-        ]);
+        const activityData = await api(`admin/activity?${params.toString()}`);
         if (!alive) return;
         
-        // Map transactions
-        const transRows = Array.isArray(transData?.rows) ? transData.rows : (Array.isArray(transData) ? transData : []);
-        const transMapped = transRows.map(r => ({
-          ts: r.date,
-          staff: [r.employee_first_name, r.employee_last_name].filter(Boolean).join(" ") || "—",
-          staff_role: "staff",
-          action: (r.type || "").toUpperCase(),
-          patron: [r.user_first_name, r.user_last_name].filter(Boolean).join(" ") || `#${r.user_id}`,
+        // Map activity rows from the new comprehensive endpoint
+        const rows = Array.isArray(activityData?.rows) ? activityData.rows : [];
+        const mapped = rows.map(r => ({
+          ts: r.activity_date,
+          staff: [r.staff_first_name, r.staff_last_name].filter(Boolean).join(" ") || "—",
+          staff_role: r.staff_role || "staff",
+          action: r.activity_type,
+          patron: [r.patron_first_name, r.patron_last_name].filter(Boolean).join(" ") || `#${r.patron_id}`,
           item_title: r.item_title,
           copy_id: r.copy_id,
           loan_id: r.loan_id,
+          room_number: r.room_number,
+          reservation_id: r.reservation_id,
         }));
 
-        // Map account creations
-        const acctRows = Array.isArray(accountsData?.rows) ? accountsData.rows : [];
-        const acctMapped = acctRows.map(r => ({
-          ts: r.created_at,
-          staff: "Admin",
-          staff_role: r.employee_role || "admin",
-          action: "ACCOUNT_CREATED",
-          patron: [r.first_name, r.last_name].filter(Boolean).join(" ") || r.email,
-          item_title: `${r.account_role || 'user'}${r.employee_role ? ` (${r.employee_role})` : ''}`,
-          copy_id: null,
-          loan_id: null,
-          account_id: r.account_id,
-        }));
-
-        // Merge and sort by timestamp desc
-        const merged = [...transMapped, ...acctMapped].sort((a, b) => new Date(b.ts) - new Date(a.ts));
-        setActivityRows(merged);
+        setActivityRows(mapped);
+        setActivityPage(1); // Reset to first page when data reloads
       } catch (err) {
         if (!alive) return;
         setError(err?.data?.error || err?.message || "Failed to load activity log");
@@ -120,35 +106,53 @@ export default function AdminPanel({ api }) {
     return () => { alive = false; };
   }, [api, adminTab, activityStartDate, activityEndDate, refreshKey]);
 
+  // Reset page when filter changes
+  useEffect(() => {
+    setActivityPage(1);
+  }, [activityStaffFilter]);
+
   const activitySummary = useMemo(() => {
     const filtered = activityStaffFilter === "all" 
       ? activityRows 
       : activityRows.filter(r => r.staff_role === activityStaffFilter);
     
     const byStaff = new Map();
-    let checkouts = 0, returns = 0, accountsCreated = 0;
+    let checkouts = 0, returns = 0, accountsCreated = 0, reservations = 0, copiesAdded = 0;
     for (const r of filtered) {
       const key = r.staff || '—';
-      const acc = byStaff.get(key) || { staff: key, total: 0, checkouts: 0, returns: 0, accounts: 0 };
+      const acc = byStaff.get(key) || { staff: key, total: 0, checkouts: 0, returns: 0, accounts: 0, reservations: 0, copies: 0 };
       acc.total += 1;
       if (r.action === 'CHECKOUT') { acc.checkouts += 1; checkouts += 1; }
       if (r.action === 'RETURN') { acc.returns += 1; returns += 1; }
       if (r.action === 'ACCOUNT_CREATED') { acc.accounts += 1; accountsCreated += 1; }
+      if (r.action === 'RESERVATION_CREATED') { acc.reservations += 1; reservations += 1; }
+      if (r.action === 'COPY_ADDED') { acc.copies += 1; copiesAdded += 1; }
       byStaff.set(key, acc);
     }
     
     const staffRoles = new Set(activityRows.map(r => r.staff_role).filter(Boolean));
+    
+    // Pagination
+    const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+    const startIdx = (activityPage - 1) * ITEMS_PER_PAGE;
+    const endIdx = startIdx + ITEMS_PER_PAGE;
+    const paginatedRows = filtered.slice(startIdx, endIdx);
     
     return { 
       total: filtered.length, 
       checkouts, 
       returns, 
       accountsCreated,
+      reservations,
+      copiesAdded,
       byStaff: Array.from(byStaff.values()).sort((a,b)=>b.total-a.total).slice(0,10),
-      filteredRows: filtered,
+      filteredRows: paginatedRows,
+      allFilteredRows: filtered,
       availableRoles: Array.from(staffRoles).sort(),
+      totalPages,
+      currentPage: activityPage,
     };
-  }, [activityRows, activityStaffFilter]);
+  }, [activityRows, activityStaffFilter, activityPage, ITEMS_PER_PAGE]);
 
   const triggerRefresh = () => setRefreshKey((key) => key + 1);
 
@@ -246,12 +250,14 @@ export default function AdminPanel({ api }) {
       {adminTab === "activity" ? (
         <div className="rounded-lg border bg-white p-4 shadow-sm">
           <h3 className="font-semibold mb-2">Recent Staff Activity</h3>
-          <p className="text-sm text-gray-500 mb-3">Derived from loan transaction history within the selected dates.</p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+          <p className="text-sm text-gray-500 mb-3">Comprehensive activity log including loans, reservations, item management, and accounts.</p>
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-3">
             <div className="rounded-md border bg-white p-3 text-sm"><div className="text-gray-500">Total</div><div className="text-xl font-semibold">{activitySummary.total}</div></div>
             <div className="rounded-md border bg-white p-3 text-sm"><div className="text-gray-500">Checkouts</div><div className="text-xl font-semibold">{activitySummary.checkouts}</div></div>
             <div className="rounded-md border bg-white p-3 text-sm"><div className="text-gray-500">Returns</div><div className="text-xl font-semibold">{activitySummary.returns}</div></div>
-            <div className="rounded-md border bg-white p-3 text-sm"><div className="text-gray-500">Accounts Created</div><div className="text-xl font-semibold">{activitySummary.accountsCreated}</div></div>
+            <div className="rounded-md border bg-white p-3 text-sm"><div className="text-gray-500">Reservations</div><div className="text-xl font-semibold">{activitySummary.reservations}</div></div>
+            <div className="rounded-md border bg-white p-3 text-sm"><div className="text-gray-500">Copies Added</div><div className="text-xl font-semibold">{activitySummary.copiesAdded}</div></div>
+            <div className="rounded-md border bg-white p-3 text-sm"><div className="text-gray-500">Accounts</div><div className="text-xl font-semibold">{activitySummary.accountsCreated}</div></div>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
@@ -263,8 +269,8 @@ export default function AdminPanel({ api }) {
                   <th className="px-3 py-2">Action</th>
                   <th className="px-3 py-2">Patron/Details</th>
                   <th className="px-3 py-2">Item/Type</th>
-                  <th className="px-3 py-2">Copy</th>
-                  <th className="px-3 py-2">Loan</th>
+                  <th className="px-3 py-2">Copy/Room</th>
+                  <th className="px-3 py-2">ID</th>
                 </tr>
               </thead>
               <tbody>
@@ -284,20 +290,64 @@ export default function AdminPanel({ api }) {
                       <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
                         r.action==='CHECKOUT'?'bg-blue-100 text-blue-800':
                         r.action==='RETURN'?'bg-amber-100 text-amber-800':
+                        r.action==='RESERVATION_CREATED'?'bg-purple-100 text-purple-800':
+                        r.action==='COPY_ADDED'?'bg-cyan-100 text-cyan-800':
                         'bg-green-100 text-green-800'
                       }`}>
-                        {r.action}
+                        {r.action.replace(/_/g, ' ')}
                       </span>
                     </td>
                     <td className="px-3 py-2">{r.patron}</td>
                     <td className="px-3 py-2 max-w-[30ch] truncate" title={r.item_title}>{r.item_title}</td>
-                    <td className="px-3 py-2">{r.copy_id ? `#${r.copy_id}` : '—'}</td>
-                    <td className="px-3 py-2">{r.loan_id ? `#${r.loan_id}` : '—'}</td>
+                    <td className="px-3 py-2">{r.copy_id ? `#${r.copy_id}` : (r.room_number ? `Room ${r.room_number}` : '—')}</td>
+                    <td className="px-3 py-2">{r.loan_id ? `#${r.loan_id}` : (r.reservation_id ? `#${r.reservation_id}` : '—')}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          
+          {/* Pagination Controls */}
+          {activitySummary.totalPages > 1 && (
+            <div className="mt-4 flex items-center justify-between border-t pt-4">
+              <div className="text-sm text-gray-600">
+                Showing {((activitySummary.currentPage - 1) * ITEMS_PER_PAGE) + 1} to {Math.min(activitySummary.currentPage * ITEMS_PER_PAGE, activitySummary.total)} of {activitySummary.total} activities
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setActivityPage(1)}
+                  disabled={activitySummary.currentPage === 1}
+                  className="px-3 py-1 rounded-md border text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                >
+                  First
+                </button>
+                <button
+                  onClick={() => setActivityPage(p => Math.max(1, p - 1))}
+                  disabled={activitySummary.currentPage === 1}
+                  className="px-3 py-1 rounded-md border text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                >
+                  Previous
+                </button>
+                <span className="px-3 py-1 text-sm font-medium">
+                  Page {activitySummary.currentPage} of {activitySummary.totalPages}
+                </span>
+                <button
+                  onClick={() => setActivityPage(p => Math.min(activitySummary.totalPages, p + 1))}
+                  disabled={activitySummary.currentPage === activitySummary.totalPages}
+                  className="px-3 py-1 rounded-md border text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                >
+                  Next
+                </button>
+                <button
+                  onClick={() => setActivityPage(activitySummary.totalPages)}
+                  disabled={activitySummary.currentPage === activitySummary.totalPages}
+                  className="px-3 py-1 rounded-md border text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                >
+                  Last
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <>
