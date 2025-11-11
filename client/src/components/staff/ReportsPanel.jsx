@@ -63,6 +63,7 @@ function OverdueReportTable({ data, loading }) {
         <thead className="bg-gray-100 text-left">
           <tr>
             <Th>Borrower</Th>
+            <Th>Patron ID</Th>
             <Th>Item Title</Th>
             <Th>Media Type</Th>
             <Th>Due Date</Th>
@@ -74,6 +75,7 @@ function OverdueReportTable({ data, loading }) {
           {data.map((row, idx) => (
             <tr key={idx} className="border-t">
               <Td>{`${row.first_name} ${row.last_name}`}</Td>
+              <Td>{row.patron_id ?? row.user_id}</Td>
               <Td className="max-w-[30ch] truncate" title={row.title}>{row.title}</Td>
               <Td>{(row.media_type || "book").toUpperCase()}</Td>
               <Td>{formatDate(row.due_date)}</Td>
@@ -236,6 +238,8 @@ export default function ReportsPanel({ api }) {
     return d.toISOString().slice(0, 10);
   });
   const [overdueEndDate, setOverdueEndDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [overdueBorrower, setOverdueBorrower] = useState("");
+  const [overduePatronId, setOverduePatronId] = useState("");
   
   const [balancesStartDate, setBalancesStartDate] = useState(() => {
     const d = new Date();
@@ -280,6 +284,12 @@ export default function ReportsPanel({ api }) {
           endpoint = "reports/overdue";
           params.set("start_date", overdueStartDate);
           params.set("end_date", overdueEndDate);
+          if (overdueBorrower && overdueBorrower.trim()) {
+            params.set("borrower", overdueBorrower.trim());
+          }
+          if (overduePatronId) {
+            params.set("patron_id", String(overduePatronId).trim());
+          }
           break;
         case "balances":
           endpoint = "reports/balances";
@@ -312,7 +322,7 @@ export default function ReportsPanel({ api }) {
     } finally {
       setLoading(false);
     }
-  }, [api, overdueStartDate, overdueEndDate, balancesStartDate, balancesEndDate, topItemsStartDate, topItemsEndDate, newPatronsStartDate, newPatronsEndDate,transactionsStartDate,transactionsEndDate]);
+  }, [api, overdueStartDate, overdueEndDate, overdueBorrower, overduePatronId, balancesStartDate, balancesEndDate, topItemsStartDate, topItemsEndDate, newPatronsStartDate, newPatronsEndDate,transactionsStartDate,transactionsEndDate]);
 
   useEffect(() => {
     loadReport(activeReport);
@@ -438,6 +448,26 @@ export default function ReportsPanel({ api }) {
                       className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
                     />
                   </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Borrower</label>
+                    <input
+                      type="text"
+                      placeholder="Search borrower name"
+                      value={overdueBorrower}
+                      onChange={(e) => setOverdueBorrower(e.target.value)}
+                      className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Patron ID</label>
+                    <input
+                      type="number"
+                      placeholder="e.g. 123"
+                      value={overduePatronId}
+                      onChange={(e) => setOverduePatronId(e.target.value)}
+                      className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                    />
+                  </div>
                 </div>
               )}
               {activeReport === "balances" && (
@@ -528,7 +558,19 @@ export default function ReportsPanel({ api }) {
                   </div>
                 </div>
               )}
-            <div className="flex gap-2 ml-auto">
+            {/* Toolbar moved below */}
+            </div>
+          </div>
+
+          {/* Toolbar above table: count + actions */}
+          <div className="flex items-center justify-between gap-3">
+            {activeReport === "overdue" ? (
+              <div className="inline-flex items-center rounded-md border bg-gray-50 px-3 py-2 text-sm text-gray-800">
+                <span className="font-medium">Currently Overdue:</span>
+                <span className="ml-1">{reportData.length}</span>
+              </div>
+            ) : <div />}
+            <div className="flex gap-2">
               <button
                 onClick={handleRefresh}
                 disabled={loading}
@@ -543,7 +585,6 @@ export default function ReportsPanel({ api }) {
               >
                 Export CSV
               </button>
-            </div>
             </div>
           </div>
 
