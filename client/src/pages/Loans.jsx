@@ -1,9 +1,10 @@
-import { useEffect,useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
-import { formatDate } from "../utils";
+import { formatDate, formatDateTime } from "../utils";
 import "./Loans.css";
+import { listMyHolds, cancelMyHold } from "../api";
 
 export default function Loans() {
   const { token, useApi } = useAuth();
@@ -11,6 +12,10 @@ export default function Loans() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [holds, setHolds] = useState([]);
+  const [holdsLoading, setHoldsLoading] = useState(true);
+  const [holdsError, setHoldsError] = useState("");
+  const [cancelingHoldId, setCancelingHoldId] = useState(null);
 
   useEffect(() => {
     if (!token) {
@@ -20,21 +25,59 @@ export default function Loans() {
     let active = true;
     (async () => {
       setLoading(true);
+      setHoldsLoading(true);
       setError("");
+      setHoldsError("");
       try {
-        const data = await useApi("loans/my");
-        const list = Array.isArray(data?.rows) ? data.rows : Array.isArray(data) ? data : [];
+        const [loansData, holdsData] = await Promise.all([
+          useApi("loans/my"),
+          listMyHolds(token),
+        ]);
         if (!active) return;
-        setRows(list);
+        const loans = Array.isArray(loansData?.rows) ? loansData.rows : Array.isArray(loansData) ? loansData : [];
+        const holdRows = Array.isArray(holdsData?.rows) ? holdsData.rows : Array.isArray(holdsData) ? holdsData : [];
+        setRows(loans);
+        setHolds(holdRows);
       } catch (err) {
         if (!active) return;
         setError(err?.message || "Failed to load your loans.");
+        setHoldsError(err?.message || "Failed to load your holds.");
       } finally {
-        if (active) setLoading(false);
+        if (active) {
+          setLoading(false);
+          setHoldsLoading(false);
+        }
       }
     })();
     return () => { active = false; };
   }, [token, useApi, navigate]);
+
+  const refreshHolds = async () => {
+    setHoldsLoading(true);
+    setHoldsError("");
+    try {
+      const data = await listMyHolds(token);
+      const list = Array.isArray(data?.rows) ? data.rows : Array.isArray(data) ? data : [];
+      setHolds(list);
+    } catch (err) {
+      setHoldsError(err?.message || "Failed to refresh holds.");
+    } finally {
+      setHoldsLoading(false);
+    }
+  };
+
+  const handleCancelHold = async (holdId) => {
+    if (!window.confirm("Cancel this hold?")) return;
+    setCancelingHoldId(holdId);
+    try {
+      await cancelMyHold(token, holdId);
+      await refreshHolds();
+    } catch (err) {
+      setHoldsError(err?.message || err?.data?.error || "Failed to cancel hold");
+    } finally {
+      setCancelingHoldId(null);
+    }
+  };
 
   return (
     <div className="loans-page">
@@ -79,6 +122,77 @@ export default function Loans() {
           </table>
         </div>
       </div>
+
+      <section className="holds-section">
+        <div className="holds-header">
+          <div>
+            <h2>Your Holds</h2>
+            <p>Track queued and ready-for-pickup requests.</p>
+          </div>
+          <div>
+            {holdsLoading && <span className="loading">Loading…</span>}
+            {holdsError && <span className="error">{holdsError}</span>}
+          </div>
+        </div>
+        <div className="holds-container">
+          <div style={{ overflowX: "auto" }}>
+            <table className="holds-table">
+              <thead>
+                <tr>
+                  <Th>Title</Th>
+                  <Th>Status</Th>
+                  <Th>Queue</Th>
+                  <Th>Ready Window</Th>
+                  <Th>Actions</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {holds.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="holds-empty">
+                      {holdsLoading ? "" : "No holds yet."}
+                    </td>
+                  </tr>
+                ) : (
+                  holds.map((hold) => (
+                    <tr key={hold.hold_id}>
+                      <Td>{hold.item_title}</Td>
+                      <Td>
+                        <span className={`hold-status ${hold.status}`}>{hold.status}</span>
+                      </Td>
+                      <Td>
+                        {hold.status === "queued"
+                          ? hold.queue_position
+                          : hold.status === "ready"
+                            ? "Ready"
+                            : "—"}
+                      </Td>
+                      <Td>
+                        {hold.status === "ready"
+                          ? `${formatDateTime(hold.available_since)} – ${formatDateTime(hold.expires_at)}`
+                          : "—"}
+                      </Td>
+                      <Td>
+                        {(hold.status === "queued" || hold.status === "ready") ? (
+                          <button
+                            className="hold-cancel-btn"
+                            onClick={() => handleCancelHold(hold.hold_id)}
+                            disabled={cancelingHoldId === hold.hold_id}
+                          >
+                            {cancelingHoldId === hold.hold_id ? "Cancelling…" : "Cancel"}
+                          </button>
+                        ) : (
+                          <span className="hold-action-placeholder">—</span>
+                        )}
+                      </Td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

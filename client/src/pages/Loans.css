@@ -137,6 +137,90 @@
   color: var(--gray-500);
 }
 
+.holds-section {
+  margin-top: 32px;
+}
+
+.holds-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.holds-container {
+  border: 1px solid var(--gray-200);
+  border-radius: 8px;
+  background: white;
+  box-shadow: var(--shadow-sm);
+}
+
+.holds-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.holds-table th,
+.holds-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.holds-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--gray-500);
+}
+
+.hold-status {
+  display: inline-flex;
+  padding: 3px 8px;
+  border-radius: 999px;
+  text-transform: capitalize;
+  font-size: 0.75rem;
+  background: var(--gray-100);
+  color: var(--gray-700);
+}
+
+.hold-status.ready {
+  background: #ecfdf5;
+  color: #065f46;
+}
+
+.hold-status.queued {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.hold-status.fulfilled {
+  background: #e8f5e9;
+  color: #1b5e20;
+}
+
+.hold-status.cancelled,
+.hold-status.expired {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.hold-cancel-btn {
+  border: 1px solid var(--gray-300);
+  border-radius: 6px;
+  padding: 6px 12px;
+  background: white;
+  cursor: pointer;
+}
+
+.hold-cancel-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.hold-action-placeholder {
+  color: var(--gray-500);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .loans-page {

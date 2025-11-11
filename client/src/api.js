@@ -63,6 +63,11 @@ export const placeHold = (token, item_id) =>
     body: { item_id },
   });
 
+export const listMyHolds = (token) => api("/holds/my", { token });
+
+export const cancelMyHold = (token, holdId) =>
+  api(`/holds/${holdId}`, { method: "DELETE", token });
+
 export const createReservation = (token, payload) =>
   api("/staff/reservations", { method: "POST", token, body: payload });
 

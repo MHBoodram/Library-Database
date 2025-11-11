@@ -44,6 +44,7 @@ API highlights (server)
 - Holds:
   - POST /api/holds/place { user_id?, item_id | copy_id }
   - DELETE /api/holds/:id
+  - GET /api/staff/holds (staff dashboard queue overview)
 - Reports:
   - GET /api/reports/overdue
   - GET /api/reports/balances

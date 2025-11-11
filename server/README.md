@@ -48,6 +48,7 @@ Triggers compute due date, snapshot policy, set copy status, and create overdue 
 
 - POST /api/holds/place { user_id?, item_id | copy_id }
 - DELETE /api/holds/:id
+- GET /api/staff/holds (staff auth) → joined hold queue data
 
 ## Staff
 

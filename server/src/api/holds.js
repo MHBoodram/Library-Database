@@ -56,9 +56,72 @@ export const placeHold = (JWT_SECRET) => async (req, res) => {
   }
 };
 
-export const cancelHold = (JWT_SECRET) => async (req, res, params) => {
+export const cancelHold = (JWT_SECRET, { restrictToSelf = true } = {}) => async (req, res, params) => {
   const auth = requireAuth(req, res, JWT_SECRET); if (!auth) return;
   const hold_id = Number(params.id);
-  await pool.execute("UPDATE hold SET status='cancelled' WHERE hold_id=?", [hold_id]);
-  return sendJSON(res, 200, { ok:true });
+  if (!hold_id) return sendJSON(res, 400, { error: "invalid_hold" });
+  const targetUser = restrictToSelf ? resolveUserId(auth) : null;
+  const sql = restrictToSelf
+    ? "UPDATE hold SET status='cancelled' WHERE hold_id=? AND user_id=? AND status IN ('queued','ready')"
+    : "UPDATE hold SET status='cancelled' WHERE hold_id=? AND status IN ('queued','ready')";
+  const paramsArr = restrictToSelf ? [hold_id, targetUser] : [hold_id];
+  try {
+    const [result] = await pool.execute(sql, paramsArr);
+    if (result.affectedRows === 0) {
+      return sendJSON(res, 404, { error: "hold_not_found" });
+    }
+    return sendJSON(res, 200, { ok:true });
+  } catch (err) {
+    console.error("cancelHold error", err);
+    return sendJSON(res, 500, { error: "cancel_hold_failed" });
+  }
+};
+
+export const listHolds = (JWT_SECRET) => async (req, res) => {
+  const auth = requireAuth(req, res, JWT_SECRET);
+  if (!auth) return;
+  const queryScope = (req.url || "").includes("/api/staff/holds") ? "staff" : "self";
+  if (queryScope === "staff") {
+    const isStaff = Boolean(auth.employee_id);
+    const role = (auth.role || "").toLowerCase();
+    if (!isStaff && role !== "staff" && role !== "admin") {
+      return sendJSON(res, 403, { error: "forbidden" });
+    }
+  }
+  const filterUserId = queryScope === "self" ? resolveUserId(auth) : null;
+
+  try {
+    const [rows] = await pool.query(
+      `
+        SELECT
+          h.hold_id,
+          h.status,
+          h.queue_position,
+          h.available_since,
+          h.expires_at,
+          h.created_at,
+          h.item_id,
+          i.title AS item_title,
+          h.user_id,
+          u.first_name,
+          u.last_name,
+          u.email,
+          h.copy_id,
+          c.barcode AS copy_barcode
+        FROM hold h
+        JOIN item i ON i.item_id = h.item_id
+        JOIN user u ON u.user_id = h.user_id
+        LEFT JOIN copy c ON c.copy_id = h.copy_id
+        ${filterUserId ? "WHERE h.user_id = ?" : ""}
+        ORDER BY FIELD(h.status,'ready','queued','fulfilled','cancelled','expired'),
+                 h.queue_position ASC,
+                 h.created_at ASC
+      `
+      , filterUserId ? [filterUserId] : []
+    );
+    return sendJSON(res, 200, { rows });
+  } catch (err) {
+    console.error("Failed to list holds:", err);
+    return sendJSON(res, 500, { error: "holds_query_failed" });
+  }
 };

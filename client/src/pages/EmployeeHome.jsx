@@ -8,6 +8,7 @@ import FiltersBar from "../components/staff/shared/FiltersBar";
 import FinesPanel from "../components/staff/FinesPanel";
 import ActiveLoansPanel from "../components/staff/ActiveLoansPanel";
 import { CheckoutPanel, ReturnLoanPanel } from "../components/staff/LoansManagement";
+import HoldsPanel from "../components/staff/HoldsPanel";
 import ReportsPanel from "../components/staff/ReportsPanel";
 import { AddItemPanel, EditItemPanel, RemoveItemPanel } from "../components/staff/ItemsManagement";
 import ReservationsPanel from "../components/staff/ReservationsPanel";
@@ -148,6 +149,12 @@ export default function EmployeeDashboard() {
                   >
                     Active Loans
                   </button>
+                  <button
+                    className="dropdown-item"
+                    onClick={() => { setTab("holds"); setManageLoansOpen(false); }}
+                  >
+                    Holds
+                  </button>
                 </div>
               )}
             </div>
@@ -214,6 +221,7 @@ export default function EmployeeDashboard() {
   {tab === "checkout" && <CheckoutPanel api={api} staffUser={user} />}
   {tab === "return" && <ReturnLoanPanel api={api} staffUser={user} />}
   {tab === "activeLoans" && <ActiveLoansPanel api={api} />}
+  {tab === "holds" && <HoldsPanel api={api} />}
   {tab === "reservations" && <ReservationsPanel api={api} staffUser={user} />}
   {tab === "reports" && <ReportsPanel api={api} />}
   {tab === "addItem" && <AddItemPanel api={api} />}
@@ -244,4 +252,3 @@ export default function EmployeeDashboard() {
 // RemoveItemPanel extracted to components/staff/ItemsManagement.jsx
 
 // AdminPanel (with DEFAULT_ADMIN_FORM constant) extracted to components/staff/AdminPanel.jsx
-
