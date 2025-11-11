@@ -107,12 +107,6 @@ export default function EmployeeDashboard() {
             </div>
           </div>
           <nav className="employee-tabs">
-            <button
-              className={`tab-btn ${tab === "fines" ? "active" : ""}`}
-              onClick={() => setTab("fines")}
-            >
-              Check Fines
-            </button>
             
             {/* Manage Loans Dropdown */}
             <div className="dropdown-container">
@@ -210,7 +204,7 @@ export default function EmployeeDashboard() {
       </header>
 
       <main style={{ maxWidth: 1200, margin: '0 auto', padding: '1.5rem' }}>
-  {tab === "fines" && <FinesPanel api={api} />}
+  {/* Fines moved under Reports tab */}
   {tab === "checkout" && <CheckoutPanel api={api} staffUser={user} />}
   {tab === "return" && <ReturnLoanPanel api={api} staffUser={user} />}
   {tab === "activeLoans" && <ActiveLoansPanel api={api} />}
