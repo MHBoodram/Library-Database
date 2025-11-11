@@ -20,14 +20,17 @@ const API_BASE = import.meta.env.VITE_API_BASE?.replace(/\/$/, "") || ""; // e.g
 export default function EmployeeDashboard() {
   // Alias context helper to avoid ESLint React Hooks rule false-positive on a function named `use*`
   const { useApi: api, user } = useAuth();
-  const [tab, setTab] = useState("checkout"); // "checkout" | "activeLoans" | "reservations" | "addItem" | "removeItem"
+  const isAdmin = user?.employee_role === "admin";
+  const [tab, setTab] = useState(() => {
+    if (isAdmin){return "admin"}
+    else{return "checkout"}
+  }); 
+  // valid states: "checkout" | "activeLoans" | "reservations" | "addItem" | "removeItem" | "admin" (only available to admins)
   const [counts, setCounts] = useState({ fines: 0, activeLoans: 0, reservations: 0 });
   const [countsLoading, setCountsLoading] = useState(false);
   const [countsLoaded, setCountsLoaded] = useState(false);
   const [manageItemsOpen, setManageItemsOpen] = useState(false);
   const [manageLoansOpen, setManageLoansOpen] = useState(false);
-  const isAdmin = user?.employee_role === "admin";
-
   useEffect(() => {
   if (!api || countsLoaded) return;
     
