@@ -777,3 +777,23 @@ tr.border-t {
     grid-template-columns: repeat(1, minmax(0, 1fr));
   }
 }
+
+.transactions-table-label{
+  padding: 12px 16px;
+  background: var(--gray-100);
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.875rem;
+  color: var(--gray-700);
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.td-action-label{
+  padding: 5px;
+}
+.td-action-label-checkout{
+  color:#02bd3d;
+}
+.td-action-label-return{
+  color:#01a5eb;
+}

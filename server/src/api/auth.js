@@ -3,57 +3,6 @@ import jwt from "jsonwebtoken";
 import { sendJSON, readJSONBody } from "../lib/http.js";
 import { pool } from "../lib/db.js";
 
-export function register() {
-  return async (req, res) => {
-    const b = await readJSONBody(req);
-    const first = (b.first_name || "").trim();
-    const last = (b.last_name || "").trim();
-    const email = (b.email || "").trim().toLowerCase();
-    const password = b.password || "";
-    const makeEmployee = (() => {
-      const raw = b.make_employee;
-      if (typeof raw === "boolean") return raw;
-      if (typeof raw === "number") return raw === 1;
-      if (typeof raw === "string") {
-        const normalized = raw.trim().toLowerCase();
-        return ["1", "true", "yes", "on"].includes(normalized);
-      }
-      return false;
-    })();
-    const role = makeEmployee ? "staff" : "student";
-    if (!first || !last || !email || !password) return sendJSON(res, 400, { error:"missing_fields" });
-
-    const conn = await pool.getConnection();
-    try {
-      await conn.beginTransaction();
-      const [u] = await conn.execute(
-        "INSERT INTO user(first_name,last_name,email,joined_at) VALUES(?,?,?,CURDATE())",
-        [first,last,email]
-      );
-      const hash = await bcrypt.hash(password, 10);
-      let employeeId = null;
-      if (makeEmployee) {
-        const [employee] = await conn.execute(
-          "INSERT INTO employee(first_name,last_name,role,hire_date) VALUES(?,?,?,CURDATE())",
-          [first, last, "assistant"]
-        );
-        employeeId = employee.insertId;
-      }
-      await conn.execute(
-        "INSERT INTO account(user_id,employee_id,email,password_hash,role) VALUES(?,?,?,?,?)",
-        [u.insertId, employeeId, email, hash, role]
-      );
-      await conn.commit();
-      return sendJSON(res, 201, { user_id: u.insertId, email, role, employee_id: employeeId });
-    } catch (e) {
-      try { await conn.rollback(); } catch {}
-      return sendJSON(res, 400, { error:"register_failed", details:e.message });
-    } finally {
-      conn.release();
-    }
-  };
-}
-
 export function login(JWT_SECRET) {
   return async (req, res) => {
     const { email = "", password = "" } = await readJSONBody(req);

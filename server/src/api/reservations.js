@@ -25,6 +25,13 @@ export const createReservation = (JWT_SECRET) => async (req, res) => {
     return sendJSON(res, 400, { error: "invalid_timespan", message: "end_time must be after start_time." });
   }
 
+  // Validate 2-hour maximum duration
+  const durationMs = end.getTime() - start.getTime();
+  const durationHours = durationMs / (1000 * 60 * 60);
+  if (durationHours > 2) {
+    return sendJSON(res, 400, { error: "duration_exceeded", message: "Reservations cannot exceed 2 hours." });
+  }
+
   // Validate library operation hours
   const hoursErrors = validateLibraryHours(start, end);
   if (hoursErrors.length > 0) {
@@ -181,6 +188,13 @@ export const createReservationSelf = (JWT_SECRET) => async (req, res) => {
     return sendJSON(res, 400, { error: "invalid_timespan", message: "end_time must be after start_time." });
   }
 
+  // Validate 2-hour maximum duration
+  const durationMs = end.getTime() - start.getTime();
+  const durationHours = durationMs / (1000 * 60 * 60);
+  if (durationHours > 2) {
+    return sendJSON(res, 400, { error: "duration_exceeded", message: "Reservations cannot exceed 2 hours." });
+  }
+
   // Validate library operation hours
   const hoursErrors = validateLibraryHours(start, end);
   if (hoursErrors.length > 0) {
@@ -316,5 +330,127 @@ export const deleteReservation = (JWT_SECRET) => async (req, res, params) => {
   } catch (err) {
     console.error("Delete reservation error:", err);
     return sendJSON(res, 500, { error: "server_error", message: err.message || "Failed to delete reservation" });
+  }
+};
+
+// Get room availability for a specific date
+export const getRoomAvailability = (JWT_SECRET) => async (req, res) => {
+  const auth = requireRole(req, res, JWT_SECRET, "staff");
+  if (!auth) return;
+
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const dateParam = url.searchParams.get("date"); // YYYY-MM-DD format
+  
+  if (!dateParam) {
+    return sendJSON(res, 400, { error: "invalid_payload", message: "date parameter is required (YYYY-MM-DD)" });
+  }
+
+  try {
+    // Get all rooms with their features
+    const [rooms] = await pool.query(
+      `SELECT room_id, room_number, capacity, features 
+       FROM room 
+       ORDER BY room_number`
+    );
+
+    // Get all active reservations for the specified date
+    const [reservations] = await pool.query(
+      `SELECT reservation_id, room_id, start_time, end_time, user_id
+       FROM reservation
+       WHERE DATE(start_time) = ? 
+         AND status = 'active'
+       ORDER BY start_time`,
+      [dateParam]
+    );
+
+    // Group reservations by room_id
+    const reservationsByRoom = {};
+    for (const res of reservations) {
+      if (!reservationsByRoom[res.room_id]) {
+        reservationsByRoom[res.room_id] = [];
+      }
+      reservationsByRoom[res.room_id].push({
+        reservation_id: res.reservation_id,
+        start_time: res.start_time,
+        end_time: res.end_time,
+        user_id: res.user_id,
+      });
+    }
+
+    // Build response with rooms and their reservations
+    const availability = rooms.map(room => ({
+      room_id: room.room_id,
+      room_number: room.room_number,
+      capacity: room.capacity,
+      features: room.features,
+      reservations: reservationsByRoom[room.room_id] || [],
+    }));
+
+    return sendJSON(res, 200, { date: dateParam, rooms: availability });
+  } catch (err) {
+    console.error("Get room availability failed:", err);
+    return sendJSON(res, 500, { error: "availability_fetch_failed", details: err.message });
+  }
+};
+
+// Get room availability for patrons (authenticated users)
+export const getRoomAvailabilityPatron = (JWT_SECRET) => async (req, res) => {
+  const auth = requireAuth(req, res, JWT_SECRET);
+  if (!auth) return;
+
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const dateParam = url.searchParams.get("date"); // YYYY-MM-DD format
+  
+  if (!dateParam) {
+    return sendJSON(res, 400, { error: "invalid_payload", message: "date parameter is required (YYYY-MM-DD)" });
+  }
+
+  try {
+    // Get all rooms with their features
+    const [rooms] = await pool.query(
+      `SELECT room_id, room_number, capacity, features 
+       FROM room 
+       ORDER BY room_number`
+    );
+
+    // Get all active reservations for the specified date
+    const [reservations] = await pool.query(
+      `SELECT reservation_id, room_id, start_time, end_time, user_id
+       FROM reservation
+       WHERE DATE(start_time) = ? 
+         AND status = 'active'
+       ORDER BY start_time`,
+      [dateParam]
+    );
+
+    const userId = Number(auth.uid || auth.user_id);
+
+    // Group reservations by room_id
+    const reservationsByRoom = {};
+    for (const res of reservations) {
+      if (!reservationsByRoom[res.room_id]) {
+        reservationsByRoom[res.room_id] = [];
+      }
+      reservationsByRoom[res.room_id].push({
+        reservation_id: res.reservation_id,
+        start_time: res.start_time,
+        end_time: res.end_time,
+        is_mine: res.user_id === userId,
+      });
+    }
+
+    // Build response with rooms and their reservations
+    const availability = rooms.map(room => ({
+      room_id: room.room_id,
+      room_number: room.room_number,
+      capacity: room.capacity,
+      features: room.features,
+      reservations: reservationsByRoom[room.room_id] || [],
+    }));
+
+    return sendJSON(res, 200, { date: dateParam, rooms: availability });
+  } catch (err) {
+    console.error("Get room availability failed:", err);
+    return sendJSON(res, 500, { error: "availability_fetch_failed", details: err.message });
   }
 };

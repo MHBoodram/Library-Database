@@ -62,7 +62,7 @@ function NavBar() {
                         </NavLink>
                         {user && (user.role === 'student' || user.role === 'teacher') && (
                             <NavLink to="/loans" className = {({ isActive }) => (isActive? 'sub-nav-link active' : 'sub-nav-link')}>
-                                Loans
+                                Manage Loans
                             </NavLink>
                         )}
                         <NavLink to="/rooms" className = {({ isActive }) => (isActive? 'sub-nav-link active' : 'sub-nav-link')}>
@@ -103,9 +103,6 @@ function NavBar() {
                             <>
                                 <NavLink to="/login" className = {({ isActive }) => (isActive? 'bar-link active' : 'bar-link')}>
                                     Log in
-                                </NavLink>
-                                <NavLink to="/register" className = {({ isActive }) => (isActive? 'bar-link active' : 'bar-link')}>
-                                    Register
                                 </NavLink>
                             </>
                         )}

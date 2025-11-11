@@ -17,7 +17,7 @@ Key features
 - Overdue fine calculation and storage — fine policies can vary by media type and user category.
 - Place holds/requests on items (by item or by copy).
 - Reports for overdue items, balances, and top-borrowed items.
-- Auth with role-based registration (student, faculty, staff).
+- Auth with admin-provisioned accounts and role-based access (student, faculty, staff).
 
 Architecture
 ------------
@@ -27,9 +27,9 @@ Architecture
 API highlights (server)
 -----------------------
 - Auth:
-  - POST /api/auth/register { first_name, last_name, email, password, role }
   - POST /api/auth/login { email, password } -> { token }
-  - GET /api/auth/me (Bearer token)
+  - GET /api/me (Bearer token)
+  - POST /api/admin/accounts (admin-only; provision new users/staff)
 - Items & copies:
   - POST /api/items { title, subject?, classification? }
   - PUT /api/items/:id { title?, subject?, classification? }
@@ -44,6 +44,7 @@ API highlights (server)
 - Holds:
   - POST /api/holds/place { user_id?, item_id | copy_id }
   - DELETE /api/holds/:id
+  - GET /api/staff/holds (staff dashboard queue overview)
 - Reports:
   - GET /api/reports/overdue
   - GET /api/reports/balances

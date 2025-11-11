@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, Link, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import NavBar from '../components/NavBar';
 
@@ -117,8 +117,8 @@ export default function Login() {
         </button>
       </form>
 
-        <p style={{ marginTop: 16, textAlign: 'center' }}>
-          Don't have an account? <Link to="/register">Register here</Link>
+        <p style={{ marginTop: 16, textAlign: 'center', color: '#555', fontSize: 14 }}>
+          Need an account? Please contact a library administrator.
         </p>
         </div>
       </div>

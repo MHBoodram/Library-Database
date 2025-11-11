@@ -6,7 +6,6 @@ const AuthCtx = createContext({
   ...DEFAULT_AUTH,
   login: async () => DEFAULT_AUTH,
   logout: () => {},
-  register: async () => DEFAULT_AUTH,
   useApi: () => api,
   refreshProfile: async () => DEFAULT_AUTH.user,
   updateProfile: async () => DEFAULT_AUTH.user,
@@ -73,30 +72,6 @@ export function AuthProvider({ children }) {
     save(DEFAULT_AUTH);
   }, [save]);
 
-  const register = useCallback(
-    async (
-      first_name,
-      last_name,
-      email,
-      password,
-      { autoLogin = true, makeEmployee = false } = {}
-    ) => {
-      await api("auth/register", {
-        method: "POST",
-        body: {
-          first_name: first_name.trim(),
-          last_name: last_name.trim(),
-          email: email.trim().toLowerCase(),
-          password,
-          make_employee: makeEmployee,
-        },
-      });
-      if (!autoLogin) return null;
-      return login(email, password);
-    },
-    [login]
-  );
-
   const useApi = useCallback((path, opts = {}) => {
     const { token } = auth;
     return api(path, { ...opts, token });
@@ -127,12 +102,11 @@ export function AuthProvider({ children }) {
       user: auth.user,
       login,
       logout,
-      register,
       useApi,
       refreshProfile,
       updateProfile,
     }),
-    [auth, login, logout, register, useApi, refreshProfile, updateProfile]
+    [auth, login, logout, useApi, refreshProfile, updateProfile]
   );
 
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;

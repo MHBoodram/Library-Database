@@ -4,12 +4,12 @@ import { URL } from "node:url";
 import { setCors, sendJSON } from "./lib/http.js";
 import { router } from "./lib/router.js";
 
-import { register, login } from "./api/auth.js";
+import { login } from "./api/auth.js";
 import { createItem, updateItem, deleteItem, listItems, listItemCopies } from "./api/items.js";
 import { createCopy, updateCopy, deleteCopy } from "./api/copies.js";
 import { checkout, returnLoan, fetchUserLoans } from "./api/loans.js";
-import { placeHold, cancelHold } from "./api/holds.js";
-import { overdue, balances, topItems, newPatronsByMonth } from "./api/reports.js";
+import { placeHold, cancelHold, listHolds } from "./api/holds.js";
+import { overdue, balances, topItems, newPatronsByMonth, listTransactions } from "./api/reports.js";
 import { listFines, listActiveLoans } from "./api/staff.js";
 import {
   createReservation,
@@ -18,6 +18,8 @@ import {
   listMyReservations,
   cancelReservation,
   deleteReservation,
+  getRoomAvailability,
+  getRoomAvailabilityPatron,
 } from "./api/reservations.js";
 import { createRoom, listRooms } from "./api/rooms.js";
 import { createAuthor, getItemAuthors, deleteItemAuthor } from "./api/authors.js";
@@ -34,7 +36,6 @@ const r = router();
 
 r.add("GET", "/api/health", async (_req, res) => sendJSON(res, 200, { ok: true, node: process.version }));
 
-r.add("POST", "/api/auth/register", register());
 r.add("POST", "/api/auth/login", login(JWT_SECRET));
 
 r.add("GET", "/api/items", listItems());
@@ -56,12 +57,15 @@ r.add("POST", "/api/loans/return", returnLoan(JWT_SECRET));
 r.add("GET", "/api/loans/my", fetchUserLoans(JWT_SECRET));
 
 r.add("POST", "/api/holds/place", placeHold(JWT_SECRET));
+r.add("GET", "/api/holds/my", listHolds(JWT_SECRET));
+r.add("GET", "/api/staff/holds", listHolds(JWT_SECRET));
 r.add("DELETE", "/api/holds/:id", cancelHold(JWT_SECRET));
 
 r.add("GET", "/api/reports/overdue", overdue(JWT_SECRET));
 r.add("GET", "/api/reports/balances", balances(JWT_SECRET));
 r.add("GET", "/api/reports/top-items", topItems(JWT_SECRET));
 r.add("GET", "/api/reports/new-patrons-monthly", newPatronsByMonth(JWT_SECRET));
+r.add("GET","/api/reports/transactions",listTransactions(JWT_SECRET));
 
 r.add("GET", "/api/admin/overview", adminOverview(JWT_SECRET));
 r.add("GET", "/api/admin/employees", adminEmployees(JWT_SECRET));
@@ -75,6 +79,7 @@ r.add("GET", "/api/staff/patrons/search", searchPatrons(JWT_SECRET));
 r.add("GET", "/api/staff/fines", listFines(JWT_SECRET));
 r.add("GET", "/api/staff/loans/active", listActiveLoans(JWT_SECRET));
 r.add("GET", "/api/staff/reservations", listReservations(JWT_SECRET));
+r.add("GET", "/api/staff/reservations/availability", getRoomAvailability(JWT_SECRET));
 r.add("POST", "/api/staff/reservations", createReservation(JWT_SECRET));
 r.add("DELETE", "/api/staff/reservations/:id", deleteReservation(JWT_SECRET));
 r.add("POST", "/api/staff/rooms", createRoom(JWT_SECRET));
@@ -87,6 +92,7 @@ r.add("POST", "/api/manage/accounts/:id/flag", flagAccount(JWT_SECRET));
 
 r.add("POST", "/api/reservations", createReservationSelf(JWT_SECRET));
 r.add("GET", "/api/reservations/my", listMyReservations(JWT_SECRET));
+r.add("GET", "/api/reservations/availability", getRoomAvailabilityPatron(JWT_SECRET));
 r.add("PATCH", "/api/reservations/:id/cancel", cancelReservation(JWT_SECRET));
 
 r.add("GET", "/api/rooms", listRooms());

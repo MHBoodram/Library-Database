@@ -8,6 +8,8 @@ export const overdue = (JWT_SECRET) => async (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host}`);
     const startDateParam = (url.searchParams.get("start_date") || "").trim();
     const endDateParam = (url.searchParams.get("end_date") || "").trim();
+    const graceParam = (url.searchParams.get("grace") || "all").trim().toLowerCase(); // beyond | within | all
+    const sortParam = (url.searchParams.get("sort") || "most").trim().toLowerCase();   // most | least
 
     // Validate date parameters (YYYY-MM-DD format)
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
@@ -27,30 +29,42 @@ export const overdue = (JWT_SECRET) => async (req, res) => {
       [startDate, endDate] = [endDate, startDate];
     }
 
+    const DEFAULT_GRACE_DAYS = 3; // not overdue until the 4th day after due
+
+    // Build grace filter clause
+    let graceWhere = "DATEDIFF(CURDATE(), l.due_date) >= 1"; // at least 1 day past due
+    if (graceParam === 'within') {
+      graceWhere += ` AND GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) <= COALESCE(l.grace_days_snapshot, ${DEFAULT_GRACE_DAYS})`;
+    } else if (graceParam === 'beyond') {
+      graceWhere += ` AND GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) > COALESCE(l.grace_days_snapshot, ${DEFAULT_GRACE_DAYS})`;
+    }
+
+    const orderClause = sortParam === 'least' ? 'days_overdue ASC' : 'days_overdue DESC';
+
     const sql = `
       SELECT
+        u.user_id AS patron_id,
         u.first_name,
         u.last_name,
         i.title,
-        -- best-effort media type
         CASE WHEN d.item_id IS NOT NULL THEN 'device'
              WHEN m.item_id IS NOT NULL THEN LOWER(m.media_type)
              ELSE 'book' END AS media_type,
         l.due_date,
-        GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) AS days_overdue,
-        -- existing assessed fine on an open overdue fine, if any
+        COALESCE(l.grace_days_snapshot, ${DEFAULT_GRACE_DAYS}) AS grace_days,
+        GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) AS days_since_due,
+        GREATEST(GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) - COALESCE(l.grace_days_snapshot, ${DEFAULT_GRACE_DAYS}), 0) AS days_overdue,
+        CASE WHEN GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) BETWEEN 1 AND COALESCE(l.grace_days_snapshot, ${DEFAULT_GRACE_DAYS}) THEN 1 ELSE 0 END AS within_grace,
         CASE WHEN f.fine_id IS NOT NULL THEN f.amount_assessed END AS assessed_fine,
-        -- dynamic estimate as of now using loan snapshots
         ROUND(
           LEAST(
             COALESCE(l.max_fine_snapshot, 99999),
             GREATEST(
               0,
-              (GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) - COALESCE(l.grace_days_snapshot, 0))
+              (GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) - COALESCE(l.grace_days_snapshot, ${DEFAULT_GRACE_DAYS}))
             ) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
           ), 2
         ) AS dynamic_est_fine,
-        -- prefer the assessed fine if present, otherwise the dynamic estimate
         COALESCE(
           f.amount_assessed,
           ROUND(
@@ -58,18 +72,17 @@ export const overdue = (JWT_SECRET) => async (req, res) => {
               COALESCE(l.max_fine_snapshot, 99999),
               GREATEST(
                 0,
-                (GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) - COALESCE(l.grace_days_snapshot, 0))
+                (GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) - COALESCE(l.grace_days_snapshot, ${DEFAULT_GRACE_DAYS}))
               ) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
             ), 2
           )
         ) AS current_fine,
-        -- keep original alias for backward compatibility
         ROUND(
           LEAST(
             COALESCE(l.max_fine_snapshot, 99999),
             GREATEST(
               0,
-              (GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) - COALESCE(l.grace_days_snapshot, 0))
+              (GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) - COALESCE(l.grace_days_snapshot, ${DEFAULT_GRACE_DAYS}))
             ) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
           ), 2
         ) AS est_fine
@@ -79,16 +92,15 @@ export const overdue = (JWT_SECRET) => async (req, res) => {
       JOIN item i ON i.item_id = c.item_id
       LEFT JOIN device d ON d.item_id = i.item_id
       LEFT JOIN media m ON m.item_id = i.item_id
-      -- join latest open overdue fine for this loan (if exists)
       LEFT JOIN fine f
         ON f.loan_id = l.loan_id
        AND f.status NOT IN ('paid','waived')
        AND f.reason = 'overdue'
-      WHERE l.status = 'active' 
-        AND l.due_date < CURDATE()
+      WHERE l.status = 'active'
+        AND ${graceWhere}
         AND l.due_date >= ?
         AND l.due_date <= ?
-      ORDER BY days_overdue DESC, l.due_date ASC
+      ORDER BY ${orderClause}, l.due_date ASC
       LIMIT 500
     `;
     const [rows] = await pool.query(sql, [startDate, endDate]);
@@ -139,7 +151,7 @@ export const balances = (JWT_SECRET) => async (req, res) => {
                   COALESCE(l.max_fine_snapshot, 99999),
                   GREATEST(
                     0,
-                    (GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) - COALESCE(l.grace_days_snapshot, 0))
+                    (GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) - COALESCE(l.grace_days_snapshot, 3))
                   ) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
                 ), 2
               )
@@ -277,5 +289,67 @@ export const newPatronsByMonth = (JWT_SECRET) => async (req, res) => {
   } catch (err) {
     console.error("newPatronsByMonth report failed:", err.message);
     return sendJSON(res, 500, { error: "report_new_patrons_failed" });
+  }
+};
+
+export const listTransactions = (JWT_SECRET) => async (req, res) => {
+  const auth = requireRole(req, res, JWT_SECRET, "staff"); if (!auth) return;
+  try {
+    if (!auth) return;
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const startDateParam = (url.searchParams.get("start_date") || "").trim();
+    const endDateParam = (url.searchParams.get("end_date") || "").trim();
+    // Validate date parameters (YYYY-MM-DD format)
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    let startDate = startDateParam;
+    let endDate = endDateParam;
+     // Default to last 12 months if dates not provided or invalid
+    if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
+      const now = new Date();
+      endDate = now.toISOString().slice(0, 10);
+      const yearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+      startDate = yearAgo.toISOString().slice(0, 10);
+    }
+
+    // Ensure start is before end
+    if (new Date(startDate) > new Date(endDate)) {
+      [startDate, endDate] = [endDate, startDate];
+    }
+
+    const conditions = [];
+    const params = [];
+
+    // putting start and end date into condiiton to be used in where clause
+    conditions.push("t.date BETWEEN ? and ?")
+    params.push(startDate,endDate);
+
+    const whereClause = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+    const sql = `
+      SELECT
+        t.loan_id,
+        t.date,
+        t.type,
+        u.user_id,
+        u.email        AS user_email,
+        u.first_name   AS user_first_name,
+        u.last_name    AS user_last_name,
+        e.first_name   AS employee_first_name,
+        e.last_name    AS employee_last_name,
+        c.copy_id,
+        i.title        AS item_title
+      FROM transaction t
+      JOIN user u     ON u.user_id = t.user_id
+      JOIN copy c     ON c.copy_id = t.copy_id
+      JOIN item i     ON i.item_id = c.item_id
+      LEFT JOIN employee e ON e.employee_id = t.employee_id
+      ${whereClause}
+      LIMIT 500
+    `;
+    console.log("final sql: ",sql,"params: ",params,"whereClause:",whereClause);
+    const [rows] = await pool.query(sql, params);
+    return sendJSON(res, 200, rows );
+  }catch (err) {
+    console.error("Failed to load transactions:", err.message);
+    return sendJSON(res, 500, { error: "transactions_query_failed" });
   }
 };

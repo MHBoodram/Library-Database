@@ -7,7 +7,6 @@ import Protected from "./components/Protected.jsx";
 
 import Home from "./pages/Home.jsx";
 import Login from "./pages/Login.jsx";
-import Register from "./pages/Register.jsx";
 import EmployeeHome from "./pages/EmployeeHome.jsx";
 import Books from "./pages/Books.jsx";
 import Reports from "./pages/Reports.jsx";
@@ -108,7 +107,6 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/Login" element={<Navigate to="/login" replace />} /> {/* optional redirect */}
-          <Route path="/register" element={<Register />} />
           <Route path="/books" element={<Books />} />
           <Route path="/books/:id" element={<Protected><BookRoute /></Protected>} />
           <Route path="/loans" element={<Loans />} />

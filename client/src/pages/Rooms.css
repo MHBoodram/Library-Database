@@ -27,7 +27,7 @@
 
 /* Page Container */
 .rooms-page {
-  max-width: 720px;
+  max-width: 1200px;
   margin: 2rem auto;
   padding: 24px;
 }
@@ -306,5 +306,246 @@
   .rooms-reservations-table th,
   .rooms-reservations-table td {
     padding: 8px;
+  }
+}
+
+/* Calendar View Styles */
+.calendar-container {
+  background: white;
+  border: 1px solid var(--gray-300);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  margin: 2rem 0;
+  overflow: hidden;
+}
+
+.calendar-header {
+  background: var(--gray-50);
+  padding: 1.25rem;
+  border-bottom: 1px solid var(--gray-300);
+}
+
+.calendar-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--gray-900);
+  margin-bottom: 1rem;
+}
+
+.calendar-nav {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.calendar-btn {
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  background: var(--gray-200);
+  border: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--gray-900);
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.calendar-btn:hover {
+  background: var(--gray-300);
+}
+
+.calendar-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.calendar-btn:disabled:hover {
+  background: var(--gray-200);
+}
+
+.calendar-btn-primary {
+  background: var(--primary-main);
+  color: white;
+}
+
+.calendar-btn-primary:hover {
+  background: var(--primary-dark);
+}
+
+.calendar-date-input {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--gray-300);
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+}
+
+.calendar-filters {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.filter-group label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--gray-600);
+}
+
+.filter-input {
+  padding: 0.375rem 0.5rem;
+  border: 1px solid var(--gray-300);
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+}
+
+.calendar-body {
+  padding: 1rem;
+  overflow-x: auto;
+}
+
+.calendar-loading,
+.calendar-error,
+.calendar-empty {
+  text-align: center;
+  padding: 2rem;
+  color: var(--gray-500);
+}
+
+.calendar-error {
+  color: var(--error-main);
+}
+
+.calendar-grid {
+  min-width: 100%;
+}
+
+.calendar-grid-header,
+.calendar-grid-row {
+  display: grid;
+  grid-template-columns: 120px repeat(12, minmax(60px, 1fr));
+  gap: 0.25rem;
+  margin-bottom: 0.25rem;
+}
+
+.calendar-cell-room-label {
+  font-weight: 600;
+  font-size: 0.75rem;
+  color: var(--gray-700);
+  padding: 0.5rem;
+}
+
+.calendar-cell-time {
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-align: center;
+  color: var(--gray-700);
+  padding: 0.5rem;
+}
+
+.calendar-cell-room {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0.5rem;
+  background: var(--gray-50);
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+}
+
+.calendar-cell-room .room-number {
+  font-weight: 600;
+  color: var(--gray-900);
+}
+
+.calendar-cell-room .room-capacity {
+  color: var(--gray-600);
+  font-size: 0.625rem;
+}
+
+.calendar-cell-slot {
+  padding: 0.5rem;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.slot-available {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.slot-available:hover {
+  background: #a7f3d0;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.slot-reserved {
+  background: #fee2e2;
+  color: #991b1b;
+  cursor: not-allowed;
+}
+
+.slot-mine {
+  background: #fef3c7;
+  color: #92400e;
+  cursor: default;
+}
+
+.slot-unavailable {
+  background: #f3f4f6;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.calendar-legend {
+  background: var(--gray-50);
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid var(--gray-300);
+  font-size: 0.75rem;
+  color: var(--gray-600);
+}
+
+.legend-item {
+  margin: 0 0.5rem;
+}
+
+.legend-available {
+  color: #065f46;
+}
+
+.legend-reserved {
+  color: #991b1b;
+}
+
+.legend-mine {
+  color: #92400e;
+}
+
+.legend-unavailable {
+  color: #9ca3af;
+}
+
+@media (max-width: 768px) {
+  .calendar-grid-header,
+  .calendar-grid-row {
+    grid-template-columns: 100px repeat(12, minmax(50px, 1fr));
+  }
+  
+  .calendar-cell-slot {
+    padding: 0.375rem;
+    font-size: 0.625rem;
   }
 }

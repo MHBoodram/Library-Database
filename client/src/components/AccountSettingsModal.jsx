@@ -23,6 +23,9 @@ export default function AccountSettingsModal({ open, onClose, onSubmit, user, su
 
   if (!open) return null;
 
+  // Patrons (students and teachers/faculty) cannot change their names
+  const isPatron = user?.role === 'student' || user?.role === 'teacher';
+
   const handleSubmit = (e) => {
     e.preventDefault();
     setLocalError("");
@@ -42,7 +45,12 @@ export default function AccountSettingsModal({ open, onClose, onSubmit, user, su
       return;
     }
 
-    const payload = { first_name: firstName.trim(), last_name: lastName.trim() };
+    const payload = {};
+    // Only include name changes if user is not a patron
+    if (!isPatron) {
+      payload.first_name = firstName.trim();
+      payload.last_name = lastName.trim();
+    }
     if (newPassword) payload.new_password = newPassword;
     if (newPassword) payload.current_password = currentPassword;
 
@@ -59,12 +67,29 @@ export default function AccountSettingsModal({ open, onClose, onSubmit, user, su
         <form onSubmit={handleSubmit} className="account-modal__body">
           <label>
             <span>First name</span>
-            <input value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
+            <input 
+              value={firstName} 
+              onChange={(e) => setFirstName(e.target.value)} 
+              required 
+              disabled={isPatron}
+              title={isPatron ? "Students and faculty cannot change their name" : ""}
+            />
           </label>
           <label>
             <span>Last name</span>
-            <input value={lastName} onChange={(e) => setLastName(e.target.value)} required />
+            <input 
+              value={lastName} 
+              onChange={(e) => setLastName(e.target.value)} 
+              required 
+              disabled={isPatron}
+              title={isPatron ? "Students and faculty cannot change their name" : ""}
+            />
           </label>
+          {isPatron && (
+            <p className="hint" style={{ marginTop: '-8px', marginBottom: '12px', fontSize: '0.875rem', color: '#666' }}>
+              Students and faculty cannot change their name. Please contact library staff if your name needs to be updated.
+            </p>
+          )}
 
           <div className="account-modal__password">
             <p className="hint">Change password</p>
