@@ -246,31 +246,31 @@ export default function AdminPanel({ api }) {
             </button>
           </form>
         </div>
-        <div className="rounded-lg border bg-white p-4 shadow-sm flex flex-col">
-          <h3 className="font-semibold mb-2">Account Directory</h3>
-          <p className="text-sm text-gray-600 flex-1">
-            Open the dedicated account manager to search, edit, or flag any patron or staff record.
-          </p>
-          <Link
-            to="/manage/accounts"
-            style={{
-              marginTop: "1rem",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.35rem",
-              background: "#2563eb",
-              color: "#fff",
-              padding: "0.5rem 0.9rem",
-              borderRadius: "999px",
-              fontWeight: 600,
-              textDecoration: "none",
-            }}
-          >
-            Open Account Manager →
-          </Link>
-        </div>
-
-        <div className="rounded-lg border bg-white p-4 shadow-sm">
+        <div className="grid gap-4 md:grid-rows-2">
+          <div className="rounded-lg border bg-white p-4 shadow-sm">
+            <h3 className="font-semibold mb-2">Manage Accounts</h3>
+            <div className="text-sm text-gray-600">
+              <label className="block">Open the dedicated account manager to search, edit, or flag any patron or staff record.</label>
+              <Link
+              to="/manage/accounts"
+              style={{
+                marginTop: "1rem",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.35rem",
+                background: "#2563eb",
+                color: "#fff",
+                padding: "0.5rem 0.9rem",
+                borderRadius: "999px",
+                fontWeight: 600,
+                textDecoration: "none",
+              }}
+            >
+              Open Account Manager →
+            </Link>
+            </div>
+          </div>
+          <div className="rounded-lg border bg-white p-4 shadow-sm">
           <h3 className="font-semibold mb-2">Employee Roles</h3>
           <ul className="divide-y divide-gray-100">
             {roleCounts.length === 0 && <li className="py-2 text-sm text-gray-600">No employees found.</li>}
@@ -281,6 +281,7 @@ export default function AdminPanel({ api }) {
               </li>
             ))}
           </ul>
+        </div>
         </div>
       </div>
 
