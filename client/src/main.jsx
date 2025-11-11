@@ -16,6 +16,7 @@ import BookPage from "./pages/BookPage.jsx";
 import ManageAccounts from "./pages/ManageAccounts.jsx";
 
 import "./index.css";
+import ReadyHoldNotifications from "./components/ReadyHoldNotifications.jsx";
 
 // Lightweight wrapper to supply data fetchers for BookPage
 function BookRoute() {
@@ -103,6 +104,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <AuthProvider>
       <BrowserRouter>
+        <ReadyHoldNotifications />
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
