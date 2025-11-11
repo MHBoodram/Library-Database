@@ -88,6 +88,57 @@ export const listEmployees = (JWT_SECRET) => async (req, res) => {
   }
 };
 
+export const listAccountCreations = (JWT_SECRET) => async (req, res) => {
+  const auth = requireEmployeeRole(req, res, JWT_SECRET, "admin");
+  if (!auth) return;
+
+  try {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const startDateParam = (url.searchParams.get("start_date") || "").trim();
+    const endDateParam = (url.searchParams.get("end_date") || "").trim();
+
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    let startDate = startDateParam;
+    let endDate = endDateParam;
+
+    if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
+      const now = new Date();
+      endDate = now.toISOString().slice(0, 10);
+      const monthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+      startDate = monthAgo.toISOString().slice(0, 10);
+    }
+
+    if (new Date(startDate) > new Date(endDate)) {
+      [startDate, endDate] = [endDate, startDate];
+    }
+
+    const [rows] = await pool.query(
+      `SELECT
+         a.account_id,
+         u.user_id,
+         u.first_name,
+         u.last_name,
+         u.email,
+         u.joined_at AS created_at,
+         a.role AS account_role,
+         e.employee_id,
+         e.role AS employee_role
+       FROM account a
+       JOIN user u ON u.user_id = a.user_id
+       LEFT JOIN employee e ON e.employee_id = a.employee_id
+       WHERE u.joined_at >= ? AND u.joined_at <= ?
+       ORDER BY u.joined_at DESC
+       LIMIT 500`,
+      [startDate, endDate]
+    );
+
+    return sendJSON(res, 200, { rows });
+  } catch (err) {
+    console.error("Failed to list account creations:", err.message);
+    return sendJSON(res, 500, { error: "admin_account_creations_failed" });
+  }
+};
+
 export const createAccount = (JWT_SECRET) => async (req, res) => {
   const auth = requireEmployeeRole(req, res, JWT_SECRET, "admin");
   if (!auth) return;
