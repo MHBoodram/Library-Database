@@ -1042,7 +1042,7 @@ function ReturnLoanPanel({ api, staffUser }) {
 function ReportsPanel({ api }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [activeReport, setActiveReport] = useState("overdue"); // "overdue" | "balances" | "topItems" | "newPatrons"
+  const [activeReport, setActiveReport] = useState("overdue"); // "overdue" | "balances" | "topItems" | "newPatrons" | "transactions"
   const [reportData, setReportData] = useState([]);
   
   // Date ranges for all reports
@@ -1073,6 +1073,13 @@ function ReportsPanel({ api }) {
     return d.toISOString().slice(0, 10);
   });
   const [newPatronsEndDate, setNewPatronsEndDate] = useState(() => new Date().toISOString().slice(0, 10));
+
+    const [transactionsStartDate, setTransactionStartDate] = useState(() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 1);
+    return d.toISOString().slice(0, 10);
+  });
+  const [transactionsEndDate, setTransactionsEndDate] = useState(() => new Date().toISOString().slice(0, 10));
 
   const loadReport = useCallback(async (reportType) => {
     if (!api) return;
@@ -1105,18 +1112,23 @@ function ReportsPanel({ api }) {
           params.set("start_date", newPatronsStartDate);
           params.set("end_date", newPatronsEndDate);
           break;
+        case "transactions":
+          endpoint = "reports/transactions";
+          params.set("start_date", transactionsStartDate);
+          params.set("end_date", transactionsEndDate);
+          break;
         default:
           throw new Error("Unknown report type");
       }
-      
       const data = await api(`${endpoint}?${params.toString()}`);
+      console.log("DATA: ", data);
       setReportData(Array.isArray(data) ? data : []);
     } catch (err) {
       setError(err.message || "Failed to load report");
     } finally {
       setLoading(false);
     }
-  }, [api, overdueStartDate, overdueEndDate, balancesStartDate, balancesEndDate, topItemsStartDate, topItemsEndDate, newPatronsStartDate, newPatronsEndDate]);
+  }, [api, overdueStartDate, overdueEndDate, balancesStartDate, balancesEndDate, topItemsStartDate, topItemsEndDate, newPatronsStartDate, newPatronsEndDate,transactionsStartDate,transactionsEndDate]);
 
   useEffect(() => {
     loadReport(activeReport);
@@ -1209,6 +1221,16 @@ function ReportsPanel({ api }) {
               >
                 New Patrons
               </button>
+              <button
+                onClick={() => setActiveReport("transactions")}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  activeReport === "transactions"
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                Transaction History
+              </button>
             </div>
 
             <div className="flex items-end gap-4">
@@ -1300,7 +1322,28 @@ function ReportsPanel({ api }) {
                   </div>
                 </div>
               )}
-            
+              {activeReport === "transactions" && (
+                <div className="flex flex-wrap items-end gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
+                    <input
+                      type="date"
+                      value={transactionsStartDate}
+                      onChange={(e) => setTransactionStartDate(e.target.value)}
+                      className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
+                    <input
+                      type="date"
+                      value={transactionsEndDate}
+                      onChange={(e) => setTransactionsEndDate(e.target.value)}
+                      className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                    />
+                  </div>
+                </div>
+              )}
             <div className="flex gap-2 ml-auto">
               <button
                 onClick={handleRefresh}
@@ -1331,6 +1374,7 @@ function ReportsPanel({ api }) {
             {activeReport === "balances" && <BalancesReportTable data={reportData} loading={loading} />}
             {activeReport === "topItems" && <TopItemsReportTable data={reportData} loading={loading} />}
             {activeReport === "newPatrons" && <NewPatronsReportTable data={reportData} loading={loading} />}
+            {activeReport === "transactions" && <TransactionReportTable data={reportData} loading={loading} />}
           </div>
         </div>
       </div>
@@ -1502,6 +1546,49 @@ function TopItemsReportTable({ data, loading }) {
                   {row.loans_count || row.loans_30d} loans
                 </span>
               </Td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function TransactionReportTable({data,loading}){
+  if (loading) {
+    return <div>Loading report...</div>;
+  }
+  if (data.length === 0) {
+    return <div className="p-8 text-center text-gray-500">No loan activity in selected period</div>;
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-full text-sm">
+        <thead className="bg-gray-100 text-left">
+          <tr>
+            <Th>Patron ID</Th>
+            <Th>Patron</Th>
+            <Th>Email</Th>
+            <Th>Item Title</Th>
+            <Th>Copy ID</Th>
+            <Th>Loan ID</Th>
+            <Th>Transaction</Th>
+            <Th>Date</Th>
+            <Th>Checked Out By</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((row, idx) => (
+            <tr key={idx}>
+              <Td>{row.user_id ? `#${row.user_id}` : "—"}</Td>
+              <Td>{row.user_first_name && row.user_last_name? `${row.user_first_name} ${row.user_last_name}`: "—"}</Td>
+              <Td>{row.user_email || "—"}</Td>
+              <Td>{row.item_title || "—"}</Td>
+              <Td>{row.copy_id ? `#${row.copy_id}` : "—"}</Td>
+              <Td>#{row.loan_id}</Td>
+              <Td>{(row.type || "").toUpperCase()}</Td>
+              <Td>{formatDate(row.date)}</Td>
+              <Td>{row.employee_first_name && row.employee_last_name? `${row.employee_first_name} ${row.employee_last_name}`: "—"}</Td>
             </tr>
           ))}
         </tbody>

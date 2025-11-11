@@ -279,3 +279,65 @@ export const newPatronsByMonth = (JWT_SECRET) => async (req, res) => {
     return sendJSON(res, 500, { error: "report_new_patrons_failed" });
   }
 };
+
+export const listTransactions = (JWT_SECRET) => async (req, res) => {
+  const auth = requireRole(req, res, JWT_SECRET, "staff"); if (!auth) return;
+  try {
+    if (!auth) return;
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const startDateParam = (url.searchParams.get("start_date") || "").trim();
+    const endDateParam = (url.searchParams.get("end_date") || "").trim();
+    // Validate date parameters (YYYY-MM-DD format)
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    let startDate = startDateParam;
+    let endDate = endDateParam;
+     // Default to last 12 months if dates not provided or invalid
+    if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
+      const now = new Date();
+      endDate = now.toISOString().slice(0, 10);
+      const yearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+      startDate = yearAgo.toISOString().slice(0, 10);
+    }
+
+    // Ensure start is before end
+    if (new Date(startDate) > new Date(endDate)) {
+      [startDate, endDate] = [endDate, startDate];
+    }
+
+    const conditions = [];
+    const params = [];
+
+    // putting start and end date into condiiton to be used in where clause
+    conditions.push("t.date BETWEEN ? and ?")
+    params.push(startDate,endDate);
+
+    const whereClause = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+    const sql = `
+      SELECT
+        t.loan_id,
+        t.date,
+        t.type,
+        u.user_id,
+        u.email        AS user_email,
+        u.first_name   AS user_first_name,
+        u.last_name    AS user_last_name,
+        e.first_name   AS employee_first_name,
+        e.last_name    AS employee_last_name,
+        c.copy_id,
+        i.title        AS item_title
+      FROM transaction t
+      JOIN user u     ON u.user_id = t.user_id
+      JOIN copy c     ON c.copy_id = t.copy_id
+      JOIN item i     ON i.item_id = c.item_id
+      LEFT JOIN employee e ON e.employee_id = t.employee_id
+      ${whereClause}
+      LIMIT 500
+    `;
+    console.log("final sql: ",sql,"params: ",params,"whereClause:",whereClause);
+    const [rows] = await pool.query(sql, params);
+    return sendJSON(res, 200, rows );
+  }catch (err) {
+    console.error("Failed to load transactions:", err.message);
+    return sendJSON(res, 500, { error: "transactions_query_failed" });
+  }
+};

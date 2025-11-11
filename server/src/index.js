@@ -9,7 +9,7 @@ import { createItem, updateItem, deleteItem, listItems, listItemCopies } from ".
 import { createCopy, updateCopy, deleteCopy } from "./api/copies.js";
 import { checkout, returnLoan, fetchUserLoans } from "./api/loans.js";
 import { placeHold, cancelHold } from "./api/holds.js";
-import { overdue, balances, topItems, newPatronsByMonth } from "./api/reports.js";
+import { overdue, balances, topItems, newPatronsByMonth, listTransactions } from "./api/reports.js";
 import { listFines, listActiveLoans } from "./api/staff.js";
 import {
   createReservation,
@@ -62,6 +62,7 @@ r.add("GET", "/api/reports/overdue", overdue(JWT_SECRET));
 r.add("GET", "/api/reports/balances", balances(JWT_SECRET));
 r.add("GET", "/api/reports/top-items", topItems(JWT_SECRET));
 r.add("GET", "/api/reports/new-patrons-monthly", newPatronsByMonth(JWT_SECRET));
+r.add("GET","/api/reports/transactions",listTransactions(JWT_SECRET));
 
 r.add("GET", "/api/admin/overview", adminOverview(JWT_SECRET));
 r.add("GET", "/api/admin/employees", adminEmployees(JWT_SECRET));
