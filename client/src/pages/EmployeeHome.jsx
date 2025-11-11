@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
@@ -10,7 +10,6 @@ import ActiveLoansPanel from "../components/staff/ActiveLoansPanel";
 import { CheckoutPanel, ReturnLoanPanel } from "../components/staff/LoansManagement";
 import HoldsPanel from "../components/staff/HoldsPanel";
 import ReportsPanel from "../components/staff/ReportsPanel";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { AddItemPanel, EditItemPanel, RemoveItemPanel } from "../components/staff/ItemsManagement";
 import ReservationsPanel from "../components/staff/ReservationsPanel";
 import AdminPanel from "../components/staff/AdminPanel";
