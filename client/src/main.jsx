@@ -13,7 +13,6 @@ import Reports from "./pages/Reports.jsx";
 import Loans from "./pages/Loans.jsx";
 import Rooms from "./pages/Rooms.jsx";
 import BookPage from "./pages/BookPage.jsx";
-import PendingLoans from "./pages/PendingLoans.jsx";
 import ManageAccounts from "./pages/ManageAccounts.jsx";
 
 import "./index.css";
@@ -100,7 +99,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           <Route path="/books" element={<Books />} />
           <Route path="/books/:id" element={<Protected><BookRoute /></Protected>} />
           <Route path="/loans" element={<Loans />} />
-          <Route path="/pending-loans" element={<PendingLoans />} />
+          {/** Pending loans standalone page removed */}
           <Route path="/rooms" element={<Rooms />} />
           <Route path="/reports" element={<Reports />} />
 

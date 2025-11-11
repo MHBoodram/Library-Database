@@ -7,7 +7,7 @@ import { router } from "./lib/router.js";
 import { login } from "./api/auth.js";
 import { createItem, updateItem, deleteItem, listItems, listItemCopies } from "./api/items.js";
 import { createCopy, updateCopy, deleteCopy } from "./api/copies.js";
-import { checkout, returnLoan, fetchUserLoans, requestCheckout, listMyPendingCheckouts, listPendingCheckouts, approveCheckout } from "./api/loans.js";
+import { checkout, returnLoan, fetchUserLoans, requestCheckout, listMyPendingCheckouts, listPendingCheckouts, approveCheckout, rejectCheckout } from "./api/loans.js";
 import { placeHold, cancelHold, listHolds } from "./api/holds.js";
 import { overdue, balances, topItems, newPatronsByMonth, listTransactions } from "./api/reports.js";
 import { listFines, listActiveLoans } from "./api/staff.js";
@@ -59,6 +59,7 @@ r.add("POST", "/api/loans/request", requestCheckout(JWT_SECRET));
 r.add("GET", "/api/loans/pending/my", listMyPendingCheckouts(JWT_SECRET));
 r.add("GET", "/api/staff/loans/pending", listPendingCheckouts(JWT_SECRET));
 r.add("POST", "/api/staff/loans/approve", approveCheckout(JWT_SECRET));
+r.add("POST", "/api/staff/loans/reject", rejectCheckout(JWT_SECRET));
 
 r.add("POST", "/api/holds/place", placeHold(JWT_SECRET));
 r.add("GET", "/api/holds/my", listHolds(JWT_SECRET));

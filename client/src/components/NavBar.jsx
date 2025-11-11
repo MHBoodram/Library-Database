@@ -65,11 +65,7 @@ function NavBar() {
                                 Manage Loans
                             </NavLink>
                         )}
-                        {user && user.role !== 'staff' && (
-                            <NavLink to="/pending-loans" className = {({ isActive }) => (isActive? 'sub-nav-link active' : 'sub-nav-link')}>
-                                Pending Loans
-                            </NavLink>
-                        )}
+                        {/* Pending Loans page removed per request */}
                         <NavLink to="/rooms" className = {({ isActive }) => (isActive? 'sub-nav-link active' : 'sub-nav-link')}>
                             Rooms
                         </NavLink>

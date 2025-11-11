@@ -13,6 +13,7 @@ export default function Loans() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [holds, setHolds] = useState([]);
+  const [pending, setPending] = useState([]);
   const [holdsLoading, setHoldsLoading] = useState(true);
   const [holdsError, setHoldsError] = useState("");
   const [cancelingHoldId, setCancelingHoldId] = useState(null);
@@ -29,15 +30,18 @@ export default function Loans() {
       setError("");
       setHoldsError("");
       try {
-        const [loansData, holdsData] = await Promise.all([
+        const [loansData, holdsData, pendingData] = await Promise.all([
           useApi("loans/my"),
           listMyHolds(token),
+          useApi("loans/pending/my"),
         ]);
         if (!active) return;
         const loans = Array.isArray(loansData?.rows) ? loansData.rows : Array.isArray(loansData) ? loansData : [];
         const holdRows = Array.isArray(holdsData?.rows) ? holdsData.rows : Array.isArray(holdsData) ? holdsData : [];
         setRows(loans);
         setHolds(holdRows);
+        const pendingList = Array.isArray(pendingData?.rows) ? pendingData.rows : Array.isArray(pendingData) ? pendingData : [];
+        setPending(pendingList);
       } catch (err) {
         if (!active) return;
         setError(err?.message || "Failed to load your loans.");
@@ -86,6 +90,35 @@ export default function Loans() {
       <p>View your current and past loans. Return actions are handled at the desk.</p>
 
       <div className="loans-container">
+        {/* Pending Loans */}
+        <div className="loans-header" style={{ marginBottom: 8 }}>
+          <span>Pending Loans: {pending.length}</span>
+        </div>
+        <div style={{ overflowX: "auto", marginBottom: 24 }}>
+          <table className="loans-table">
+            <thead>
+              <tr>
+                <Th>Title</Th>
+                <Th>Requested At</Th>
+                <Th>Status</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {pending.length === 0 ? (
+                <tr><td colSpan={3} className="loans-empty-state">No pending requests.</td></tr>
+              ) : (
+                pending.map((r) => (
+                  <tr key={r.loan_id}>
+                    <Td title={r.item_title}>{r.item_title}</Td>
+                    <Td>{formatDateTime(r.request_date || r.checkout_date)}</Td>
+                    <Td><span className={`loans-status-badge ${r.status}`}>{r.status}</span></Td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
         <div className="loans-header">
           <span>Loans: {rows.length}</span>
           {loading && <span className="loading">Loading…</span>}

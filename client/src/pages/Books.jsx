@@ -132,11 +132,11 @@ export default function Books() {
   async function checkoutCopy(copy_id) {
     setCheckoutLoading(true);
     try {
-      await apiWithAuth("loans/checkout", {
+      await apiWithAuth("loans/request", {
         method: "POST",
-        body: { copy_id, user_id: user?.user_id, identifier_type: "copy_id" },
+        body: { copy_id },
       });
-      alert(`Successfully checked out "${selectedItem.title}"! View it in My Loans.`);
+      alert(`Checkout request submitted for "${selectedItem.title}". Track it under Pending Loans in Manage Loans.`);
       closeModal();
     } catch (err) {
       const code = err?.data?.error;

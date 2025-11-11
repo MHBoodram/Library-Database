@@ -255,19 +255,13 @@ export default function Home() {
         return;
       }
 
-      // Checkout the copy with user_id
-      const checkoutData = { 
-        copy_id: availableCopy.copy_id,
-        user_id: user.user_id,
-        identifier_type: 'copy_id'
-      };
-      
-      await api('loans/checkout', {
+      // Submit a pending checkout request instead of immediate checkout
+      await api('loans/request', {
         method: 'POST',
-        body: checkoutData
+        body: { copy_id: availableCopy.copy_id }
       });
 
-      alert(`Successfully checked out "${selectedBook.title}"! View it in My Loans.`);
+      alert(`Checkout request submitted for "${selectedBook.title}". Track it under Pending Loans in Manage Loans.`);
       closeModal();
     } catch (err) {
       const msg = err?.data?.details || err?.data?.message || err?.message || 'Checkout failed';

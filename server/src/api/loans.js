@@ -55,15 +55,99 @@ export const requestCheckout = (JWT_SECRET) => async (req, res) => {
   if (!user_id || !copy_id) {
     return sendJSON(res, 400, { error: "invalid_payload", message: "copy_id is required" });
   }
+  const conn = await pool.getConnection();
   try {
-    const sql = `INSERT INTO transaction (loan_id, user_id, employee_id, copy_id, type, date)
-                 VALUES (NULL, ?, NULL, ?, 'checkout_request', NOW())`;
-    await pool.query(sql, [user_id, copy_id]);
-    return sendJSON(res, 201, { ok: true });
+    await conn.beginTransaction();
+    // Ensure copy exists
+    const [crows] = await conn.query(`SELECT c.copy_id, c.item_id FROM copy c WHERE c.copy_id = ? FOR UPDATE`, [copy_id]);
+    if (!crows.length) { await conn.rollback(); return sendJSON(res, 404, { error: 'copy_not_found' }); }
+    const copy = crows[0];
+
+    // Determine policy for due date + snapshots
+    const [itemTypeRows] = await conn.query(
+      `SELECT CASE WHEN d.item_id IS NOT NULL THEN 'device' WHEN md.item_id IS NOT NULL THEN LOWER(md.media_type) ELSE 'book' END AS raw_media_type
+       FROM item i LEFT JOIN device d ON d.item_id=i.item_id LEFT JOIN media md ON md.item_id=i.item_id WHERE i.item_id=? LIMIT 1`, [copy.item_id]);
+    const rawMediaType = itemTypeRows[0]?.raw_media_type || 'book';
+    const accountRoleRow = await conn.query(`SELECT COALESCE(a.role,'student') AS role FROM account a WHERE a.user_id=? LIMIT 1`, [user_id]).then(r=>r[0][0]).catch(()=>({role:'student'}));
+    const userCategory = (accountRoleRow?.role||'student').toLowerCase()==='faculty'?'faculty':'student';
+    const limit = userCategory === 'faculty' ? 7 : 5;
+    // enforce limit across pending + active
+    const [cntActiveRows] = await conn.query(`SELECT COUNT(*) AS n FROM loan WHERE user_id=? AND status IN ('active','pending')`, [user_id]);
+    let current = Number(cntActiveRows[0]?.n || 0);
+    // include legacy pending requests stored in transaction table
+    try {
+      const [cntTx] = await conn.query(`SELECT COUNT(*) AS n FROM transaction WHERE user_id=? AND type='checkout_request'`, [user_id]);
+      current += Number(cntTx[0]?.n || 0);
+    } catch {}
+    if (current >= limit) {
+      await conn.rollback();
+      return sendJSON(res, 409, { error: 'loan_limit_exceeded', message: `Limit ${limit} reached (includes pending + active).` });
+    }
+    let loanDays = 14, dailyRate = null, graceDays = 3, maxFine = null, replacementFee = null;
+    try {
+      const [pol] = await conn.query(`SELECT loan_days,daily_rate,grace_days,max_fine,replacement_fee FROM fine_policy WHERE media_type=? AND user_category=? LIMIT 1`, [normalizePolicyMediaType(rawMediaType), userCategory]);
+      if (pol.length) {
+        loanDays = Number(pol[0].loan_days) || loanDays;
+        dailyRate = pol[0].daily_rate;
+        graceDays = Number.isFinite(Number(pol[0].grace_days)) ? Number(pol[0].grace_days) : graceDays;
+        maxFine = pol[0].max_fine;
+        replacementFee = pol[0].replacement_fee;
+      }
+    } catch {}
+    const dueDate = getDueDateISO(loanDays);
+
+    // Create pending loan (do not change copy status yet)
+    let resIns;
+    try {
+      const [ins] = await conn.execute(`
+        INSERT INTO loan (
+          user_id, copy_id, employee_id, policy_id, checkout_date, due_date, status,
+          daily_fine_rate_snapshot, grace_days_snapshot, max_fine_snapshot, replacement_fee_snapshot
+        ) VALUES (?, ?, NULL, NULL, NOW(), ?, 'pending', ?, ?, ?, ?)
+      `, [user_id, copy_id, dueDate, dailyRate, graceDays, maxFine, replacementFee]);
+      resIns = ins;
+    } catch (e) {
+      // Fallback for schemas without snapshot/policy columns
+      const msg = String(e?.message || "");
+      if (e?.code === 'ER_BAD_FIELD_ERROR' || /Unknown column|doesn't exist/i.test(msg)) {
+        // try legacy loan insert without snapshots
+        try {
+          const [insLegacy] = await conn.execute(`
+            INSERT INTO loan (
+              user_id, copy_id, employee_id, checkout_date, due_date, status
+            ) VALUES (?, ?, NULL, NOW(), ?, 'pending')
+          `, [user_id, copy_id, dueDate]);
+          resIns = insLegacy;
+        } catch (e2) {
+          // If loan.status does not support 'pending', fall back to transaction table pending request
+          const [insTx] = await conn.execute(`
+            INSERT INTO transaction (loan_id, user_id, employee_id, copy_id, type, date)
+            VALUES (NULL, ?, NULL, ?, 'checkout_request', NOW())
+          `, [user_id, copy_id]);
+          await conn.commit();
+          return sendJSON(res, 201, { ok: true, request_id: insTx.insertId });
+        }
+      } else {
+        // Unknown error, fall back to transaction-based request for resilience
+        try {
+          const [insTx] = await conn.execute(`
+            INSERT INTO transaction (loan_id, user_id, employee_id, copy_id, type, date)
+            VALUES (NULL, ?, NULL, ?, 'checkout_request', NOW())
+          `, [user_id, copy_id]);
+          await conn.commit();
+          return sendJSON(res, 201, { ok: true, request_id: insTx.insertId });
+        } catch (txErr) {
+          throw e; // original error
+        }
+      }
+    }
+    await conn.commit();
+    return sendJSON(res, 201, { ok: true, loan_id: resIns.insertId });
   } catch (err) {
+    try { await conn.rollback(); } catch {}
     console.error("checkout request failed:", err.message);
     return sendJSON(res, 500, { error: "checkout_request_failed" });
-  }
+  } finally { conn.release(); }
 };
 
 // Patron: list my pending checkout requests
@@ -71,8 +155,23 @@ export const listMyPendingCheckouts = (JWT_SECRET) => async (req, res) => {
   const auth = requireAuth(req, res, JWT_SECRET); if (!auth) return;
   const user_id = Number(auth.uid || auth.user_id);
   try {
-    const sql = `
-      SELECT t.transaction_id, t.date AS request_date, t.copy_id, t.loan_id,
+    const sqlLoan = `
+      SELECT l.loan_id, l.checkout_date AS request_date, l.copy_id, l.status,
+             u.user_id, u.first_name, u.last_name,
+             i.title AS item_title,
+             CASE WHEN d.item_id IS NOT NULL THEN 'device'
+                  WHEN m.item_id IS NOT NULL THEN LOWER(m.media_type)
+                  ELSE 'book' END AS media_type
+      FROM loan l
+      JOIN user u ON u.user_id = l.user_id
+      JOIN copy c ON c.copy_id = l.copy_id
+      JOIN item i ON i.item_id = c.item_id
+      LEFT JOIN device d ON d.item_id = i.item_id
+      LEFT JOIN media m ON m.item_id = i.item_id
+      WHERE l.status = 'pending' AND l.user_id = ?
+    `;
+    const sqlTx = `
+      SELECT NULL AS loan_id, t.date AS request_date, t.copy_id, 'pending' AS status,
              u.user_id, u.first_name, u.last_name,
              i.title AS item_title,
              CASE WHEN d.item_id IS NOT NULL THEN 'device'
@@ -85,10 +184,12 @@ export const listMyPendingCheckouts = (JWT_SECRET) => async (req, res) => {
       LEFT JOIN device d ON d.item_id = i.item_id
       LEFT JOIN media m ON m.item_id = i.item_id
       WHERE t.type = 'checkout_request' AND t.user_id = ?
-      ORDER BY t.date DESC
-      LIMIT 500`;
-    const [rows] = await pool.query(sql, [user_id]);
-    return sendJSON(res, 200, { rows });
+    `;
+    const [loanRows] = await pool.query(sqlLoan, [user_id]);
+    let txRows = [];
+    try { const r = await pool.query(sqlTx, [user_id]); txRows = r[0] || []; } catch {}
+    const merged = [...loanRows, ...txRows].sort((a,b)=> new Date(b.request_date) - new Date(a.request_date)).slice(0,500);
+    return sendJSON(res, 200, { rows: merged });
   } catch (err) {
     console.error("list my pending failed:", err.message);
     return sendJSON(res, 500, { error: "pending_list_failed" });
@@ -99,8 +200,23 @@ export const listMyPendingCheckouts = (JWT_SECRET) => async (req, res) => {
 export const listPendingCheckouts = (JWT_SECRET) => async (req, res) => {
   const auth = requireRole(req, res, JWT_SECRET, 'staff'); if (!auth) return;
   try {
-    const sql = `
-      SELECT t.transaction_id, t.date AS request_date, t.copy_id, t.loan_id,
+    const sqlLoan = `
+      SELECT l.loan_id, l.checkout_date AS request_date, l.copy_id, l.status,
+             u.user_id, u.first_name, u.last_name,
+             i.title AS item_title,
+             CASE WHEN d.item_id IS NOT NULL THEN 'device'
+                  WHEN m.item_id IS NOT NULL THEN LOWER(m.media_type)
+                  ELSE 'book' END AS media_type
+      FROM loan l
+      JOIN user u ON u.user_id = l.user_id
+      JOIN copy c ON c.copy_id = l.copy_id
+      JOIN item i ON i.item_id = c.item_id
+      LEFT JOIN device d ON d.item_id = i.item_id
+      LEFT JOIN media m ON m.item_id = i.item_id
+      WHERE l.status = 'pending'
+    `;
+    const sqlTx = `
+      SELECT NULL AS loan_id, t.date AS request_date, t.copy_id, 'pending' AS status,
              u.user_id, u.first_name, u.last_name,
              i.title AS item_title,
              CASE WHEN d.item_id IS NOT NULL THEN 'device'
@@ -113,10 +229,12 @@ export const listPendingCheckouts = (JWT_SECRET) => async (req, res) => {
       LEFT JOIN device d ON d.item_id = i.item_id
       LEFT JOIN media m ON m.item_id = i.item_id
       WHERE t.type = 'checkout_request'
-      ORDER BY t.date DESC
-      LIMIT 500`;
-    const [rows] = await pool.query(sql);
-    return sendJSON(res, 200, { rows });
+    `;
+    const [loanRows] = await pool.query(sqlLoan);
+    let txRows = [];
+    try { const r = await pool.query(sqlTx); txRows = r[0] || []; } catch {}
+    const merged = [...loanRows, ...txRows].sort((a,b)=> new Date(b.request_date) - new Date(a.request_date)).slice(0,500);
+    return sendJSON(res, 200, { rows: merged });
   } catch (err) {
     console.error("list pending failed:", err.message);
     return sendJSON(res, 500, { error: "pending_list_failed" });
@@ -127,31 +245,61 @@ export const listPendingCheckouts = (JWT_SECRET) => async (req, res) => {
 export const approveCheckout = (JWT_SECRET) => async (req, res) => {
   const auth = requireRole(req, res, JWT_SECRET, 'staff'); if (!auth) return;
   const b = await readJSONBody(req);
-  const transaction_id = Number(b.transaction_id);
-  if (!transaction_id) return sendJSON(res, 400, { error: 'invalid_payload', message: 'transaction_id required' });
+  const loan_id = Number(b.loan_id || 0);
+  const transaction_id = Number(b.transaction_id || 0);
+  if (!loan_id && !transaction_id) return sendJSON(res, 400, { error: 'invalid_payload', message: 'loan_id or transaction_id required' });
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
-    const [rows] = await conn.query(`SELECT transaction_id, user_id, copy_id, type FROM transaction WHERE transaction_id = ? FOR UPDATE`, [transaction_id]);
-    if (!rows.length || rows[0].type !== 'checkout_request') {
-      await conn.rollback();
-      return sendJSON(res, 404, { error: 'not_found' });
+    if (loan_id) {
+      const [rows] = await conn.query(`SELECT loan_id, user_id, copy_id, status FROM loan WHERE loan_id = ? FOR UPDATE`, [loan_id]);
+      if (!rows.length || rows[0].status !== 'pending') {
+        await conn.rollback();
+        return sendJSON(res, 404, { error: 'not_found' });
+      }
+      const copy_id = rows[0].copy_id;
+      await conn.execute(`UPDATE loan SET status='active', checkout_date = NOW() WHERE loan_id = ?`, [loan_id]);
+      await conn.execute(`UPDATE copy SET status='on_loan' WHERE copy_id = ?`, [copy_id]);
+      await conn.commit();
+      return sendJSON(res, 200, { ok: true, loan_id });
+    } else {
+      // transaction-based approval → create a real loan via helper
+      const [trows] = await conn.query(`SELECT transaction_id, user_id, copy_id FROM transaction WHERE transaction_id = ? FOR UPDATE`, [transaction_id]);
+      if (!trows.length) { await conn.rollback(); return sendJSON(res, 404, { error: 'not_found' }); }
+      const user_id = trows[0].user_id; const copy_id = trows[0].copy_id;
+      await conn.commit();
+      const result = await performCheckout({ user_id, copy_id, barcode: '', employee_id: null });
+      try { await pool.query(`UPDATE transaction SET type='checkout_approved', loan_id=? WHERE transaction_id=?`, [result.loan_id, transaction_id]); } catch {}
+      return sendJSON(res, 200, { ok: true, loan_id: result.loan_id });
     }
-    const user_id = rows[0].user_id;
-    const copy_id = rows[0].copy_id;
-    // perform checkout (outside helper due to connection differences)
-    await conn.commit();
-    // Use shared helper which manages its own transaction
-    const result = await performCheckout({ user_id, copy_id, barcode: '', employee_id: null });
-    // Mark transaction as approved and link loan
-    await pool.query(`UPDATE transaction SET type='checkout_approved', loan_id = ? WHERE transaction_id = ?`, [result.loan_id, transaction_id]);
-    return sendJSON(res, 200, { ok: true, loan_id: result.loan_id, due_date: result.due_date });
   } catch (err) {
     try { await conn.rollback(); } catch {}
     console.error('approve checkout failed:', err.message);
     return sendJSON(res, 500, { error: 'approve_failed' });
   } finally {
     conn.release();
+  }
+};
+
+// Staff: reject a pending request
+export const rejectCheckout = (JWT_SECRET) => async (req, res) => {
+  const auth = requireRole(req, res, JWT_SECRET, 'staff'); if (!auth) return;
+  const b = await readJSONBody(req);
+  const loan_id = Number(b.loan_id || 0);
+  const transaction_id = Number(b.transaction_id || 0);
+  if (!loan_id && !transaction_id) return sendJSON(res, 400, { error: 'invalid_payload', message: 'loan_id or transaction_id required' });
+  try {
+    if (loan_id) {
+      const [resu] = await pool.query(`UPDATE loan SET status='rejected' WHERE loan_id = ? AND status = 'pending'`, [loan_id]);
+      if (!resu.affectedRows) return sendJSON(res, 404, { error: 'not_found' });
+      return sendJSON(res, 200, { ok: true });
+    } else {
+      try { await pool.query(`UPDATE transaction SET type='checkout_rejected' WHERE transaction_id=? AND type='checkout_request'`, [transaction_id]); } catch {}
+      return sendJSON(res, 200, { ok: true });
+    }
+  } catch (err) {
+    console.error('reject checkout failed:', err.message);
+    return sendJSON(res, 500, { error: 'reject_failed' });
   }
 };
 

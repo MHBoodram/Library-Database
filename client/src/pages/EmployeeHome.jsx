@@ -255,14 +255,25 @@ function PendingCheckoutsPanel({ api }) {
 
   React.useEffect(() => { load(); }, [load]);
 
-  const approve = async (transaction_id) => {
-    if (!transaction_id) return;
+  const approve = async (loan_id) => {
+    if (!loan_id) return;
     try {
-      await api('staff/loans/approve', { method: 'POST', body: { transaction_id } });
+      await api('staff/loans/approve', { method: 'POST', body: { loan_id } });
       await load();
       alert('Approved');
     } catch (e) {
       alert(e?.data?.message || e?.message || 'Approval failed');
+    }
+  };
+  const reject = async (loan_id) => {
+    if (!loan_id) return;
+    if (!confirm('Reject this checkout request?')) return;
+    try {
+      await api('staff/loans/reject', { method: 'POST', body: { loan_id } });
+      await load();
+      alert('Rejected');
+    } catch (e) {
+      alert(e?.data?.message || e?.message || 'Reject failed');
     }
   };
 
@@ -285,13 +296,14 @@ function PendingCheckoutsPanel({ api }) {
                     <Th>Loan ID</Th>
                     <Th>Requested</Th>
                     <Th>Item</Th>
-                    <Th>Type</Th>
+                      <Th>Type</Th>
+                      <Th>Status</Th>
                     <Th></Th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map(r => (
-                    <tr key={r.transaction_id} className="border-t">
+                    <tr key={r.loan_id} className="border-t">
                       <Td>{r.first_name} {r.last_name}</Td>
                       <Td>{r.user_id}</Td>
                       <Td>{r.copy_id}</Td>
@@ -299,7 +311,11 @@ function PendingCheckoutsPanel({ api }) {
                       <Td>{new Date(r.request_date).toLocaleString()}</Td>
                       <Td className="max-w-[30ch] truncate" title={r.item_title}>{r.item_title}</Td>
                       <Td>{(r.media_type || 'book').toUpperCase()}</Td>
-                      <Td><button className="px-2 py-1 rounded bg-green-600 text-white" onClick={() => approve(r.transaction_id)}>Approve</button></Td>
+                      <Td>{(r.status || 'pending').toUpperCase()}</Td>
+                      <Td className="flex gap-2">
+                        <button className="px-2 py-1 rounded bg-green-600 text-white" onClick={() => approve(r.loan_id)}>Approve</button>
+                        <button className="px-2 py-1 rounded bg-red-600 text-white" onClick={() => reject(r.loan_id)}>Reject</button>
+                      </Td>
                     </tr>
                   ))}
                 </tbody>
