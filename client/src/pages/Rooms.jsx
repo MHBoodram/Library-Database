@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
-import { formatLibraryDateTime, localDateTimeToUTCISOString, toLibraryTimeParts } from "../utils";
+import { formatLibraryDateTime, toLibraryDateISOString, toLibraryTimeParts } from "../utils";
 import "./Rooms.css";
 
 function RoomCalendarViewPatron({ api, onReservationCreated }) {
@@ -149,12 +149,9 @@ function RoomCalendarViewPatron({ api, onReservationCreated }) {
 
   // Handle slot click for booking
   const handleSlotClick = async (room, hour) => {
-    const startLocal = `${selectedDate}T${String(hour).padStart(2, '0')}:00:00`;
     const endHour = hour + 1; // 1-hour booking
-    const endLocal = `${selectedDate}T${String(endHour).padStart(2, '0')}:00:00`;
-    // Convert to UTC ISO for consistent server handling regardless of server timezone
-    const startTime = localDateTimeToUTCISOString(startLocal);
-    const endTime = localDateTimeToUTCISOString(endLocal);
+    const startTime = toLibraryDateISOString(`${selectedDate}T${String(hour).padStart(2, "0")}:00:00`);
+    const endTime = toLibraryDateISOString(`${selectedDate}T${String(endHour).padStart(2, "0")}:00:00`);
 
     if (!confirm(`Book ${room.room_number} from ${hour}:00 to ${endHour}:00?`)) return;
 

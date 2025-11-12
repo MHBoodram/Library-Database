@@ -71,8 +71,11 @@ export function toLibraryTimeParts(value) {
 
 // Convert a naive local datetime string (e.g., from <input type="datetime-local">)
 // to a UTC ISO string for transport to the server
-export function localDateTimeToUTCISOString(value) {
-  if (!value) return value;
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? value : d.toISOString();
+export function toLibraryDateISOString(value) {
+  const parts = toLibraryTimeParts(value);
+  if (!parts) return value;
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${parts.year}-${pad(parts.month)}-${pad(parts.day)}T${pad(parts.hour)}:${pad(parts.minute)}:${pad(
+    parts.second
+  )}`;
 }
