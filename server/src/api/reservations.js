@@ -263,6 +263,7 @@ export const createReservationSelf = (JWT_SECRET) => async (req, res) => {
     
     console.log("Checking conflicts for:", {
       room_id,
+      user_id,
       startMySQL,
       endMySQL,
       startUTC: start.toISOString(),
@@ -270,13 +271,15 @@ export const createReservationSelf = (JWT_SECRET) => async (req, res) => {
     });
     
     const [conflicts] = await pool.query(
-      `SELECT COUNT(*) AS cnt FROM reservation r
+      `SELECT r.reservation_id, r.start_time, r.end_time, r.status, r.user_id
+       FROM reservation r
        WHERE r.room_id = ? AND r.status = 'active'
          AND NOT (r.end_time <= ? OR r.start_time >= ?)`,
       [room_id, startMySQL, endMySQL]
     );
     
-    console.log("Conflict check result:", conflicts[0]);
+    console.log("SQL Conflict check found:", conflicts);
+    console.log("Conflict count:", conflicts.length);
     
     // Also check what existing reservations exist for debugging
     const [existing] = await pool.query(
@@ -289,9 +292,12 @@ export const createReservationSelf = (JWT_SECRET) => async (req, res) => {
     
     console.log("Existing reservations for room", room_id, ":", existing);
     
-    if (Number(conflicts[0]?.cnt || 0) > 0) {
+    if (conflicts.length > 0) {
+      console.log("CONFLICT DETECTED - rejecting reservation");
       return sendJSON(res, 409, { error: "reservation_conflict", message: "Room already booked for that timeslot." });
     }
+    
+    console.log("No conflicts found, attempting to insert...");
     const [result] = await pool.execute(
       `INSERT INTO reservation (user_id, room_id, start_time, end_time, status)
        VALUES (?, ?, ?, ?, 'active')`,
