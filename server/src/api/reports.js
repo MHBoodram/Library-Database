@@ -1,11 +1,144 @@
 import { sendJSON, requireRole } from "../lib/http.js";
 import { pool } from "../lib/db.js";
 
+const MONTH_LABELS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+const DAY_MS = 24 * 60 * 60 * 1000;
+const TIMEFRAMES = new Set(["day", "week", "month", "quarter", "year"]);
+
+function parseDateOnly(value) {
+  if (!value) return null;
+  if (value instanceof Date) {
+    return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()));
+  }
+  const parts = String(value).split("-");
+  if (parts.length !== 3) return null;
+  const [year, month, day] = parts.map(Number);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function isoDate(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function startOfBucket(date, timeframe) {
+  const d = new Date(date.getTime());
+  switch (timeframe) {
+    case "day":
+      return d;
+    case "week": {
+      const weekday = d.getUTCDay() === 0 ? 6 : d.getUTCDay() - 1; // Monday start
+      d.setUTCDate(d.getUTCDate() - weekday);
+      return d;
+    }
+    case "quarter": {
+      const quarterStart = Math.floor(d.getUTCMonth() / 3) * 3;
+      d.setUTCMonth(quarterStart, 1);
+      return d;
+    }
+    case "year":
+      d.setUTCMonth(0, 1);
+      return d;
+    case "month":
+    default:
+      d.setUTCDate(1);
+      return d;
+  }
+}
+
+function advanceBucket(date, timeframe) {
+  const d = new Date(date.getTime());
+  switch (timeframe) {
+    case "day":
+      d.setUTCDate(d.getUTCDate() + 1);
+      break;
+    case "week":
+      d.setUTCDate(d.getUTCDate() + 7);
+      break;
+    case "quarter":
+      d.setUTCMonth(d.getUTCMonth() + 3, 1);
+      break;
+    case "year":
+      d.setUTCFullYear(d.getUTCFullYear() + 1, 0, 1);
+      break;
+    case "month":
+    default:
+      d.setUTCMonth(d.getUTCMonth() + 1, 1);
+      break;
+  }
+  return d;
+}
+
+function bucketEnd(date, timeframe) {
+  const next = advanceBucket(date, timeframe);
+  const end = new Date(next.getTime() - DAY_MS);
+  return end;
+}
+
+function bucketLabel(date, timeframe) {
+  const year = date.getUTCFullYear();
+  const month = MONTH_LABELS[date.getUTCMonth()];
+  switch (timeframe) {
+    case "day":
+      return `${month} ${date.getUTCDate()}, ${year}`;
+    case "week":
+      return `Week of ${month} ${date.getUTCDate()}`;
+    case "quarter": {
+      const quarter = Math.floor(date.getUTCMonth() / 3) + 1;
+      return `Q${quarter} ${year}`;
+    }
+    case "year":
+      return `${year}`;
+    case "month":
+    default:
+      return `${month} ${year}`;
+  }
+}
+
+function parseListParam(value) {
+  if (!value) return [];
+  return value
+    .split(",")
+    .map((v) => v.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function normalizeUserType(role, isFaculty) {
+  const normalizedRole = (role || "").toLowerCase();
+  if (normalizedRole === "faculty") return "faculty";
+  if (normalizedRole === "staff" || normalizedRole === "admin") return "staff";
+  if (normalizedRole === "community") return "community";
+  if (normalizedRole === "student") return isFaculty ? "faculty" : "student";
+  return isFaculty ? "faculty" : "student";
+}
+
+function percentDiff(current, previous) {
+  if (previous === null || previous === undefined) return null;
+  if (previous === 0) {
+    if (current === 0) return 0;
+    return 100;
+  }
+  return ((current - previous) / previous) * 100;
+}
+
 // All reports require staff
 export const overdue = (JWT_SECRET) => async (req, res) => {
   const auth = requireRole(req, res, JWT_SECRET, "staff"); if (!auth) return;
   try {
-    // Ensure overdue loans without fines get one before reporting
+    // Ensure overdue loans without fines get one before reporting (no grace period)
     try {
       await pool.query(`
         INSERT INTO fine (loan_id, user_id, assessed_at, reason, amount_assessed, status)
@@ -17,17 +150,13 @@ export const overdue = (JWT_SECRET) => async (req, res) => {
           ROUND(
             LEAST(
               COALESCE(l.max_fine_snapshot, 99999),
-              GREATEST(
-                0,
-                (GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) - COALESCE(l.grace_days_snapshot, 3))
-              ) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
+              GREATEST(0, DATEDIFF(CURDATE(), l.due_date)) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
             ), 2
           ),
           'open'
         FROM loan l
         WHERE l.status = 'active' 
           AND l.due_date < CURDATE()
-          AND GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) > COALESCE(l.grace_days_snapshot, 3)
           AND NOT EXISTS (
             SELECT 1 FROM fine f 
             WHERE f.loan_id = l.loan_id 
@@ -62,15 +191,10 @@ export const overdue = (JWT_SECRET) => async (req, res) => {
       [startDate, endDate] = [endDate, startDate];
     }
 
-    const DEFAULT_GRACE_DAYS = 3; // not overdue until the 4th day after due
+    const DEFAULT_GRACE_DAYS = 0; // no grace period
 
     // Build grace filter clause
-    let graceWhere = "DATEDIFF(CURDATE(), l.due_date) >= 1"; // at least 1 day past due
-    if (graceParam === 'within') {
-      graceWhere += ` AND GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) <= COALESCE(l.grace_days_snapshot, ${DEFAULT_GRACE_DAYS})`;
-    } else if (graceParam === 'beyond') {
-      graceWhere += ` AND GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) > COALESCE(l.grace_days_snapshot, ${DEFAULT_GRACE_DAYS})`;
-    }
+    let graceWhere = "DATEDIFF(CURDATE(), l.due_date) >= 1"; // any day past due
 
     const orderClause = sortParam === 'least' ? 'days_overdue ASC' : 'days_overdue DESC';
 
@@ -86,16 +210,13 @@ export const overdue = (JWT_SECRET) => async (req, res) => {
         l.due_date,
         COALESCE(l.grace_days_snapshot, ${DEFAULT_GRACE_DAYS}) AS grace_days,
         GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) AS days_since_due,
-        GREATEST(GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) - COALESCE(l.grace_days_snapshot, ${DEFAULT_GRACE_DAYS}), 0) AS days_overdue,
-        CASE WHEN GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) BETWEEN 1 AND COALESCE(l.grace_days_snapshot, ${DEFAULT_GRACE_DAYS}) THEN 1 ELSE 0 END AS within_grace,
+        GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) AS days_overdue,
+        0 AS within_grace,
         CASE WHEN f.fine_id IS NOT NULL THEN f.amount_assessed END AS assessed_fine,
         ROUND(
           LEAST(
             COALESCE(l.max_fine_snapshot, 99999),
-            GREATEST(
-              0,
-              (GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) - COALESCE(l.grace_days_snapshot, ${DEFAULT_GRACE_DAYS}))
-            ) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
+            GREATEST(0, DATEDIFF(CURDATE(), l.due_date)) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
           ), 2
         ) AS dynamic_est_fine,
         COALESCE(
@@ -103,20 +224,14 @@ export const overdue = (JWT_SECRET) => async (req, res) => {
           ROUND(
             LEAST(
               COALESCE(l.max_fine_snapshot, 99999),
-              GREATEST(
-                0,
-                (GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) - COALESCE(l.grace_days_snapshot, ${DEFAULT_GRACE_DAYS}))
-              ) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
+              GREATEST(0, DATEDIFF(CURDATE(), l.due_date)) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
             ), 2
           )
         ) AS current_fine,
         ROUND(
           LEAST(
             COALESCE(l.max_fine_snapshot, 99999),
-            GREATEST(
-              0,
-              (GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) - COALESCE(l.grace_days_snapshot, ${DEFAULT_GRACE_DAYS}))
-            ) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
+            GREATEST(0, DATEDIFF(CURDATE(), l.due_date)) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
           ), 2
         ) AS est_fine
       FROM loan l
@@ -127,7 +242,7 @@ export const overdue = (JWT_SECRET) => async (req, res) => {
       LEFT JOIN media m ON m.item_id = i.item_id
       LEFT JOIN fine f
         ON f.loan_id = l.loan_id
-       AND f.status NOT IN ('paid','waived')
+      AND f.status NOT IN ('paid','waived')
        AND f.reason = 'overdue'
       WHERE l.status = 'active'
         AND ${graceWhere}
@@ -182,10 +297,7 @@ export const balances = (JWT_SECRET) => async (req, res) => {
               ROUND(
                 LEAST(
                   COALESCE(l.max_fine_snapshot, 99999),
-                  GREATEST(
-                    0,
-                    (GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) - COALESCE(l.grace_days_snapshot, 3))
-                  ) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
+                  GREATEST(0, DATEDIFF(CURDATE(), l.due_date)) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
                 ), 2
               )
             WHEN LOWER(f.status) NOT IN ('paid','waived') THEN f.amount_assessed
@@ -317,13 +429,14 @@ export const newPatronsByMonth = (JWT_SECRET) => async (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host}`);
     const startDateParam = (url.searchParams.get("start_date") || "").trim();
     const endDateParam = (url.searchParams.get("end_date") || "").trim();
+    const timeframeParam = (url.searchParams.get("timeframe") || "month").trim().toLowerCase();
+    const timeframe = TIMEFRAMES.has(timeframeParam) ? timeframeParam : "month";
+    const userTypeFilter = parseListParam(url.searchParams.get("user_type"));
 
-    // Validate date parameters (YYYY-MM-DD format)
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
     let startDate = startDateParam;
     let endDate = endDateParam;
 
-    // Default to last 12 months if dates not provided or invalid
     if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
       const now = new Date();
       endDate = now.toISOString().slice(0, 10);
@@ -331,45 +444,214 @@ export const newPatronsByMonth = (JWT_SECRET) => async (req, res) => {
       startDate = yearAgo.toISOString().slice(0, 10);
     }
 
-    // Ensure start is before end
     if (new Date(startDate) > new Date(endDate)) {
       [startDate, endDate] = [endDate, startDate];
     }
 
-    const sql = `
-      SELECT
-        DATE_FORMAT(u.joined_at, '%Y-%m') AS ym,
-        COUNT(DISTINCT u.user_id) AS new_patrons
-      FROM user u
-      LEFT JOIN account a ON a.user_id = u.user_id
-      WHERE u.joined_at IS NOT NULL
-        AND u.joined_at >= ?
-        AND u.joined_at <= ?
-        AND (
-          a.role IS NULL OR a.role IN ('student','faculty')
-        )
-      GROUP BY ym
-      ORDER BY ym ASC
-    `;
+    const [rawRows] = await pool.query(
+      `
+        SELECT
+          u.user_id,
+          u.first_name,
+          u.last_name,
+          u.email,
+          u.is_faculty,
+          u.joined_at,
+          a.role AS account_role
+        FROM user u
+        LEFT JOIN account a ON a.user_id = u.user_id
+        WHERE u.joined_at IS NOT NULL
+          AND u.joined_at >= ?
+          AND u.joined_at <= ?
+      `,
+      [startDate, endDate]
+    );
 
-    const [rows] = await pool.query(sql, [startDate, endDate]);
-
-    // Fill in any missing months in the range with zero counts
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const buckets = new Map(rows.map(r => [r.ym, Number(r.new_patrons)]));
-    const out = [];
-
-    let current = new Date(start.getFullYear(), start.getMonth(), 1);
-    const endMonth = new Date(end.getFullYear(), end.getMonth(), 1);
-
-    while (current <= endMonth) {
-      const ym = current.toISOString().slice(0, 7); // YYYY-MM
-      out.push({ month: ym, new_patrons: buckets.get(ym) || 0 });
-      current.setMonth(current.getMonth() + 1);
+    const alignedStart = startOfBucket(parseDateOnly(startDate), timeframe);
+    const alignedEnd = parseDateOnly(endDate);
+    const bucketOrder = [];
+    const bucketMap = new Map();
+    let cursor = new Date(alignedStart.getTime());
+    while (cursor <= alignedEnd) {
+      const bucketKey = `${timeframe}:${isoDate(cursor)}`;
+      bucketOrder.push(bucketKey);
+      bucketMap.set(bucketKey, {
+        start: new Date(cursor.getTime()),
+        end: bucketEnd(cursor, timeframe),
+        label: bucketLabel(cursor, timeframe),
+        total: 0,
+        breakdown: {},
+      });
+      cursor = advanceBucket(cursor, timeframe);
     }
 
-    return sendJSON(res, 200, out);
+    const normalizeDateString = (value) => {
+      if (!value) return null;
+      if (value instanceof Date) return value.toISOString().slice(0, 10);
+      return String(value).slice(0, 10);
+    };
+
+    const availableUserTypes = new Set();
+
+    const normalizedRows = rawRows
+      .map((row) => {
+        const userType = normalizeUserType(row.account_role, row.is_faculty);
+        const joined_at = normalizeDateString(row.joined_at);
+        if (!joined_at) return null;
+        availableUserTypes.add(userType);
+        return {
+          user_id: Number(row.user_id),
+          joined_at,
+          user_type: userType,
+          email: row.email,
+        };
+      })
+      .filter(Boolean);
+
+    const filteredRows = normalizedRows.filter((row) => {
+      if (userTypeFilter.length && !userTypeFilter.includes(row.user_type)) return false;
+      return true;
+    });
+
+    const totalsByType = {};
+
+    filteredRows.forEach((row) => {
+      totalsByType[row.user_type] = (totalsByType[row.user_type] || 0) + 1;
+      const joinedDate = parseDateOnly(row.joined_at);
+      const bucketKey = `${timeframe}:${isoDate(startOfBucket(joinedDate, timeframe))}`;
+      const bucket = bucketMap.get(bucketKey);
+      if (!bucket) return;
+      bucket.total += 1;
+      bucket.breakdown[row.user_type] = (bucket.breakdown[row.user_type] || 0) + 1;
+    });
+
+    const totalNewPatrons = filteredRows.length;
+    let runningTotal = 0;
+    const timeline = bucketOrder.map((key, idx) => {
+      const bucket = bucketMap.get(key);
+      runningTotal += bucket.total;
+      const prev = idx > 0 ? bucketMap.get(bucketOrder[idx - 1]).total : null;
+      const change = percentDiff(bucket.total, prev);
+      const percentOfTotal =
+        totalNewPatrons === 0 ? 0 : Number(((bucket.total / totalNewPatrons) * 100).toFixed(1));
+      return {
+        key,
+        label: bucket.label,
+        bucketStart: isoDate(bucket.start),
+        bucketEnd: isoDate(bucket.end),
+        total: bucket.total,
+        breakdown: bucket.breakdown,
+        cumulative: runningTotal,
+        percentOfTotal,
+        changePercent: change === null ? null : Number(change.toFixed(1)),
+      };
+    });
+
+    const tableRows = timeline.map((entry) => ({
+      period: entry.label,
+      start_date: entry.bucketStart,
+      end_date: entry.bucketEnd,
+      new_patrons: entry.total,
+      cumulative: entry.cumulative,
+      percent_of_total: entry.percentOfTotal,
+      change_percent: entry.changePercent,
+    }));
+
+    const averagePerBucket =
+      timeline.length === 0 ? 0 : Number((totalNewPatrons / timeline.length).toFixed(1));
+    const latest = timeline[timeline.length - 1];
+    const meta = {
+      startDate,
+      endDate,
+      timeframe,
+      totalNewPatrons,
+      bucketCount: timeline.length,
+      averagePerBucket,
+      latestPeriod: latest ? latest.label : null,
+      lastChangePercent: latest?.changePercent ?? null,
+    };
+
+    let topPeriods = [...timeline]
+      .filter((period) => period.total > 0)
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 3)
+      .map((period) => ({
+        label: period.label,
+        total: period.total,
+        start_date: period.bucketStart,
+        end_date: period.bucketEnd,
+        percent_of_total: period.percentOfTotal,
+      }));
+    if (!topPeriods.length) {
+      topPeriods = timeline.slice(-3).map((period) => ({
+        label: period.label,
+        total: period.total,
+        start_date: period.bucketStart,
+        end_date: period.bucketEnd,
+        percent_of_total: period.percentOfTotal,
+      }));
+    }
+
+    const retentionSummary = {
+      cohortLabel: "Last 30 days",
+      cohortSize: 0,
+      engagedCount: 0,
+      engagementRate: 0,
+      windowStart: null,
+      windowEnd: endDate,
+    };
+
+    if (filteredRows.length) {
+      const retentionEnd = parseDateOnly(endDate);
+      const retentionStart = new Date(retentionEnd.getTime());
+      retentionStart.setUTCDate(retentionStart.getUTCDate() - 30);
+      const retentionStartStr = isoDate(retentionStart);
+      const cohort = filteredRows.filter((row) => row.joined_at >= retentionStartStr);
+      retentionSummary.cohortSize = cohort.length;
+      retentionSummary.windowStart = retentionStartStr;
+      if (cohort.length) {
+        const uniqueIds = Array.from(new Set(cohort.map((row) => row.user_id)));
+        const engagedSet = new Set();
+        const chunkSize = 500;
+        for (let i = 0; i < uniqueIds.length; i += chunkSize) {
+          const chunk = uniqueIds.slice(i, i + chunkSize);
+          const placeholders = chunk.map(() => "?").join(",");
+          const params = [...chunk, retentionStartStr, endDate];
+          const [loanRows] = await pool.query(
+            `
+              SELECT DISTINCT user_id
+              FROM loan
+              WHERE user_id IN (${placeholders})
+                AND checkout_date BETWEEN ? AND ?
+            `,
+            params
+          );
+          loanRows.forEach((loanRow) => engagedSet.add(Number(loanRow.user_id)));
+        }
+        const engagedCount = cohort.filter((row) => engagedSet.has(row.user_id)).length;
+        retentionSummary.engagedCount = engagedCount;
+        retentionSummary.engagementRate = cohort.length
+          ? Number(((engagedCount / cohort.length) * 100).toFixed(1))
+          : 0;
+      }
+    }
+
+    return sendJSON(res, 200, {
+      meta,
+      timeline,
+      tableRows,
+      breakdowns: {
+        byType: totalsByType,
+      },
+      topPeriods,
+      retention: retentionSummary,
+      filterOptions: {
+        userTypes: Array.from(availableUserTypes).sort(),
+      },
+      appliedFilters: {
+        userTypes: userTypeFilter,
+      },
+    });
   } catch (err) {
     console.error("newPatronsByMonth report failed:", err.message);
     return sendJSON(res, 500, { error: "report_new_patrons_failed" });
