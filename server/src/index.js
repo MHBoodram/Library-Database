@@ -9,7 +9,7 @@ import { createItem, updateItem, deleteItem, listItems, listItemCopies } from ".
 import { createCopy, updateCopy, deleteCopy } from "./api/copies.js";
 import { checkout, returnLoan, fetchUserLoans, reqCheckout, listMyPendingCheckouts, listPendingCheckouts, approveCheckout } from "./api/loans.js";
 import { placeHold, cancelHold, listHolds } from "./api/holds.js";
-import { overdue, balances, topItems, newPatronsByMonth, listTransactions } from "./api/reports.js";
+import { overdue, balances, topItems, topItemsPublic, newPatronsByMonth, listTransactions } from "./api/reports.js";
 import { listFines, listActiveLoans } from "./api/staff.js";
 import {
   createReservation,
@@ -43,6 +43,10 @@ r.add("GET", "/api/items/:id/copies", listItemCopies());
 r.add("POST", "/api/items", createItem(JWT_SECRET));
 r.add("PUT", "/api/items/:id", updateItem(JWT_SECRET));
 r.add("DELETE", "/api/items/:id", deleteItem(JWT_SECRET));
+
+// Public endpoint for homepage featured books
+r.add("GET", "/api/public/top-items", topItemsPublic());
+
 
 r.add("POST", "/api/authors", createAuthor(JWT_SECRET));
 r.add("GET", "/api/items/:id/authors", getItemAuthors());

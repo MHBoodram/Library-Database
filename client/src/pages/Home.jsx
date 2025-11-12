@@ -72,14 +72,25 @@ export default function Home() {
           end_date: end.toISOString().slice(0, 10)
         });
         
-        const topItems = await api(`reports/top-items?${params}`);
+        // Use public endpoint that doesn't require authentication
+        const response = await fetch(`http://localhost:3000/api/public/top-items?${params}`);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const topItems = await response.json();
         const items = Array.isArray(topItems) ? topItems : [];
+        
+        console.log('Top items from API:', items.length);
         
         // Filter only books (not devices or media)
         const books = items.filter(item => item.media_type === 'book');
         
-        // Take top 10 books
-        const topBooks = books.slice(0, 10);
+        console.log('Books filtered:', books.length);
+        
+        // Take top 5 books
+        const topBooks = books.slice(0, 5);
+        
+        console.log('Top books to load:', topBooks.length, topBooks.map(b => b.title));
         
         // Load full details for each book
         const updated = [];
@@ -132,6 +143,9 @@ export default function Home() {
             console.error(`Failed to load details for ${book.title}:`, err);
           }
         }
+        
+        console.log('Successfully loaded books:', updated.length);
+        console.log('Book details:', updated.map(b => ({ title: b.title, available: b.available, total: b.total })));
         
         if (!cancel && updated.length > 0) {
           setDynamicFeatured(updated);

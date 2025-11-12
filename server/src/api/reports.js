@@ -225,6 +225,57 @@ export const topItems = (JWT_SECRET) => async (req, res) => {
   }
 };
 
+// Public version of topItems for homepage featured books (no auth required)
+export const topItemsPublic = () => async (req, res) => {
+  try {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const startDateParam = (url.searchParams.get("start_date") || "").trim();
+    const endDateParam = (url.searchParams.get("end_date") || "").trim();
+
+    // Validate date parameters (YYYY-MM-DD format)
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    let startDate = startDateParam;
+    let endDate = endDateParam;
+
+    // Default to last 30 days if dates not provided or invalid
+    if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
+      const now = new Date();
+      endDate = now.toISOString().slice(0, 10);
+      const monthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+      startDate = monthAgo.toISOString().slice(0, 10);
+    }
+
+    // Ensure start is before end
+    if (new Date(startDate) > new Date(endDate)) {
+      [startDate, endDate] = [endDate, startDate];
+    }
+
+    const sql = `
+      SELECT
+        i.title,
+        CASE WHEN d.item_id IS NOT NULL THEN 'device'
+             WHEN m.item_id IS NOT NULL THEN LOWER(m.media_type)
+             ELSE 'book' END AS media_type,
+        COUNT(*) AS loans_count
+      FROM loan l
+      JOIN copy c ON c.copy_id = l.copy_id
+      JOIN item i ON i.item_id = c.item_id
+      LEFT JOIN device d ON d.item_id = i.item_id
+      LEFT JOIN media m ON m.item_id = i.item_id
+      WHERE l.checkout_date >= ? AND l.checkout_date <= ?
+      GROUP BY i.item_id
+      ORDER BY loans_count DESC, i.title ASC
+      LIMIT 50
+    `;
+    const [rows] = await pool.query(sql, [startDate, endDate]);
+    return sendJSON(res, 200, rows);
+  } catch (err) {
+    console.error("topItemsPublic report failed:", err.message);
+    return sendJSON(res, 500, { error: "report_top_items_failed" });
+  }
+};
+
+
 // New Patrons by Month report
 // Returns the number of newly joined patrons (students + faculty) grouped by month for a custom date range
 export const newPatronsByMonth = (JWT_SECRET) => async (req, res) => {
