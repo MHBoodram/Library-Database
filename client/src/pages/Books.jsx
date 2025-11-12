@@ -136,7 +136,7 @@ export default function Books() {
         method: "POST",
         body: { copy_id, user_id: user?.user_id, identifier_type: "copy_id" },
       });
-      alert(`Successfully checked out "${selectedItem.title}"! View it in My Loans.`);
+      alert(`Successfully requested "${selectedItem.title}"! View it in My Loans.`);
       closeModal();
     } catch (err) {
       const code = err?.data?.error;
