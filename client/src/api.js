@@ -103,8 +103,10 @@ export const getItemCopies = (token, item_id) =>
 
 // my loans
 export const getMyLoans = (token) => api("/loans/my", { token });
-
+export const getMyRequests = (token) => api("/loans/myreqs", { token });
+export const getMyHistory = (token) => api("/loans/myhist", { token });
 export const getAccounts = (token) => api("/manage/accounts", { token })
+
 
 export default api;
 export { api, API_BASE };

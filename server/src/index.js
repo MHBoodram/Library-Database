@@ -54,7 +54,9 @@ r.add("DELETE", "/api/copies/:id", deleteCopy(JWT_SECRET));
 
 r.add("POST", "/api/loans/checkout", checkout(JWT_SECRET));
 r.add("POST", "/api/loans/return", returnLoan(JWT_SECRET));
-r.add("GET", "/api/loans/my", fetchUserLoans(JWT_SECRET));
+r.add("GET", "/api/loans/my", fetchUserLoans(JWT_SECRET,"active"));
+r.add("GET", "/api/loans/myreqs", fetchUserLoans(JWT_SECRET,"request"));
+r.add("GET", "/api/loans/myhist", fetchUserLoans(JWT_SECRET,"history"));
 r.add("POST", "/api/loans/request", reqCheckout(JWT_SECRET));
 r.add("GET", "/api/loans/pending/my", listMyPendingCheckouts(JWT_SECRET));
 r.add("GET", "/api/staff/loans/pending", listPendingCheckouts(JWT_SECRET));

@@ -16,6 +16,9 @@ export default function Loans() {
   const [holdsLoading, setHoldsLoading] = useState(true);
   const [holdsError, setHoldsError] = useState("");
   const [cancelingHoldId, setCancelingHoldId] = useState(null);
+  const [requests, setRequests] = useState([]);
+  const [reqLoading, setReqLoading] = useState(true);
+  const [reqError,setReqError] = useState("");
 
   useEffect(() => {
     if (!token) {
@@ -26,26 +29,34 @@ export default function Loans() {
     (async () => {
       setLoading(true);
       setHoldsLoading(true);
+      setReqLoading(true);
       setError("");
       setHoldsError("");
+      setReqError("");
       try {
-        const [loansData, holdsData] = await Promise.all([
+        const [loansData, requestData, holdsData] = await Promise.all([
           useApi("loans/my"),
+          useApi("loans/myreqs"),
+          useApi("loans/myhist"),
           listMyHolds(token),
         ]);
         if (!active) return;
         const loans = Array.isArray(loansData?.rows) ? loansData.rows : Array.isArray(loansData) ? loansData : [];
+        const reqRows = Array.isArray(requestData?.rows) ? requestData.rows : Array.isArray(requestData) ? requestData : [];
         const holdRows = Array.isArray(holdsData?.rows) ? holdsData.rows : Array.isArray(holdsData) ? holdsData : [];
         setRows(loans);
+        setRequests(reqRows);
         setHolds(holdRows);
       } catch (err) {
         if (!active) return;
         setError(err?.message || "Failed to load your loans.");
         setHoldsError(err?.message || "Failed to load your holds.");
+        setReqError(err?.message || "Failed to load your checkout requests");
       } finally {
         if (active) {
           setLoading(false);
           setHoldsLoading(false);
+          setReqLoading(false);
         }
       }
     })();
@@ -83,7 +94,7 @@ export default function Loans() {
     <div className="loans-page">
       <NavBar />
       <h1>Your Loans</h1>
-      <p>View your current and past loans. Return actions are handled at the desk.</p>
+      <p>View your current and past loans.</p>
 
       <div className="loans-container">
         <div className="loans-header">
@@ -125,6 +136,42 @@ export default function Loans() {
         </div>
       </div>
 
+      <section style={{marginTop:10}}>
+        <h1>Checkout Requests</h1>
+        <p>View your current checkout requests.</p>
+        <div className="loans-container">
+          <div className="loans-header">
+            <span>Loans: {rows.length}</span>
+            {loading && <span className="loading">Loading…</span>}
+            {error && <span className="error">{error}</span>}
+          </div>
+          <div style={{ overflowX: "auto" }}>
+            <table className="loans-table">
+              <thead>
+                <tr>
+                  <Th>Title</Th>
+                  <Th>Request Date</Th>
+                  <Th>Actions</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.length === 0 ? (
+                  <tr><td colSpan={2} className="loans-empty-state">{loading ? "" : "No Requests found."}</td></tr>
+                ) : (
+                  rows.map((r) => (
+                    <tr key={r.loan_id}>
+                      <Td title={r.item_title}>{r.item_title}</Td>
+                      <Td>{formatDate(r.due_date)}</Td>
+                      <Td><button>Cancel Request</button></Td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+      
       <section className="holds-section">
         <div className="holds-header">
           <div>

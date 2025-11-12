@@ -91,6 +91,7 @@ export const reqCheckout = (JWT_SECRET) => async (req, res) => {
   }
 };
 
+
 // Patrons submit a checkout request instead of immediate checkout
 async function requestCheckout({ user_id, copy_id, barcode, employee_id }) {
   const conn = await pool.getConnection();
@@ -738,11 +739,18 @@ function defaultLoanDays(role) {
   return 14;
 }
 
-export const fetchUserLoans = (JWT_SECRET) => async (req, res) => {
+export const fetchUserLoans = (JWT_SECRET, mode = "active") => async (req, res) => {
   const auth = requireAuth(req, res, JWT_SECRET); if (!auth) return;
   const userId = Number(auth.uid || auth.user_id || auth.userId || 0);
   if (!userId) return sendJSON(res, 400, { error: "invalid_user" });
-
+  const filters = {
+    active: "active",
+    requests: "pending",
+    history: "returned"
+  };
+  // Default to active if mode not found
+  const status = filters[mode] || filters.active;
+  const params = [userId, status];
   try {
     // Include outstanding fine totals per loan so the UI can surface what each borrower still owes.
     const sql = `
@@ -782,7 +790,7 @@ export const fetchUserLoans = (JWT_SECRET) => async (req, res) => {
         WHERE f.status NOT IN ('paid', 'waived', 'written_off')
         GROUP BY f.loan_id
       ) fines ON fines.loan_id = l.loan_id
-      WHERE u.user_id = ?
+      WHERE u.user_id = ? AND l.status =?
       ORDER BY
         CASE
           WHEN l.return_date IS NULL AND l.due_date < NOW() THEN 1
@@ -792,7 +800,7 @@ export const fetchUserLoans = (JWT_SECRET) => async (req, res) => {
         l.due_date ASC
       LIMIT 50
     `;
-    const [rows] = await pool.query(sql, [userId]);
+    const [rows] = await pool.query(sql, params);
     return sendJSON(res, 200, { rows });
   } catch (err) {
       console.error("Failed to list user loans:", err.message);
