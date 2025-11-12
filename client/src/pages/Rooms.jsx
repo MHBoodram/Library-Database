@@ -5,7 +5,7 @@ import NavBar from "../components/NavBar";
 import { formatLibraryDateTime, libraryDateTimeToUTCISOString, toLibraryTimeParts } from "../utils";
 import "./Rooms.css";
 
-function RoomCalendarViewPatron({ api, onReservationCreated }) {
+function RoomCalendarViewPatron({ api, onReservationCreated, refreshTrigger }) {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -28,7 +28,7 @@ function RoomCalendarViewPatron({ api, onReservationCreated }) {
       }
     };
     fetchAvailability();
-  }, [api, selectedDate]);
+  }, [api, selectedDate, refreshTrigger]);
 
   // Navigation helpers
   const changeDate = (days) => {
@@ -330,6 +330,7 @@ export default function Rooms() {
   const [reservationsLoading, setReservationsLoading] = useState(false);
   const [reservationsError, setReservationsError] = useState("");
   const [refreshFlag, setRefreshFlag] = useState(0);
+  const [calendarRefreshFlag, setCalendarRefreshFlag] = useState(0);
 
   useEffect(() => {
     if (!token) {
@@ -362,9 +363,12 @@ export default function Rooms() {
     }
 
     try {
-  await api(`reservations/${reservationId}/cancel`, { method: "PATCH" });
+      await api(`reservations/${reservationId}/cancel`, { method: "PATCH" });
       alert("Reservation cancelled successfully.");
-      setRefreshFlag((f) => f + 1); // Refresh reservations list
+      
+      // Refresh both the reservations list AND the availability calendar
+      setRefreshFlag((f) => f + 1); // Refresh "My Reservations" list
+      setCalendarRefreshFlag((f) => f + 1); // Refresh availability grid
     } catch (err) {
       const msg = err?.data?.message || err?.message;
       alert(msg || "Failed to cancel reservation.");
@@ -395,7 +399,11 @@ export default function Rooms() {
       </div>
 
       {/* Room Calendar Grid */}
-  <RoomCalendarViewPatron api={api} onReservationCreated={() => setRefreshFlag((f) => f + 1)} />
+  <RoomCalendarViewPatron 
+    api={api} 
+    onReservationCreated={() => setRefreshFlag((f) => f + 1)} 
+    refreshTrigger={calendarRefreshFlag}
+  />
 
       {/* My Reservations Section */}
       <div className="rooms-reservations-section">
