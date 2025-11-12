@@ -29,12 +29,29 @@ export const adminOverview = (JWT_SECRET) => async (req, res) => {
        FROM account`
     );
 
+    // Open fines should reflect fines on currently overdue, active loans only,
+    // and no grace period applies. For overdue fines, compute current amount
+    // dynamically in case the assessed snapshot is stale; for other reasons
+    // (damage/lost/manual) keep the assessed amount.
     const [[fineStats]] = await pool.query(
       `SELECT
          COUNT(*) AS open_fines,
-         COALESCE(SUM(amount_assessed), 0) AS open_fine_amount
-       FROM fine
-       WHERE LOWER(status) NOT IN ('paid','waived','written_off')`
+         COALESCE(SUM(
+           CASE 
+             WHEN f.reason = 'overdue' THEN ROUND(
+               LEAST(
+                 COALESCE(l.max_fine_snapshot, 99999),
+                 GREATEST(0, DATEDIFF(CURDATE(), l.due_date)) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
+               ), 2
+             )
+             ELSE f.amount_assessed
+           END
+         ), 0) AS open_fine_amount
+       FROM fine f
+       JOIN loan l ON l.loan_id = f.loan_id
+       WHERE LOWER(f.status) NOT IN ('paid','waived','written_off')
+         AND l.status = 'active'
+         AND l.due_date < CURDATE()`
     );
 
     return sendJSON(res, 200, {

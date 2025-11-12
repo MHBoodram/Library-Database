@@ -138,7 +138,7 @@ function percentDiff(current, previous) {
 export const overdue = (JWT_SECRET) => async (req, res) => {
   const auth = requireRole(req, res, JWT_SECRET, "staff"); if (!auth) return;
   try {
-    // Ensure overdue loans without fines get one before reporting
+    // Ensure overdue loans without fines get one before reporting (no grace period)
     try {
       await pool.query(`
         INSERT INTO fine (loan_id, user_id, assessed_at, reason, amount_assessed, status)
@@ -150,17 +150,13 @@ export const overdue = (JWT_SECRET) => async (req, res) => {
           ROUND(
             LEAST(
               COALESCE(l.max_fine_snapshot, 99999),
-              GREATEST(
-                0,
-                (GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) - COALESCE(l.grace_days_snapshot, 3))
-              ) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
+              GREATEST(0, DATEDIFF(CURDATE(), l.due_date)) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
             ), 2
           ),
           'open'
         FROM loan l
         WHERE l.status = 'active' 
           AND l.due_date < CURDATE()
-          AND GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) > COALESCE(l.grace_days_snapshot, 3)
           AND NOT EXISTS (
             SELECT 1 FROM fine f 
             WHERE f.loan_id = l.loan_id 
@@ -195,15 +191,10 @@ export const overdue = (JWT_SECRET) => async (req, res) => {
       [startDate, endDate] = [endDate, startDate];
     }
 
-    const DEFAULT_GRACE_DAYS = 3; // not overdue until the 4th day after due
+    const DEFAULT_GRACE_DAYS = 0; // no grace period
 
     // Build grace filter clause
-    let graceWhere = "DATEDIFF(CURDATE(), l.due_date) >= 1"; // at least 1 day past due
-    if (graceParam === 'within') {
-      graceWhere += ` AND GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) <= COALESCE(l.grace_days_snapshot, ${DEFAULT_GRACE_DAYS})`;
-    } else if (graceParam === 'beyond') {
-      graceWhere += ` AND GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) > COALESCE(l.grace_days_snapshot, ${DEFAULT_GRACE_DAYS})`;
-    }
+    let graceWhere = "DATEDIFF(CURDATE(), l.due_date) >= 1"; // any day past due
 
     const orderClause = sortParam === 'least' ? 'days_overdue ASC' : 'days_overdue DESC';
 
@@ -219,16 +210,13 @@ export const overdue = (JWT_SECRET) => async (req, res) => {
         l.due_date,
         COALESCE(l.grace_days_snapshot, ${DEFAULT_GRACE_DAYS}) AS grace_days,
         GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) AS days_since_due,
-        GREATEST(GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) - COALESCE(l.grace_days_snapshot, ${DEFAULT_GRACE_DAYS}), 0) AS days_overdue,
-        CASE WHEN GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) BETWEEN 1 AND COALESCE(l.grace_days_snapshot, ${DEFAULT_GRACE_DAYS}) THEN 1 ELSE 0 END AS within_grace,
+        GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) AS days_overdue,
+        0 AS within_grace,
         CASE WHEN f.fine_id IS NOT NULL THEN f.amount_assessed END AS assessed_fine,
         ROUND(
           LEAST(
             COALESCE(l.max_fine_snapshot, 99999),
-            GREATEST(
-              0,
-              (GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) - COALESCE(l.grace_days_snapshot, ${DEFAULT_GRACE_DAYS}))
-            ) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
+            GREATEST(0, DATEDIFF(CURDATE(), l.due_date)) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
           ), 2
         ) AS dynamic_est_fine,
         COALESCE(
@@ -236,20 +224,14 @@ export const overdue = (JWT_SECRET) => async (req, res) => {
           ROUND(
             LEAST(
               COALESCE(l.max_fine_snapshot, 99999),
-              GREATEST(
-                0,
-                (GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) - COALESCE(l.grace_days_snapshot, ${DEFAULT_GRACE_DAYS}))
-              ) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
+              GREATEST(0, DATEDIFF(CURDATE(), l.due_date)) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
             ), 2
           )
         ) AS current_fine,
         ROUND(
           LEAST(
             COALESCE(l.max_fine_snapshot, 99999),
-            GREATEST(
-              0,
-              (GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) - COALESCE(l.grace_days_snapshot, ${DEFAULT_GRACE_DAYS}))
-            ) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
+            GREATEST(0, DATEDIFF(CURDATE(), l.due_date)) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
           ), 2
         ) AS est_fine
       FROM loan l
@@ -260,7 +242,7 @@ export const overdue = (JWT_SECRET) => async (req, res) => {
       LEFT JOIN media m ON m.item_id = i.item_id
       LEFT JOIN fine f
         ON f.loan_id = l.loan_id
-       AND f.status NOT IN ('paid','waived')
+      AND f.status NOT IN ('paid','waived')
        AND f.reason = 'overdue'
       WHERE l.status = 'active'
         AND ${graceWhere}
@@ -315,10 +297,7 @@ export const balances = (JWT_SECRET) => async (req, res) => {
               ROUND(
                 LEAST(
                   COALESCE(l.max_fine_snapshot, 99999),
-                  GREATEST(
-                    0,
-                    (GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) - COALESCE(l.grace_days_snapshot, 3))
-                  ) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
+                  GREATEST(0, DATEDIFF(CURDATE(), l.due_date)) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
                 ), 2
               )
             WHEN LOWER(f.status) NOT IN ('paid','waived') THEN f.amount_assessed

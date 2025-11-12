@@ -551,7 +551,7 @@ export default function AdminPanel({ api }) {
           sub="Students + Faculty"
         />
         <StatCard
-          label="Open Fines"
+          label="Open Fines (Active Overdue)"
           value={fineStats.open_fines ?? 0}
           sub={`$${Number(fineStats.open_fine_amount ?? 0).toFixed(2)}`}
         />
