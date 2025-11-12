@@ -669,6 +669,7 @@ export default function ReportsPanel({ api }) {
   const [overduePatronId, setOverduePatronId] = useState("");
   const [overdueMinDays, setOverdueMinDays] = useState(1);
   const [overdueMediaType, setOverdueMediaType] = useState("all");
+  const [overdueGraceMode, setOverdueGraceMode] = useState('all'); // beyond | within | all
   const [overdueSortMode, setOverdueSortMode] = useState('most'); // most | least
 
   // Fines report state
@@ -757,6 +758,7 @@ export default function ReportsPanel({ api }) {
             params.set("borrower", overdueBorrower.trim());
           }
           // Patron ID partial match handled client-side; avoid over-filtering on server
+          if (overdueGraceMode) params.set('grace', overdueGraceMode);
           if (overdueSortMode) params.set('sort', overdueSortMode);
           break;
         case "fines":
@@ -813,7 +815,7 @@ export default function ReportsPanel({ api }) {
     } finally {
       setLoading(false);
     }
-  }, [api, activeReport, overdueStartDate, overdueEndDate, overdueBorrower, overdueSortMode, balancesStartDate, balancesEndDate, topItemsStartDate, topItemsEndDate, newPatronsStartDate, newPatronsEndDate, newPatronsTimeframe, newPatronsUserTypes, transactionsStartDate, transactionsEndDate, txEventTypes, txStatuses, txStaff, txSearch]);
+  }, [api, activeReport, overdueStartDate, overdueEndDate, overdueBorrower, overdueGraceMode, overdueSortMode, balancesStartDate, balancesEndDate, topItemsStartDate, topItemsEndDate, newPatronsStartDate, newPatronsEndDate, newPatronsTimeframe, newPatronsUserTypes, transactionsStartDate, transactionsEndDate, txEventTypes, txStatuses, txStaff, txSearch]);
 
   // Derived media types from the currently loaded overdue dataset
   const mediaTypeOptions = useMemo(() => {
@@ -1354,6 +1356,14 @@ export default function ReportsPanel({ api }) {
                     <label className="block text-xs font-medium text-gray-600 mb-1">Media Type</label>
                     <select value={overdueMediaType} onChange={(e)=>setOverdueMediaType(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm">
                       {mediaTypeOptions.map(opt => (<option key={opt} value={opt}>{opt === 'all' ? 'All' : opt.toUpperCase()}</option>))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Grace Window</label>
+                    <select value={overdueGraceMode} onChange={(e)=>setOverdueGraceMode(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm">
+                      <option value="beyond">Beyond grace (overdue)</option>
+                      <option value="within">Within grace</option>
+                      <option value="all">All past due</option>
                     </select>
                   </div>
                   <div>

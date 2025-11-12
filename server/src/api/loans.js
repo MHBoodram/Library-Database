@@ -188,11 +188,12 @@ async function requestCheckout({ user_id, copy_id, barcode, employee_id }) {
             due_date,
             status,
             daily_fine_rate_snapshot,
+            grace_days_snapshot,
             max_fine_snapshot,
             replacement_fee_snapshot
           )
           VALUES (
-            ?, ?, ?, ?, NOW(), ?, 'pending', ?, ?, ?
+            ?, ?, ?, ?, NOW(), ?, 'pending', ?, ?, ?, ?
           )
         `,
         [
@@ -202,6 +203,7 @@ async function requestCheckout({ user_id, copy_id, barcode, employee_id }) {
           policy?.policy_id ?? null,
           dueDate,
           policy?.daily_rate ?? null,
+          policy?.grace_days ?? null,
           policy?.max_fine ?? null,
           policy?.replacement_fee ?? null,
         ]
@@ -535,6 +537,7 @@ export const listMyLoans = (JWT_SECRET) => async (req, res) => {
         i.title AS item_title,
         c.barcode AS copy_barcode,
         COALESCE(l.daily_fine_rate_snapshot, fp.daily_rate) AS daily_rate,
+        COALESCE(l.grace_days_snapshot, fp.grace_days) AS grace_days,
         COALESCE(l.max_fine_snapshot, fp.max_fine) AS max_fine,
         CASE
           WHEN d.item_id IS NOT NULL THEN 'device'
@@ -670,11 +673,12 @@ async function performCheckout({ user_id, copy_id, barcode, employee_id }) {
             due_date,
             status,
             daily_fine_rate_snapshot,
+            grace_days_snapshot,
             max_fine_snapshot,
             replacement_fee_snapshot
           )
           VALUES (
-            ?, ?, ?, ?, NOW(), ?, 'active', ?, ?, ?
+            ?, ?, ?, ?, NOW(), ?, 'active', ?, ?, ?, ?
           )
         `,
         [
@@ -684,6 +688,7 @@ async function performCheckout({ user_id, copy_id, barcode, employee_id }) {
           policy?.policy_id ?? null,
           dueDate,
           policy?.daily_rate ?? null,
+          policy?.grace_days ?? null,
           policy?.max_fine ?? null,
           policy?.replacement_fee ?? null,
         ]
@@ -774,7 +779,7 @@ async function resolvePolicy(conn, item_id, userCategory) {
   try {
     const [policyRows] = await conn.query(
       `
-        SELECT policy_id, media_type, loan_days, daily_rate, max_fine, replacement_fee
+        SELECT policy_id, media_type, loan_days, daily_rate, grace_days, max_fine, replacement_fee
         FROM fine_policy
         WHERE media_type = ? AND user_category = ?
         LIMIT 1
@@ -786,7 +791,7 @@ async function resolvePolicy(conn, item_id, userCategory) {
     if (policyMediaType !== "other") {
       const [fallbackRows] = await conn.query(
         `
-          SELECT policy_id, media_type, loan_days, daily_rate, max_fine, replacement_fee
+          SELECT policy_id, media_type, loan_days, daily_rate, grace_days, max_fine, replacement_fee
           FROM fine_policy
           WHERE media_type = 'other' AND user_category = ?
           LIMIT 1

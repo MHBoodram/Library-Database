@@ -84,14 +84,17 @@ export const listFines = (JWT_SECRET) => async (req, res) => {
         ROUND(
           LEAST(
             COALESCE(l.max_fine_snapshot, 99999),
-            GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
+            GREATEST(
+              0,
+              (GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) - COALESCE(l.grace_days_snapshot, 3))
+            ) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
           ), 2
         ),
         'open'
       FROM loan l
       WHERE l.status = 'active' 
         AND l.due_date < CURDATE()
-        AND GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) > 0
+        AND GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) > COALESCE(l.grace_days_snapshot, 3)
         AND NOT EXISTS (
           SELECT 1 FROM fine f 
           WHERE f.loan_id = l.loan_id 
@@ -172,12 +175,15 @@ export const listFines = (JWT_SECRET) => async (req, res) => {
            WHEN m.item_id IS NOT NULL THEN LOWER(m.media_type)
            ELSE 'book' END AS media_type,
       GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) AS days_since_due,
-      GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) AS days_overdue,
+      GREATEST(GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) - COALESCE(l.grace_days_snapshot, 3), 0) AS days_overdue,
       -- dynamic estimate (mirrors reports.overdue)
       ROUND(
         LEAST(
           COALESCE(l.max_fine_snapshot, 99999),
-          GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
+          GREATEST(
+            0,
+            (GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) - COALESCE(l.grace_days_snapshot, 3))
+          ) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
         ), 2
       ) AS dynamic_est_fine,
       -- prefer assessed amount if fine is overdue/open
@@ -186,9 +192,12 @@ export const listFines = (JWT_SECRET) => async (req, res) => {
         ROUND(
           LEAST(
             COALESCE(l.max_fine_snapshot, 99999),
-            GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
-          ), 2
-        )
+            GREATEST(
+              0,
+                (GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) - COALESCE(l.grace_days_snapshot, 3))
+              ) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
+            ), 2
+          )
       ) AS current_fine
     FROM fine f
     JOIN loan l ON l.loan_id = f.loan_id
