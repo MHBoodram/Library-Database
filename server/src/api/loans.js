@@ -410,6 +410,7 @@ export const denyCheckout = (JWT_SECRET) => async (req, res) => {
 };
 
 export const cancelRequest = (JWT_SECRET) => async (req, res) => {
+  const auth = requireAuth(req, res, JWT_SECRET); if (!auth) return;
   const b = await readJSONBody(req);
   const loan_id = Number(b.loan_id);
   if (!loan_id) return sendJSON(res, 400, { error: 'invalid_payload', message: 'loan_id required' });
@@ -425,6 +426,12 @@ export const cancelRequest = (JWT_SECRET) => async (req, res) => {
       return sendJSON(res, 404, { error: 'loan_not_found' });
     }
     const loan = rows[0];
+    // Ensure the requester owns this pending request
+    const userId = Number(auth.uid || auth.user_id || 0);
+    if (!userId || userId !== Number(loan.user_id)) {
+      await conn.rollback();
+      return sendJSON(res, 403, { error: 'forbidden', message: 'You can only cancel your own requests' });
+    }
     if (loan.status !== 'pending') {
       await conn.rollback();
       return sendJSON(res, 400, { error: 'invalid_status', message: 'Loan is not pending' });

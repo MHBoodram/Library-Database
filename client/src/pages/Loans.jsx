@@ -4,10 +4,10 @@ import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
 import { formatDate, formatDateTime, formatCurrency } from "../utils";
 import "./Loans.css";
-import { listMyHolds, cancelMyHold } from "../api";
+import { listMyHolds, cancelMyHold, cancelMyRequest } from "../api";
 
 export default function Loans() {
-  const { token, useApi } = useAuth();
+  const { token, useApi: callApi } = useAuth();
   const navigate = useNavigate();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -22,6 +22,7 @@ export default function Loans() {
   const [history, setHistory] = useState([]);
   const [histLoading, setHistLoading] = useState(true);
   const [histError, setHistError] = useState("");
+  const [cancelingRequestId, setCancelingRequestId] = useState(null);
 
   useEffect(() => {
     if (!token) {
@@ -39,9 +40,9 @@ export default function Loans() {
       setHistError("");
       try {
         const [loansData, requestData, historyData, holdsData] = await Promise.all([
-          useApi("loans/my"),
-          useApi("loans/myreqs"),
-          useApi("loans/myhist"),
+          callApi("loans/my"),
+          callApi("loans/pending/my"),
+          callApi("loans/myhist"),
           listMyHolds(token)
         ]);
         if (!active) return;
@@ -70,7 +71,7 @@ export default function Loans() {
       }
     })();
     return () => { active = false; };
-  }, [token, useApi, navigate]);
+  }, [token, callApi, navigate]);
 
   const refreshHolds = async () => {
     setHoldsLoading(true);
@@ -96,6 +97,33 @@ export default function Loans() {
       setHoldsError(err?.message || err?.data?.error || "Failed to cancel hold");
     } finally {
       setCancelingHoldId(null);
+    }
+  };
+
+  const refreshRequests = async () => {
+    setReqLoading(true);
+    setReqError("");
+    try {
+      const data = await callApi("loans/pending/my");
+      const list = Array.isArray(data?.rows) ? data.rows : Array.isArray(data) ? data : [];
+      setRequests(list);
+    } catch (err) {
+      setReqError(err?.message || "Failed to refresh requests.");
+    } finally {
+      setReqLoading(false);
+    }
+  };
+
+  const handleCancelRequest = async (loanId) => {
+    if (!window.confirm("Cancel this request?")) return;
+    setCancelingRequestId(loanId);
+    try {
+      await cancelMyRequest(token, loanId);
+      await refreshRequests();
+    } catch (err) {
+      setReqError(err?.message || err?.data?.error || "Failed to cancel request");
+    } finally {
+      setCancelingRequestId(null);
     }
   };
 
@@ -188,28 +216,42 @@ export default function Loans() {
         <p>View your current checkout requests.</p>
         <div className="loans-container">
           <div className="loans-header">
-            <span>Loans: {rows.length}</span>
-            {loading && <span className="loading">Loading…</span>}
-            {error && <span className="error">{error}</span>}
+            <span>Requests: {requests.length}</span>
+            {reqLoading && <span className="loading">Loading…</span>}
+            {reqError && <span className="error">{reqError}</span>}
           </div>
           <div style={{ overflowX: "auto" }}>
             <table className="loans-table">
               <thead>
                 <tr>
                   <Th>Title</Th>
-                  <Th>Request Date</Th>
+                  <Th>Requested</Th>
+                  <Th>Status</Th>
                   <Th>Actions</Th>
                 </tr>
               </thead>
               <tbody>
                 {requests.length === 0 ? (
-                  <tr><td colSpan={2} className="loans-empty-state">{loading ? "" : "No Requests found."}</td></tr>
+                  <tr><td colSpan={4} className="loans-empty-state">{reqLoading ? "" : "No requests found."}</td></tr>
                 ) : (
                   requests.map((r) => (
                     <tr key={r.loan_id}>
                       <Td title={r.item_title}>{r.item_title}</Td>
-                      <Td>{formatDate(r.due_date)}</Td>
-                      <Td><button>Cancel Request</button></Td>
+                      <Td>{formatDateTime(r.request_date)}</Td>
+                      <Td>
+                        <span className={`loans-status-badge ${r.status || 'pending'}`}>
+                          {(r.status || 'pending') === 'rejected' ? 'denied' : (r.status || 'pending')}
+                        </span>
+                      </Td>
+                      <Td>
+                        <button
+                          className="hold-cancel-btn"
+                          onClick={() => handleCancelRequest(r.loan_id)}
+                          disabled={cancelingRequestId === r.loan_id}
+                        >
+                          {cancelingRequestId === r.loan_id ? "Cancelling…" : "Cancel Request"}
+                        </button>
+                      </Td>
                     </tr>
                   ))
                 )}

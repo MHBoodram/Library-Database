@@ -107,6 +107,10 @@ export const getMyRequests = (token) => api("/loans/myreqs", { token });
 export const getMyHistory = (token) => api("/loans/myhist", { token });
 export const getAccounts = (token) => api("/manage/accounts", { token })
 
+// Cancel a pending checkout request
+export const cancelMyRequest = (token, loan_id) =>
+  api("/loans/request/cancel", { method: "POST", token, body: { loan_id } });
+
 
 export default api;
 export { api, API_BASE };
