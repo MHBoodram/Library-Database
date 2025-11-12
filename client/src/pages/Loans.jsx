@@ -187,7 +187,6 @@ export default function Loans() {
               <thead>
                 <tr>
                   <Th>Item</Th>
-                  <Th>Copy ID</Th>
                   <Th>Return Date</Th>
                 </tr>
               </thead>
@@ -200,7 +199,6 @@ export default function Loans() {
                   history.map((r) => (
                     <tr key={r.loan_id}>
                       <Td title={r.item_title}>{r.item_title}</Td>
-                      <Td>{r.copy_id ? `#${r.copy_id}` : "—"}</Td>
                       <Td>{formatDate(r.return_date)}</Td>
                     </tr>
                   ))
