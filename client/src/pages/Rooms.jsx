@@ -1,22 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
 import { formatLibraryDateTime, libraryDateTimeToUTCISOString, toLibraryTimeParts } from "../utils";
 import "./Rooms.css";
 
-const SLOT_STATE_META = {
-  available: { icon: "\u2713", label: "Available", className: "slot-available" },
-  reserved: { icon: "\u2717", label: "Reserved", className: "slot-reserved" },
-  mine: { icon: "\u2605", label: "Your Reservation", className: "slot-mine" },
-  unavailable: { icon: "\u2014", label: "Unavailable", className: "slot-unavailable" },
-};
-
-const LEGEND_STATES = ["available", "reserved", "mine", "unavailable"];
-
-const AVAILABILITY_POLL_INTERVAL_MS = 30000;
-
-function RoomCalendarViewPatron({ api, onReservationCreated, refreshTrigger }) {
+function RoomCalendarViewPatron({ api, onReservationCreated }) {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -24,79 +13,22 @@ function RoomCalendarViewPatron({ api, onReservationCreated, refreshTrigger }) {
   const [filterCapacity, setFilterCapacity] = useState("");
   const [filterFeatures, setFilterFeatures] = useState("");
 
-  const fetchAvailability = useCallback(
-    async ({ silent = false } = {}) => {
-      if (!silent) {
-        setLoading(true);
-        setError("");
-      }
+  // Fetch room availability for selected date
+  useEffect(() => {
+    const fetchAvailability = async () => {
+      setLoading(true);
+      setError("");
       try {
-        const data = await api(`reservations/availability?date=${selectedDate}`);
-        const normalizedRooms = (data.rooms || []).map((room) => ({
-          ...room,
-          reservations: Array.isArray(room.reservations) ? room.reservations : [],
-        }));
-        setRooms(normalizedRooms);
+  const data = await api(`reservations/availability?date=${selectedDate}`);
+        setRooms(data.rooms || []);
       } catch (err) {
-        if (!silent) {
-          setError(err.message || "Failed to load room availability");
-        }
+        setError(err.message || "Failed to load room availability");
       } finally {
-        if (!silent) {
-          setLoading(false);
-        }
+        setLoading(false);
       }
-    },
-    [api, selectedDate]
-  );
-
-  // Fetch room availability for selected date (and manual refresh triggers)
-  useEffect(() => {
+    };
     fetchAvailability();
-  }, [fetchAvailability, refreshTrigger]);
-
-  // Background polling so icons stay in sync without manual refreshes
-  useEffect(() => {
-    if (typeof document === "undefined") return undefined;
-
-    const tick = () => fetchAvailability({ silent: true });
-
-    let intervalId = null;
-    const startPolling = () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-        intervalId = null;
-      }
-      if (document.hidden) return;
-      intervalId = setInterval(() => {
-        if (!document.hidden) {
-          tick();
-        }
-      }, AVAILABILITY_POLL_INTERVAL_MS);
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        if (intervalId) {
-          clearInterval(intervalId);
-          intervalId = null;
-        }
-      } else {
-        tick();
-        startPolling();
-      }
-    };
-
-    startPolling();
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    return () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [fetchAvailability]);
+  }, [api, selectedDate]);
 
   // Navigation helpers
   const changeDate = (days) => {
@@ -168,16 +100,14 @@ function RoomCalendarViewPatron({ api, onReservationCreated, refreshTrigger }) {
 
   // Check if a time slot is reserved
   const isReserved = (reservations, hour) => {
-    const list = Array.isArray(reservations) ? reservations : [];
     const { start, end } = slotRangeParts(hour);
-    return list.some((res) => overlapsSlot(res, start, end));
+    return reservations.some((res) => overlapsSlot(res, start, end));
   };
 
   // Check if reservation belongs to current user
   const isMine = (reservations, hour) => {
-    const list = Array.isArray(reservations) ? reservations : [];
     const { start, end } = slotRangeParts(hour);
-    return list.some((res) => res.is_mine && overlapsSlot(res, start, end));
+    return reservations.some((res) => res.is_mine && overlapsSlot(res, start, end));
   };
 
   // Check if time slot is in the past or outside operation hours
@@ -220,52 +150,10 @@ function RoomCalendarViewPatron({ api, onReservationCreated, refreshTrigger }) {
   // Handle slot click for booking
   const handleSlotClick = async (room, hour) => {
     const endHour = hour + 1; // 1-hour booking
-    const localStart = `${selectedDate}T${String(hour).padStart(2, "0")}:00:00`;
-    const localEnd = `${selectedDate}T${String(endHour).padStart(2, "0")}:00:00`;
-    const startTime = libraryDateTimeToUTCISOString(localStart);
-    const endTime = libraryDateTimeToUTCISOString(localEnd);
+    const startTime = libraryDateTimeToUTCISOString(`${selectedDate}T${String(hour).padStart(2, "0")}:00:00`);
+    const endTime = libraryDateTimeToUTCISOString(`${selectedDate}T${String(endHour).padStart(2, "0")}:00:00`);
 
     if (!confirm(`Book ${room.room_number} from ${hour}:00 to ${endHour}:00?`)) return;
-
-    const optimisticReservation = {
-      reservation_id: `optimistic-${Date.now()}`,
-      start_time: localStart,
-      end_time: localEnd,
-      is_mine: true,
-    };
-
-    const addOptimisticReservation = () => {
-      setRooms((prevRooms) =>
-        prevRooms.map((r) =>
-          r.room_id === room.room_id
-            ? {
-                ...r,
-                reservations: [
-                  ...(Array.isArray(r.reservations) ? r.reservations : []),
-                  optimisticReservation,
-                ],
-              }
-            : r
-        )
-      );
-    };
-
-    const removeOptimisticReservation = () => {
-      setRooms((prevRooms) =>
-        prevRooms.map((r) =>
-          r.room_id === room.room_id
-            ? {
-                ...r,
-                reservations: (Array.isArray(r.reservations) ? r.reservations : []).filter(
-                  (res) => res.reservation_id !== optimisticReservation.reservation_id
-                ),
-              }
-            : r
-        )
-      );
-    };
-
-    addOptimisticReservation();
 
     try {
       await api("reservations", {
@@ -277,10 +165,11 @@ function RoomCalendarViewPatron({ api, onReservationCreated, refreshTrigger }) {
         },
       });
       alert("Reservation created successfully!");
+      // Refresh availability
+      const data = await api(`reservations/availability?date=${selectedDate}`);
+      setRooms(data.rooms || []);
       if (onReservationCreated) onReservationCreated();
-      await fetchAvailability({ silent: true });
     } catch (err) {
-      removeOptimisticReservation();
       const code = err?.data?.error;
       const msg = err?.data?.message || err.message;
       if (code === "reservation_conflict") {
@@ -385,20 +274,20 @@ function RoomCalendarViewPatron({ api, onReservationCreated, refreshTrigger }) {
                   const mine = isMine(room.reservations, hour);
                   const bookable = isSlotBookable(hour);
                   const disabled = reserved || !bookable;
-                  const slotState = mine
-                    ? "mine"
-                    : reserved
-                    ? "reserved"
-                    : !bookable
-                    ? "unavailable"
-                    : "available";
-                  const slotMeta = SLOT_STATE_META[slotState];
                   
                   return (
                     <button
                       key={hour}
                       onClick={() => !disabled && handleSlotClick(room, hour)}
-                      className={`calendar-cell-slot ${slotMeta.className}`}
+                      className={`calendar-cell-slot ${
+                        mine
+                          ? 'slot-mine'
+                          : reserved
+                          ? 'slot-reserved'
+                          : !bookable
+                          ? 'slot-unavailable'
+                          : 'slot-available'
+                      }`}
                       disabled={disabled}
                       title={
                         mine 
@@ -410,7 +299,7 @@ function RoomCalendarViewPatron({ api, onReservationCreated, refreshTrigger }) {
                           : 'Click to book'
                       }
                     >
-                      {slotMeta.icon}
+                      {mine ? '★' : reserved ? '✗' : !bookable ? '—' : '✓'}
                     </button>
                   );
                 })}
@@ -422,11 +311,10 @@ function RoomCalendarViewPatron({ api, onReservationCreated, refreshTrigger }) {
 
       <div className="calendar-legend">
         <strong>Legend:</strong>{' '}
-        {LEGEND_STATES.map((state) => (
-          <span key={state} className={`legend-item legend-${state}`}>
-            {SLOT_STATE_META[state].icon} {SLOT_STATE_META[state].label}
-          </span>
-        ))}{' '}
+        <span className="legend-item legend-available">✓ Available</span>{' '}
+        <span className="legend-item legend-reserved">✗ Reserved</span>{' '}
+        <span className="legend-item legend-mine">★ Your Reservation</span>{' '}
+        <span className="legend-item legend-unavailable">— Unavailable</span>{' '}
         | Click available slots to create 1-hour reservations
       </div>
     </div>
@@ -442,7 +330,6 @@ export default function Rooms() {
   const [reservationsLoading, setReservationsLoading] = useState(false);
   const [reservationsError, setReservationsError] = useState("");
   const [refreshFlag, setRefreshFlag] = useState(0);
-  const [calendarRefreshFlag, setCalendarRefreshFlag] = useState(0);
 
   useEffect(() => {
     if (!token) {
@@ -475,12 +362,9 @@ export default function Rooms() {
     }
 
     try {
-      await api(`reservations/${reservationId}/cancel`, { method: "PATCH" });
+  await api(`reservations/${reservationId}/cancel`, { method: "PATCH" });
       alert("Reservation cancelled successfully.");
-      
-      // Refresh both the reservations list AND the availability calendar
-      setRefreshFlag((f) => f + 1); // Refresh "My Reservations" list
-      setCalendarRefreshFlag((f) => f + 1); // Refresh availability grid
+      setRefreshFlag((f) => f + 1); // Refresh reservations list
     } catch (err) {
       const msg = err?.data?.message || err?.message;
       alert(msg || "Failed to cancel reservation.");
@@ -511,14 +395,7 @@ export default function Rooms() {
       </div>
 
       {/* Room Calendar Grid */}
-      <RoomCalendarViewPatron 
-        api={api} 
-        onReservationCreated={() => {
-          setRefreshFlag((f) => f + 1);
-          setCalendarRefreshFlag((f) => f + 1);
-        }} 
-        refreshTrigger={calendarRefreshFlag}
-      />
+  <RoomCalendarViewPatron api={api} onReservationCreated={() => setRefreshFlag((f) => f + 1)} />
 
       {/* My Reservations Section */}
       <div className="rooms-reservations-section">
