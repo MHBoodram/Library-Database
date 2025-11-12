@@ -159,10 +159,12 @@ export const listReservations = (JWT_SECRET) => async (req, res) => {
   }
 };
 
-// Format a JS Date in UTC for MySQL DATETIME storage.
+// Format a JS Date for MySQL DATETIME storage in local library time
+// The database stores times as they should appear in the library's timezone
 function toMySQLDateTime(date) {
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())} ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())}`;
+  const parts = getLibraryTimeParts(date);
+  if (!parts) return null;
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
 }
 
 /**
@@ -256,12 +258,37 @@ export const createReservationSelf = (JWT_SECRET) => async (req, res) => {
   }
 
   try {
+    const startMySQL = toMySQLDateTime(start);
+    const endMySQL = toMySQLDateTime(end);
+    
+    console.log("Checking conflicts for:", {
+      room_id,
+      startMySQL,
+      endMySQL,
+      startUTC: start.toISOString(),
+      endUTC: end.toISOString()
+    });
+    
     const [conflicts] = await pool.query(
       `SELECT COUNT(*) AS cnt FROM reservation r
        WHERE r.room_id = ? AND r.status = 'active'
          AND NOT (r.end_time <= ? OR r.start_time >= ?)`,
-      [room_id, toMySQLDateTime(start), toMySQLDateTime(end)]
+      [room_id, startMySQL, endMySQL]
     );
+    
+    console.log("Conflict check result:", conflicts[0]);
+    
+    // Also check what existing reservations exist for debugging
+    const [existing] = await pool.query(
+      `SELECT reservation_id, start_time, end_time, status 
+       FROM reservation 
+       WHERE room_id = ? AND status = 'active'
+       ORDER BY start_time`,
+      [room_id]
+    );
+    
+    console.log("Existing reservations for room", room_id, ":", existing);
+    
     if (Number(conflicts[0]?.cnt || 0) > 0) {
       return sendJSON(res, 409, { error: "reservation_conflict", message: "Room already booked for that timeslot." });
     }
@@ -273,6 +300,16 @@ export const createReservationSelf = (JWT_SECRET) => async (req, res) => {
     return sendJSON(res, 201, { reservation_id: result.insertId, ok: true });
   } catch (err) {
     console.error("Create self reservation failed:", err);
+    console.error("Error details:", {
+      message: err.message,
+      code: err.code,
+      sqlState: err.sqlState,
+      sqlMessage: err.sqlMessage,
+      user_id,
+      room_id,
+      start: toMySQLDateTime(start),
+      end: toMySQLDateTime(end)
+    });
     return sendJSON(res, 500, { error: "reservation_failed", message: err.message });
   }
 };
