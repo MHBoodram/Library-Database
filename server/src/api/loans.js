@@ -436,8 +436,7 @@ export const cancelRequest = (JWT_SECRET) => async (req, res) => {
       await conn.rollback();
       return sendJSON(res, 400, { error: 'invalid_status', message: 'Loan is not pending' });
     }
-    await conn.execute(`DELETE FROM loan_events WHERE loan_id = ?`, [loan_id]);
-    await conn.execute(`DELETE FROM loan WHERE loan_id = ?`, [loan_id]);
+    await conn.execute(`UPDATE loan SET status='cancelled' WHERE loan_id = ?`, [loan_id]);
     await conn.execute(`UPDATE copy SET status='available' WHERE copy_id = ?`, [loan.copy_id]);
     await conn.commit();
 
