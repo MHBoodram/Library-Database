@@ -159,11 +159,10 @@ export const listReservations = (JWT_SECRET) => async (req, res) => {
   }
 };
 
-// Format a JS Date using the library's timezone for MySQL DATETIME storage.
+// Format a JS Date in UTC for MySQL DATETIME storage.
 function toMySQLDateTime(date) {
-  const parts = getLibraryTimeParts(date);
-  if (!parts) return null;
-  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())} ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())}`;
 }
 
 /**
