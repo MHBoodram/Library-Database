@@ -54,7 +54,17 @@ export function formatLibraryDateTime(value) {
 
 // Represent a timestamp as components in the library timezone for comparisons
 export function toLibraryTimeParts(value) {
-  const date = value instanceof Date ? value : new Date(value);
+  let date;
+  if (
+    typeof value === "string" &&
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(value) &&
+    !/[zZ]$/.test(value) &&
+    !/([+-]\d{2}:?\d{2})$/.test(value)
+  ) {
+    date = new Date(libraryDateTimeToUTCISOString(value));
+  } else {
+    date = value instanceof Date ? value : new Date(value);
+  }
   if (Number.isNaN(date.getTime())) return null;
   const parts = LIBRARY_TZ_FORMATTER.formatToParts(date);
   const map = Object.fromEntries(parts.map((p) => [p.type, p.value]));
@@ -75,4 +85,47 @@ export function localDateTimeToUTCISOString(value) {
   if (!value) return value;
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? value : d.toISOString();
+}
+
+const LIBRARY_TZ_OFFSET_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  timeZone: LIBRARY_TIMEZONE,
+  hour12: false,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+});
+
+function getLibraryOffsetMinutes(date) {
+  const parts = LIBRARY_TZ_OFFSET_FORMATTER.formatToParts(date);
+  const map = Object.fromEntries(parts.map((p) => [p.type, p.value]));
+  const asUTC = Date.UTC(
+    Number(map.year),
+    Number(map.month) - 1,
+    Number(map.day),
+    Number(map.hour),
+    Number(map.minute),
+    Number(map.second || 0)
+  );
+  return (asUTC - date.getTime()) / 60000;
+}
+
+export function libraryDateTimeToUTCISOString(value) {
+  if (!value) return value;
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(value);
+  if (!match) return localDateTimeToUTCISOString(value);
+  const [, year, month, day, hour, minute, second = "00"] = match;
+  const base = Date.UTC(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    Number(second)
+  );
+  const offsetMinutes = getLibraryOffsetMinutes(new Date(base));
+  const utcMillis = base - offsetMinutes * 60 * 1000;
+  return new Date(utcMillis).toISOString();
 }
