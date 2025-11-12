@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
+import { useAuth } from "../../AuthContext";
 import { Field, Th, Td } from "./shared/CommonComponents";
-
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:3000";
 
 // ============================================================================
 // AddItemPanel
 // ============================================================================
 
 export function AddItemPanel() {
+  const { useApi } = useAuth();
+  const api = useApi;
   const [form, setForm] = useState({
     title: "",
     subject: "",
@@ -110,39 +111,21 @@ export function AddItemPanel() {
         if (form.media_type) itemPayload.media_type = form.media_type;
       }
 
-      const createRes = await fetch(`${API_BASE}/items`, {
+      const { item_id: newItemId } = await api("/items", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(itemPayload),
-        credentials: "include",
+        body: itemPayload,
       });
-
-      let json;
-      try {
-        json = await createRes.json();
-      } catch {
-        json = null;
-      }
-
-      if (!createRes.ok) {
-        const errMsg = json?.message || json?.error || `Server returned ${createRes.status}`;
-        throw new Error(errMsg);
-      }
-
-      const newItemId = json.item_id;
 
       // Add authors if book
       if (form.item_type === "book") {
         const authorNames = authors.map((a) => a.name.trim()).filter(Boolean);
         for (const authorName of authorNames) {
-          const authorRes = await fetch(`${API_BASE}/authors`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ item_id: newItemId, author_name: authorName }),
-            credentials: "include",
-          });
-          if (!authorRes.ok) {
-            const authorErr = await authorRes.json().catch(() => ({}));
+          try {
+            await api("/authors", {
+              method: "POST",
+              body: { item_id: newItemId, author_name: authorName },
+            });
+          } catch (authorErr) {
             console.warn("Author creation failed:", authorErr);
           }
         }
@@ -162,14 +145,12 @@ export function AddItemPanel() {
         if (barcodeVal) copyPayload.barcode = barcodeVal;
         if (locationVal) copyPayload.shelf_location = locationVal;
 
-        const copyRes = await fetch(`${API_BASE}/copies`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(copyPayload),
-          credentials: "include",
-        });
-        if (!copyRes.ok) {
-          const copyErr = await copyRes.json().catch(() => ({}));
+        try {
+          await api("/copies", {
+            method: "POST",
+            body: copyPayload,
+          });
+        } catch (copyErr) {
           console.warn("Copy creation failed:", copyErr);
         }
       }
