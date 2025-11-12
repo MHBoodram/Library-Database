@@ -2,45 +2,366 @@ import React, { useState, useCallback, useEffect, useMemo } from "react";
 import { Th, Td } from "./shared/CommonComponents";
 import { formatDate } from "../../utils";
 
+const numberFormatter = new Intl.NumberFormat();
+const donutPalette = ["#2563eb", "#10b981", "#f97316", "#a855f7", "#0ea5e9", "#ef4444"];
+const timeframePresets = [
+  { label: "By Day", value: "day" },
+  { label: "By Week", value: "week" },
+  { label: "By Month", value: "month" },
+  { label: "By 3 Months", value: "quarter" },
+  { label: "By Year", value: "year" },
+];
+const fallbackUserTypeOptions = ["student", "faculty", "staff", "community"];
+const fallbackSourceOptions = ["Online Registration", "In-Person Kiosk", "Event Sign-Up", "Faculty Outreach"];
+const fallbackBranchOptions = ["Main Campus Library", "Science Library", "Downtown Branch"];
+
+const toTitle = (value = "") =>
+  value
+    .split(" ")
+    .map((word) => (word ? word[0].toUpperCase() + word.slice(1) : ""))
+    .join(" ");
+
+function formatPercent(value) {
+  if (value === null || value === undefined || Number.isNaN(value)) return "—";
+  const abs = Math.abs(value).toFixed(1);
+  if (value > 0) return `▲ ${abs}%`;
+  if (value < 0) return `▼ ${abs}%`;
+  return "▬ 0%";
+}
+
+function SparklineChart({ data, valueKey, color = "#2563eb", fill = "rgba(37,99,235,0.18)", height = 140 }) {
+  if (!Array.isArray(data) || data.length === 0) {
+    return <div className="h-[140px] flex items-center justify-center text-sm text-gray-500">No data yet</div>;
+  }
+  const safeData = data.map((entry) => Number(entry?.[valueKey] || 0));
+  const maxValue = Math.max(...safeData, 0);
+  const domainMax = maxValue === 0 ? 1 : maxValue;
+  const stepX = data.length === 1 ? 100 : 100 / (data.length - 1);
+  const points = safeData.map((value, idx) => {
+    const x = idx * stepX;
+    const y = 100 - (value / domainMax) * 100;
+    return { x, y, label: data[idx].label, raw: value, change: data[idx].changePercent };
+  });
+  const polygonPoints = [
+    "0,100",
+    ...points.map((p) => `${p.x},${p.y}`),
+    `${points[points.length - 1].x},100`,
+  ].join(" ");
+
+  return (
+    <div style={{ height }} className="text-[0px]">
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-full w-full">
+        <polygon points={polygonPoints} fill={fill} />
+        <polyline
+          points={points.map((p) => `${p.x},${p.y}`).join(" ")}
+          fill="none"
+          stroke={color}
+          strokeWidth={2}
+          strokeLinecap="round"
+        />
+        {points.map((point, idx) => (
+          <circle key={`${point.x}-${idx}`} cx={point.x} cy={point.y} r={1.8} fill={color}>
+            <title>
+              {`${point.label}: ${numberFormatter.format(point.raw)} new patrons${
+                point.change === null || point.change === undefined
+                  ? ""
+                  : ` (${formatPercent(point.change)})`
+              }`}
+            </title>
+          </circle>
+        ))}
+      </svg>
+    </div>
+  );
+}
+
+function DonutChart({ title, breakdown, total, palette = donutPalette }) {
+  const entries = Object.entries(breakdown || {}).sort((a, b) => Number(b[1]) - Number(a[1]));
+  if (!entries.length) {
+    return (
+      <div className="rounded-xl border bg-white p-4 shadow-sm flex flex-col justify-between">
+        <p className="text-sm text-gray-500">{title}</p>
+        <p className="text-sm text-gray-500 mt-6">No breakdown data yet.</p>
+      </div>
+    );
+  }
+  const totalValue = entries.reduce((sum, [, value]) => sum + Number(value || 0), 0) || 1;
+  let currentPercent = 0;
+  const slices = entries.map(([label, value], idx) => {
+    const percent = (Number(value || 0) / totalValue) * 100;
+    const slice = {
+      label,
+      value: Number(value || 0),
+      percent,
+      color: palette[idx % palette.length],
+      start: currentPercent,
+      end: currentPercent + percent,
+    };
+    currentPercent += percent;
+    return slice;
+  });
+  const gradientStops = slices
+    .map((slice) => `${slice.color} ${slice.start}% ${slice.end}%`)
+    .join(", ");
+
+  return (
+    <div className="rounded-xl border bg-white p-4 shadow-sm flex flex-col gap-4">
+      <p className="text-sm text-gray-500">{title}</p>
+      <div className="flex items-center gap-4">
+        <div className="relative h-32 w-32 shrink-0">
+          <div className="h-full w-full rounded-full" style={{ background: `conic-gradient(${gradientStops})` }} />
+          <div className="absolute inset-6 rounded-full bg-white flex flex-col items-center justify-center text-center">
+            <span className="text-lg font-semibold">{numberFormatter.format(total)}</span>
+            <span className="text-xs text-gray-500">total</span>
+          </div>
+        </div>
+        <ul className="flex-1 space-y-2 text-sm">
+          {slices.slice(0, 5).map((slice) => (
+            <li key={slice.label} className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: slice.color }} />
+              <span className="flex-1 text-gray-700 capitalize">{slice.label}</span>
+              <span className="text-gray-900 font-medium">{numberFormatter.format(slice.value)}</span>
+              <span className="text-gray-500 text-xs">{slice.percent.toFixed(1)}%</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+function BreakdownList({ title, data, total }) {
+  const entries = Object.entries(data || {}).sort((a, b) => Number(b[1]) - Number(a[1]));
+  const denominator = total || entries.reduce((sum, [, value]) => sum + Number(value || 0), 0);
+  return (
+    <div className="rounded-xl border bg-white p-4 shadow-sm">
+      <p className="text-sm text-gray-500 mb-3">{title}</p>
+      {entries.length ? (
+        <ul className="space-y-2 text-sm">
+          {entries.slice(0, 5).map(([label, value]) => {
+            const percent = denominator ? ((Number(value || 0) / denominator) * 100).toFixed(1) : "0.0";
+            return (
+              <li key={label} className="flex items-center justify-between gap-3">
+                <span className="text-gray-700 truncate">{label}</span>
+                <span className="text-gray-900 font-semibold">{numberFormatter.format(value || 0)}</span>
+                <span className="text-xs text-gray-500 w-12 text-right">{percent}%</span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="text-sm text-gray-500">No data captured yet.</p>
+      )}
+    </div>
+  );
+}
+
+function TopPeriodCard({ period }) {
+  const percentLabel =
+    typeof period.percent_of_total === "number"
+      ? `${period.percent_of_total.toFixed(1)}% of total`
+      : "—";
+  return (
+    <div className="rounded-lg border bg-white p-4 shadow-sm">
+      <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">Top period</p>
+      <p className="text-sm font-semibold text-gray-900">{period.label}</p>
+      <p className="text-2xl font-bold text-gray-900 mt-2">{numberFormatter.format(period.total || 0)}</p>
+      <p className="text-xs text-gray-500 mt-1">{percentLabel}</p>
+      <p className="text-xs text-gray-500 mt-1">
+        {period.start_date === period.end_date
+          ? period.start_date
+          : `${period.start_date} → ${period.end_date}`}
+      </p>
+    </div>
+  );
+}
+
+function RetentionSnapshotCard({ retention, loading }) {
+  if (loading) {
+    return (
+      <div className="rounded-xl border bg-white p-4 shadow-sm flex items-center justify-center text-sm text-gray-500">
+        Loading retention…
+      </div>
+    );
+  }
+  if (!retention) {
+    return (
+      <div className="rounded-xl border bg-white p-4 shadow-sm">
+        <p className="text-sm text-gray-500">Retention Snapshot</p>
+        <p className="text-sm text-gray-500 mt-4">Not enough data yet.</p>
+      </div>
+    );
+  }
+  const { cohortLabel, cohortSize, engagedCount, engagementRate, windowStart, windowEnd } = retention;
+  const hasCohort = cohortSize > 0;
+  const numericRate = typeof engagementRate === "number" ? engagementRate : 0;
+  const progressWidth = Math.min(100, Math.max(0, numericRate || 0));
+  const rateLabel = hasCohort ? `${numericRate.toFixed(1)}%` : "—";
+  return (
+    <div className="rounded-xl border bg-white p-4 shadow-sm flex flex-col gap-3">
+      <div>
+        <p className="text-sm text-gray-500">Retention Snapshot</p>
+        <p className="text-2xl font-bold text-gray-900 mt-2">{rateLabel}</p>
+        <p className="text-xs text-gray-500">
+          {hasCohort
+            ? `${engagedCount} of ${cohortSize} patrons from ${cohortLabel || "recent cohort"}`
+            : "Waiting for at least one new patron in the last 30 days"}
+        </p>
+      </div>
+      <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+        <div className="h-full bg-green-500 transition-all" style={{ width: `${progressWidth}%` }} />
+      </div>
+      <p className="text-xs text-gray-500">
+        {hasCohort && windowStart
+          ? `Looks at checkouts between ${windowStart} and ${windowEnd}`
+          : "We need recent checkout activity to calculate retention."}
+      </p>
+    </div>
+  );
+}
+
+function NewPatronInsights({ report, loading }) {
+  if (!report) return null;
+  const timeline = Array.isArray(report.timeline) ? report.timeline : [];
+  const meta = report.meta || {};
+  const breakdowns = report.breakdowns || {};
+  const topPeriods = Array.isArray(report.topPeriods) ? report.topPeriods : [];
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-xl border bg-white p-4 shadow-sm flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500">New Patrons Over Time</p>
+              <p className="text-2xl font-semibold text-gray-900">{numberFormatter.format(meta.totalNewPatrons || 0)}</p>
+              <p
+                className={`text-xs ${
+                  meta.lastChangePercent > 0
+                    ? "text-green-600"
+                    : meta.lastChangePercent < 0
+                    ? "text-rose-600"
+                    : "text-gray-500"
+                }`}
+              >
+                {meta.lastChangePercent == null ? "Awaiting previous period" : formatPercent(meta.lastChangePercent)}
+              </p>
+            </div>
+            <div className="text-right text-xs text-gray-500">
+              <p>Avg / {meta.timeframe || "period"}</p>
+              <p className="font-semibold text-gray-900">
+                {meta.averagePerBucket ? meta.averagePerBucket.toFixed(1) : "0.0"}
+              </p>
+            </div>
+          </div>
+          <SparklineChart data={timeline} valueKey="total" color="#2563eb" />
+        </div>
+        <div className="rounded-xl border bg-white p-4 shadow-sm flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500">Cumulative Growth</p>
+              <p className="text-2xl font-semibold text-gray-900">
+                {numberFormatter.format(timeline.length ? timeline[timeline.length - 1].cumulative : 0)}
+              </p>
+              <p className="text-xs text-gray-500">{meta.startDate} → {meta.endDate}</p>
+            </div>
+            <div className="text-right text-xs text-gray-500">
+              <p>Periods tracked</p>
+              <p className="font-semibold text-gray-900">{meta.bucketCount || 0}</p>
+            </div>
+          </div>
+          <SparklineChart data={timeline} valueKey="cumulative" color="#10b981" fill="rgba(16,185,129,0.25)" />
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <DonutChart title="User Type Breakdown" breakdown={breakdowns.byType} total={meta.totalNewPatrons || 0} />
+        <BreakdownList title="By Branch" data={breakdowns.byBranch} total={meta.totalNewPatrons} />
+        <BreakdownList title="By Source" data={breakdowns.bySource} total={meta.totalNewPatrons} />
+        <RetentionSnapshotCard retention={report.retention} loading={loading} />
+      </div>
+
+      <div className="rounded-xl border bg-white p-4 shadow-sm">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-sm font-medium text-gray-900">Top Registration Periods</p>
+          <span className="text-xs text-gray-500">
+            Highlighting {topPeriods.length || 0} / {timeline.length || 0} periods
+          </span>
+        </div>
+        {topPeriods.length ? (
+          <div className="grid gap-3 md:grid-cols-3">
+            {topPeriods.map((period) => (
+              <TopPeriodCard key={`${period.label}-${period.start_date}`} period={period} />
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500">We need more than one period with activity to surface leaders.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function NewPatronsReportTable({ data, loading }) {
   if (loading) {
     return <div className="p-8 text-center text-gray-500">Loading report...</div>;
   }
-  if (!data.length) {
+  const rows = Array.isArray(data) ? data : [];
+  if (!rows.length) {
     return <div className="p-8 text-center text-gray-500">No patron signups in the selected window</div>;
   }
-  // data: [{ month: 'YYYY-MM', new_patrons: number }, ...]
-  const total = data.reduce((sum, r) => sum + Number(r.new_patrons || 0), 0);
+  const total = rows.reduce((sum, row) => sum + Number(row.new_patrons || 0), 0);
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full text-sm">
         <thead className="bg-gray-100 text-left">
           <tr>
-            <Th>Month</Th>
+            <Th>Period</Th>
             <Th>New Patrons</Th>
             <Th>Cumulative</Th>
+            <Th>% of Total</Th>
+            <Th>Δ vs Prev</Th>
           </tr>
         </thead>
         <tbody>
-          {data.map((row, idx) => {
-            const monthLabel = new Date(row.month + '-01').toLocaleDateString(undefined, { year: 'numeric', month: 'short' });
-            const cumulative = data.slice(0, idx + 1).reduce((s, r) => s + Number(r.new_patrons || 0), 0);
+          {rows.map((row) => {
+            const startLabel = row.start_date ? formatDate(row.start_date) : "—";
+            const endLabel = row.end_date ? formatDate(row.end_date) : "—";
+            const rowKey = `${row.period}-${row.start_date ?? row.period}`;
             return (
-              <tr key={row.month} className="border-t">
-                <Td>{monthLabel}</Td>
+              <tr key={rowKey} className="border-t">
                 <Td>
-                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${row.new_patrons > 0 ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}> 
-                    {row.new_patrons} {row.new_patrons === 1 ? 'patron' : 'patrons'}
-                  </span>
+                  <div className="font-semibold text-gray-900">{row.period}</div>
+                  <div className="text-xs text-gray-500">
+                    {row.start_date && row.end_date && row.start_date !== row.end_date
+                      ? `${startLabel} → ${endLabel}`
+                      : startLabel}
+                  </div>
                 </Td>
-                <Td className="font-medium">{cumulative}</Td>
-              </tr>
+              <Td>
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+                    row.new_patrons > 0 ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600"
+                  }`}
+                >
+                  {numberFormatter.format(row.new_patrons || 0)}
+                </span>
+              </Td>
+              <Td className="font-medium text-gray-900">{numberFormatter.format(row.cumulative || 0)}</Td>
+              <Td className="text-gray-900">
+                {row.percent_of_total != null
+                  ? `${Number(row.percent_of_total).toFixed(1)}%`
+                  : "—"}
+              </Td>
+              <Td className="text-gray-900">{formatPercent(row.change_percent)}</Td>
+            </tr>
             );
           })}
           <tr className="bg-gray-50 border-t">
-            <Td className="font-semibold">Total</Td>
-            <Td className="font-semibold">{total}</Td>
-            <Td className="font-semibold">—</Td>
+            <Td className="font-semibold">Grand Total</Td>
+            <Td className="font-semibold">{numberFormatter.format(total)}</Td>
+            <Td className="font-semibold text-gray-500">—</Td>
+            <Td className="font-semibold text-gray-500">100%</Td>
+            <Td className="font-semibold text-gray-500">—</Td>
           </tr>
         </tbody>
       </table>
@@ -176,28 +497,28 @@ function TopItemsReportTable({ data, loading }) {
   );
 }
 
-function TransactionReportTable({data,loading}){
+function TransactionReportTable({ data = [], loading }) {
+  // client-side sorting
+  const [sortKey, setSortKey] = React.useState('event_timestamp');
+  const [sortDir, setSortDir] = React.useState('desc');
+  const sorted = React.useMemo(() => {
+    const arr = [...data].map((r, i) => ({ ...r, __i: i }));
+    const cmp = (a, b) => {
+      const dir = sortDir === 'asc' ? 1 : -1;
+      let av = a[sortKey], bv = b[sortKey];
+      if (sortKey === 'event_timestamp') { av = new Date(av).getTime(); bv = new Date(bv).getTime(); }
+      else if (typeof av === 'string' && typeof bv === 'string') { av = av.toLowerCase(); bv = bv.toLowerCase(); }
+      if (av < bv) return -1 * dir; if (av > bv) return 1 * dir; return a.__i - b.__i; // stable
+    };
+    arr.sort(cmp);
+    return arr;
+  }, [data, sortKey, sortDir]);
   if (loading) {
     return <div>Loading report...</div>;
   }
   if (data.length === 0) {
     return <div className="p-8 text-center text-gray-500">No loan activity in selected period</div>;
   }
-  // client-side sorting
-  const [sortKey, setSortKey] = React.useState('event_timestamp');
-  const [sortDir, setSortDir] = React.useState('desc');
-  const sorted = React.useMemo(() => {
-    const arr = [...data].map((r, i) => ({...r, __i:i}));
-    const cmp = (a,b) => {
-      const dir = sortDir === 'asc' ? 1 : -1;
-      let av = a[sortKey], bv = b[sortKey];
-      if (sortKey === 'event_timestamp') { av = new Date(av).getTime(); bv = new Date(bv).getTime(); }
-      else if (typeof av === 'string' && typeof bv === 'string') { av = av.toLowerCase(); bv = bv.toLowerCase(); }
-      if (av < bv) return -1*dir; if (av > bv) return 1*dir; return a.__i - b.__i; // stable
-    };
-    arr.sort(cmp);
-    return arr;
-  }, [data, sortKey, sortDir]);
   const onSort = (key) => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     else { setSortKey(key); setSortDir('desc'); }
@@ -398,12 +719,12 @@ export default function ReportsPanel({ api }) {
   const [finesOnlyActive, setFinesOnlyActive] = useState(false);
   const [finesIncludeWaived, setFinesIncludeWaived] = useState(true);
   
-  const [balancesStartDate, setBalancesStartDate] = useState(() => {
+  const [balancesStartDate] = useState(() => {
     const d = new Date();
     d.setFullYear(d.getFullYear() - 1);
     return d.toISOString().slice(0, 10);
   });
-  const [balancesEndDate, setBalancesEndDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [balancesEndDate] = useState(() => new Date().toISOString().slice(0, 10));
   
   const [topItemsStartDate, setTopItemsStartDate] = useState(() => {
     const d = new Date();
@@ -418,8 +739,18 @@ export default function ReportsPanel({ api }) {
     return d.toISOString().slice(0, 10);
   });
   const [newPatronsEndDate, setNewPatronsEndDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [newPatronsTimeframe, setNewPatronsTimeframe] = useState("month");
+  const [newPatronsUserTypes, setNewPatronsUserTypes] = useState([]);
+  const [newPatronsBranch, setNewPatronsBranch] = useState("all");
+  const [newPatronsSources, setNewPatronsSources] = useState([]);
+  const [newPatronsReport, setNewPatronsReport] = useState(null);
+  const [newPatronsFilterOptions, setNewPatronsFilterOptions] = useState({
+    userTypes: [],
+    branches: [],
+    sources: [],
+  });
 
-    const [transactionsStartDate, setTransactionStartDate] = useState(() => {
+  const [transactionsStartDate, setTransactionStartDate] = useState(() => {
     const d = new Date();
     d.setFullYear(d.getFullYear() - 1);
     return d.toISOString().slice(0, 10);
@@ -430,18 +761,35 @@ export default function ReportsPanel({ api }) {
   const [txStatuses, setTxStatuses] = useState(['Pending','Approved & Active','Rejected','Returned']);
   const [txStaff, setTxStaff] = useState('');
   const [txSearch, setTxSearch] = useState('');
+  const userTypeOptions = Array.from(
+    new Set(
+      (newPatronsFilterOptions.userTypes?.length ? newPatronsFilterOptions.userTypes : fallbackUserTypeOptions).map(
+        (value) => value.toLowerCase()
+      )
+    )
+  );
+  const branchOptions = Array.from(
+    new Set(newPatronsFilterOptions.branches?.length ? newPatronsFilterOptions.branches : fallbackBranchOptions)
+  );
+  const sourceOptions = Array.from(
+    new Set(newPatronsFilterOptions.sources?.length ? newPatronsFilterOptions.sources : fallbackSourceOptions)
+  );
 
   const loadReport = useCallback(async (reportType) => {
     if (!api) return;
+    const targetReport = reportType || activeReport;
     setLoading(true);
     setError("");
     setReportData([]);
+    if (targetReport === "newPatrons") {
+      setNewPatronsReport(null);
+    }
 
     try {
       let endpoint = "";
       let params = new URLSearchParams();
       
-      switch (reportType) {
+      switch (targetReport) {
         case "overdue":
           endpoint = "reports/overdue";
           params.set("start_date", overdueStartDate);
@@ -473,6 +821,16 @@ export default function ReportsPanel({ api }) {
           endpoint = "reports/new-patrons-monthly";
           params.set("start_date", newPatronsStartDate);
           params.set("end_date", newPatronsEndDate);
+          params.set("timeframe", newPatronsTimeframe);
+          if (Array.isArray(newPatronsUserTypes) && newPatronsUserTypes.length) {
+            params.set("user_type", newPatronsUserTypes.join(","));
+          }
+          if (newPatronsBranch && newPatronsBranch !== "all") {
+            params.set("branch", newPatronsBranch);
+          }
+          if (Array.isArray(newPatronsSources) && newPatronsSources.length) {
+            params.set("source", newPatronsSources.join(","));
+          }
           break;
         case "transactions":
           endpoint = "reports/transactions";
@@ -488,15 +846,24 @@ export default function ReportsPanel({ api }) {
       }
       const data = await api(`${endpoint}?${params.toString()}`);
       console.log("DATA: ", data);
-      // Some endpoints return arrays, staff endpoints return { rows }
-      const rows = Array.isArray(data?.rows) ? data.rows : (Array.isArray(data) ? data : []);
-      setReportData(rows);
+      if (targetReport === "newPatrons") {
+        setNewPatronsReport(data || null);
+        setNewPatronsFilterOptions({
+          userTypes: data?.filterOptions?.userTypes || [],
+          branches: data?.filterOptions?.branches || [],
+          sources: data?.filterOptions?.sources || [],
+        });
+        setReportData(Array.isArray(data?.tableRows) ? data.tableRows : []);
+      } else {
+        const rows = Array.isArray(data?.rows) ? data.rows : (Array.isArray(data) ? data : []);
+        setReportData(rows);
+      }
     } catch (err) {
       setError(err.message || "Failed to load report");
     } finally {
       setLoading(false);
     }
-  }, [api, overdueStartDate, overdueEndDate, overdueBorrower, overdueGraceMode, overdueSortMode, balancesStartDate, balancesEndDate, topItemsStartDate, topItemsEndDate, newPatronsStartDate, newPatronsEndDate,transactionsStartDate,transactionsEndDate, txEventTypes, txStatuses, txStaff, txSearch]);
+  }, [api, activeReport, overdueStartDate, overdueEndDate, overdueBorrower, overdueGraceMode, overdueSortMode, balancesStartDate, balancesEndDate, topItemsStartDate, topItemsEndDate, newPatronsStartDate, newPatronsEndDate, newPatronsTimeframe, newPatronsUserTypes, newPatronsBranch, newPatronsSources, transactionsStartDate, transactionsEndDate, txEventTypes, txStatuses, txStaff, txSearch]);
 
   // Derived media types from the currently loaded overdue dataset
   const mediaTypeOptions = useMemo(() => {
@@ -545,12 +912,13 @@ export default function ReportsPanel({ api }) {
 
   // Transactions filtering and KPIs
   const transactionsFilteredRows = useMemo(() => {
-    if (activeReport !== 'transactions') return reportData || [];
+    const sourceRows = Array.isArray(reportData) ? reportData : [];
+    if (activeReport !== 'transactions') return sourceRows;
     const types = new Set(txEventTypes);
     const statuses = new Set(txStatuses);
     const staffId = txStaff ? String(txStaff) : '';
     const q = (txSearch || '').trim().toLowerCase();
-    return (reportData || []).filter(r => {
+    return sourceRows.filter(r => {
       const typeOk = !r.event_type || types.has(String(r.event_type));
       const statusOk = !r.current_status || statuses.has(String(r.current_status));
       const staffOk = !staffId || String(r.employee_id||'') === staffId;
@@ -621,102 +989,7 @@ export default function ReportsPanel({ api }) {
   }, [activeReport, transactionsFilteredRows]);
 
   // Fines filtering and KPIs
-  const finesFilteredRows = useMemo(() => {
-    if (activeReport !== 'fines') return reportData || [];
-    const sDate = finesStartDate ? new Date(finesStartDate) : null;
-    const eDate = finesEndDate ? new Date(finesEndDate) : null;
-    const amtMin = finesAmountMin !== '' ? Number(finesAmountMin) : null;
-    const amtMax = finesAmountMax !== '' ? Number(finesAmountMax) : null;
-    const statusSel = finesStatus; // 'active' | 'closed' | 'all'
-    const mt = (finesMediaType || 'all').toLowerCase();
-    const reason = (finesReason || 'all').toLowerCase();
-    const pidFilter = (finesPatronId || '').trim().toLowerCase();
-    const borrowerFilter = (finesBorrower || '').trim().toLowerCase();
-    const titleFilter = (finesItemTitle || '').trim().toLowerCase();
-
-    const agingMatch = (days) => {
-      const d = Number(days || 0);
-      switch (finesAging) {
-        case '0-7': return d >= 0 && d <= 7;
-        case '8-30': return d >= 8 && d <= 30;
-        case '31-60': return d >= 31 && d <= 60;
-        case '61-90': return d >= 61 && d <= 90;
-        case '90+': return d >= 91;
-        default: return true;
-      }
-    };
-
-    const isActive = (st) => !['paid','waived'].includes(String(st||'').toLowerCase());
-
-    return (reportData || []).filter(r => {
-      // dates
-      if (sDate && (!r.assessed_at || new Date(r.assessed_at) < sDate)) return false;
-      if (eDate && (!r.assessed_at || new Date(r.assessed_at) > eDate)) return false;
-      // status
-      if (statusSel === 'active' && !isActive(r.status)) return false;
-      if (statusSel === 'closed' && isActive(r.status)) return false;
-      if (finesOnlyActive && !isActive(r.status)) return false;
-      if (!finesIncludeWaived && String(r.status||'').toLowerCase() === 'waived') return false;
-      // amounts
-      const amt = Number(r.amount_assessed || 0);
-      if (amtMin != null && amtMin !== '' && amt < amtMin) return false;
-      if (amtMax != null && amtMax !== '' && amt > amtMax) return false;
-      // borrower
-      const borrowerName = `${(r.first_name||'').toLowerCase()} ${(r.last_name||'').toLowerCase()}`.trim();
-      if (borrowerFilter && !borrowerName.includes(borrowerFilter)) return false;
-      // patron id
-      const pid = String(r.patron_id ?? r.user_id ?? '').toLowerCase();
-      if (pidFilter && !pid.includes(pidFilter)) return false;
-      // title
-      if (titleFilter && !String(r.title||'').toLowerCase().includes(titleFilter)) return false;
-      // media type
-      if (mt !== 'all' && String(r.media_type||'book').toLowerCase() !== mt) return false;
-      // reason
-      if (reason !== 'all' && String(r.reason||'').toLowerCase() !== reason) return false;
-      // aging
-      if (!agingMatch(r.days_overdue)) return false;
-      return true;
-    });
-  }, [activeReport, reportData, finesStartDate, finesEndDate, finesStatus, finesOnlyActive, finesIncludeWaived, finesAmountMin, finesAmountMax, finesBorrower, finesPatronId, finesItemTitle, finesMediaType, finesReason, finesAging]);
-
-  const finesKPIs = useMemo(() => {
-    if (activeReport !== 'fines') return null;
-    const rows = finesFilteredRows;
-    const total = rows.length;
-    const uniqueBorrowers = new Set(rows.map(r => String(r.patron_id ?? r.user_id))).size;
-    const amounts = rows.map(r => Number(r.amount_assessed || 0)).sort((a,b)=>a-b);
-    const sum = amounts.reduce((s,x)=>s+x,0);
-    const paid = rows.reduce((s,r)=> s + Number(r.amount_paid || 0), 0);
-    const waived = rows.filter(r => String(r.status||'').toLowerCase()==='waived').reduce((s,r)=> s + Number(r.amount_assessed||0), 0);
-    const outstanding = rows.reduce((s,r)=> {
-      const st = String(r.status||'').toLowerCase();
-      const isAct = !['paid','waived'].includes(st);
-      const due = Math.max(0, Number(r.amount_assessed||0) - Number(r.amount_paid||0));
-      return s + (isAct ? due : 0);
-    }, 0);
-    const avg = total ? sum/total : 0;
-    const med = total ? (amounts[Math.floor((total-1)/2)] + amounts[Math.ceil((total-1)/2)]) / 2 : 0;
-    const p95 = total ? amounts[Math.min(total-1, Math.ceil(0.95*total)-1)] : 0;
-    const max = total ? amounts[total-1] : 0;
-    const agingBuckets = { '0-7':0, '8-30':0, '31-60':0, '61-90':0, '90+':0 };
-    rows.forEach(r=>{
-      const d = Number(r.days_overdue||0);
-      if (d<=7) agingBuckets['0-7']++; else if (d<=30) agingBuckets['8-30']++; else if (d<=60) agingBuckets['31-60']++; else if (d<=90) agingBuckets['61-90']++; else agingBuckets['90+']++;
-    });
-    // top borrowers by outstanding
-    const byBorrower = new Map();
-    rows.forEach(r=>{
-      const id = String(r.patron_id ?? r.user_id);
-      const name = `${r.first_name||''} ${r.last_name||''}`.trim() || `#${id}`;
-      const st = String(r.status||'').toLowerCase();
-      const isAct = !['paid','waived'].includes(st);
-      const due = Math.max(0, Number(r.amount_assessed||0) - Number(r.amount_paid||0));
-      const rec = byBorrower.get(id) || { id, name, outstanding: 0 };
-      rec.outstanding += isAct ? due : 0; byBorrower.set(id, rec);
-    });
-    const topBorrowers = Array.from(byBorrower.values()).sort((a,b)=> b.outstanding - a.outstanding).slice(0,5);
-    return { total, uniqueBorrowers, sum, outstanding, paid, waived, avg: Number(avg.toFixed(2)), med, p95, max, agingBuckets, topBorrowers };
-  }, [activeReport, finesFilteredRows]);
+  // Legacy fines filtering/KPIs removed until the fines report is re-enabled
 
   function onFinesGenerate() {
     // Just validate dates and reload; data filters apply client-side
@@ -771,6 +1044,30 @@ export default function ReportsPanel({ api }) {
     setOverdueMediaType('all');
   // no-op: borrowers view removed
     loadReport('overdue');
+  }
+
+  const handleUserTypeToggle = (type) => {
+    setNewPatronsUserTypes((prev) =>
+      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
+    );
+  };
+
+  const handleSourceToggle = (source) => {
+    setNewPatronsSources((prev) =>
+      prev.includes(source) ? prev.filter((s) => s !== source) : [...prev, source]
+    );
+  };
+
+  function handleNewPatronsReset() {
+    const now = new Date();
+    const yearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+    setNewPatronsStartDate(yearAgo.toISOString().slice(0, 10));
+    setNewPatronsEndDate(new Date().toISOString().slice(0, 10));
+    setNewPatronsTimeframe("month");
+    setNewPatronsUserTypes([]);
+    setNewPatronsBranch("all");
+    setNewPatronsSources([]);
+    loadReport("newPatrons");
   }
 
   useEffect(() => {
@@ -902,25 +1199,137 @@ export default function ReportsPanel({ api }) {
                 </div>
               </div>
             )}
-{false && (
-              <div className="flex flex-wrap items-end gap-3">
+            {activeReport === "newPatrons" && (
+              <div className="space-y-4 rounded-md border bg-white/80 p-4">
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
-                  <input
-                    type="date"
-                    value={finesStartDate}
-                    onChange={(e) => setFinesStartDate(e.target.value)}
-                    className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
-                  />
+                  <label className="block text-xs font-medium text-gray-600 mb-2">Time Frame</label>
+                  <div className="flex flex-wrap gap-2">
+                    {timeframePresets.map((preset) => (
+                      <button
+                        key={preset.value}
+                        type="button"
+                        onClick={() => setNewPatronsTimeframe(preset.value)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium ${
+                          newPatronsTimeframe === preset.value
+                            ? "bg-blue-600 text-white"
+                            : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
-                  <input
-                    type="date"
-                    value={finesEndDate}
-                    onChange={(e) => setFinesEndDate(e.target.value)}
-                    className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
-                  />
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
+                    <input
+                      type="date"
+                      value={newPatronsStartDate}
+                      onChange={(e) => setNewPatronsStartDate(e.target.value)}
+                      className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
+                    <input
+                      type="date"
+                      value={newPatronsEndDate}
+                      onChange={(e) => setNewPatronsEndDate(e.target.value)}
+                      className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-xs font-medium text-gray-600">User Types</label>
+                      <button
+                        type="button"
+                        onClick={() => setNewPatronsUserTypes([])}
+                        className="text-[11px] text-blue-600 hover:underline"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-3">
+                      {userTypeOptions.map((type) => {
+                        const value = type.toLowerCase();
+                        return (
+                          <label key={value} className="inline-flex items-center gap-1 text-xs capitalize cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={newPatronsUserTypes.includes(value)}
+                              onChange={() => handleUserTypeToggle(value)}
+                              className="h-4 w-4"
+                            />
+                            {toTitle(value)}
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <p className="mt-2 text-[11px] text-gray-500">Leave unchecked to include every patron type.</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Branch / Location</label>
+                    <select
+                      value={newPatronsBranch}
+                      onChange={(e) => setNewPatronsBranch(e.target.value)}
+                      disabled={branchOptions.length <= 1}
+                      className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm disabled:bg-gray-100 disabled:text-gray-500"
+                    >
+                      <option value="all">All branches</option>
+                      {branchOptions.map((branch) => (
+                        <option key={branch} value={branch}>
+                          {branch}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="mt-2 text-[11px] text-gray-500">
+                      {branchOptions.length > 1
+                        ? "Drill into a single campus or view the entire system."
+                        : "Branch tracking defaults to Main Campus until other sites sync data."}
+                    </p>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-xs font-medium text-gray-600">Registration Source</label>
+                      <button
+                        type="button"
+                        onClick={() => setNewPatronsSources([])}
+                        className="text-[11px] text-blue-600 hover:underline"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      {sourceOptions.map((source) => (
+                        <label key={source} className="inline-flex items-center gap-1 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={newPatronsSources.includes(source)}
+                            onChange={() => handleSourceToggle(source)}
+                            className="h-4 w-4"
+                          />
+                          <span>{source}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <p className="mt-2 text-[11px] text-gray-500">
+                      Track outreach funnels such as online forms, events, or faculty referrals.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
+                  <button
+                    type="button"
+                    onClick={handleNewPatronsReset}
+                    disabled={loading}
+                    className="px-3 py-2 rounded-md bg-gray-100 text-gray-800 text-sm font-medium hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Reset Filters
+                  </button>
+                  <span>Filters auto-apply and refresh charts instantly.</span>
                 </div>
               </div>
             )}
@@ -1176,140 +1585,63 @@ export default function ReportsPanel({ api }) {
               {/* Top borrowers chart removed per request */}
             </div>
           )}
-{false && (
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div className="rounded-md border bg-white p-3 text-sm"><div className="text-gray-500">Total Fines</div><div className="text-xl font-semibold">{finesKPIs?.total || 0}</div></div>
-                <div className="rounded-md border bg-white p-3 text-sm"><div className="text-gray-500">Distinct Borrowers</div><div className="text-xl font-semibold">{finesKPIs?.uniqueBorrowers || 0}</div></div>
-                <div className="rounded-md border bg-white p-3 text-sm"><div className="text-gray-500">Assessed Total</div><div className="text-xl font-semibold">${(finesKPIs?.sum || 0).toFixed(2)}</div></div>
-                <div className="rounded-md border bg-white p-3 text-sm"><div className="text-gray-500">Outstanding</div><div className="text-xl font-semibold">${(finesKPIs?.outstanding || 0).toFixed(2)}</div></div>
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div className="rounded-md border bg-white p-3 text-sm"><div className="text-gray-500">Paid</div><div className="text-xl font-semibold">${(finesKPIs?.paid || 0).toFixed(2)}</div></div>
-                <div className="rounded-md border bg-white p-3 text-sm"><div className="text-gray-500">Waived</div><div className="text-xl font-semibold">${(finesKPIs?.waived || 0).toFixed(2)}</div></div>
-                <div className="rounded-md border bg-white p-3 text-sm"><div className="text-gray-500">Avg / Median</div><div className="text-xl font-semibold">${(finesKPIs?.avg || 0).toFixed(2)} / ${(finesKPIs?.med || 0).toFixed(2)}</div></div>
-                <div className="rounded-md border bg-white p-3 text-sm"><div className="text-gray-500">P95 / Max</div><div className="text-xl font-semibold">${(finesKPIs?.p95 || 0).toFixed(2)} / ${(finesKPIs?.max || 0).toFixed(2)}</div></div>
-              </div>
-              <div className="text-sm text-gray-700">
-                {finesFilteredRows.length === 0 ? (
-                  <span>No fines matched the selected parameters.</span>
-                ) : (
-                  <span>
-                    {`Report shows ${finesKPIs?.total} fines for ${finesKPIs?.uniqueBorrowers} patrons. Outstanding is $${(finesKPIs?.outstanding||0).toFixed(2)} vs paid $${(finesKPIs?.paid||0).toFixed(2)} and waived $${(finesKPIs?.waived||0).toFixed(2)}. Median $${(finesKPIs?.med||0).toFixed(2)}; P95 $${(finesKPIs?.p95||0).toFixed(2)}.`}
-                  </span>
-                )}
-              </div>
-              {finesKPIs?.topBorrowers?.length ? (
-                <div className="rounded-lg border bg-white p-3">
-                  <div className="mb-2 text-sm font-medium">Top Borrowers by Outstanding</div>
-                  <ul className="text-sm space-y-1">
-                    {finesKPIs.topBorrowers.map(tb => (
-                      <li key={tb.id} className="flex justify-between"><span>{tb.name}</span><span>${tb.outstanding.toFixed(2)}</span></li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-            </div>
-          )}
-
           {error && (
             <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-800">
               {error}
             </div>
           )}
 
-          <div className="rounded-lg border overflow-hidden">
-            {activeReport === "overdue" && <OverdueReportTable data={overdueFilteredRows} loading={loading} />}
-{false && (
-              <div className="overflow-x-auto">
-                {finesFilteredRows.length === 0 ? (
-                  <div className="p-6 text-center text-gray-500">No fines to display</div>
-                ) : (
-                  <table className="min-w-full text-sm">
-                    <thead className="bg-gray-100 text-left">
-                      <tr>
-                        <Th>Borrower</Th>
-                        <Th>Patron ID</Th>
-                        <Th>Fine ID</Th>
-                        <Th>Status</Th>
-                        <Th>Assessed</Th>
-                        <Th>Amount</Th>
-                        <Th>Paid</Th>
-                        <Th>Outstanding</Th>
-                        <Th>Reason</Th>
-                        <Th>Item Title</Th>
-                        <Th>Media</Th>
-                        <Th>Due</Th>
-                        <Th>Days</Th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {finesFilteredRows.map((r, idx) => {
-                        const outstanding = Math.max(0, Number(r.amount_assessed||0) - Number(r.amount_paid||0));
-                        return (
-                          <tr key={idx} className="border-t">
-                            <Td>{`${r.first_name} ${r.last_name}`}</Td>
-                            <Td>{String(r.patron_id ?? r.user_id ?? '')}</Td>
-                            <Td>#{r.fine_id}</Td>
-                            <Td>{String(r.status||'').toUpperCase()}</Td>
-                            <Td>{r.assessed_at ? new Date(r.assessed_at).toLocaleDateString() : '—'}</Td>
-                            <Td>${Number(r.amount_assessed||0).toFixed(2)}</Td>
-                            <Td>${Number(r.amount_paid||0).toFixed(2)}</Td>
-                            <Td>${outstanding.toFixed(2)}</Td>
-                            <Td>{r.reason || '—'}</Td>
-                            <Td className="max-w-[30ch] truncate" title={r.title}>{r.title}</Td>
-                            <Td>{(r.media_type||'book').toUpperCase()}</Td>
-                            <Td>{r.due_date ? new Date(r.due_date).toLocaleDateString() : '—'}</Td>
-                            <Td>{r.days_overdue}</Td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                )}
+          {activeReport === "newPatrons" ? (
+            <div className="space-y-4">
+              <NewPatronInsights report={newPatronsReport} loading={loading} />
+              <div className="rounded-lg border overflow-hidden">
+                <NewPatronsReportTable data={reportData} loading={loading} />
               </div>
-            )}
+            </div>
+          ) : (
+            <div className="rounded-lg border overflow-hidden">
+              {activeReport === "overdue" && <OverdueReportTable data={overdueFilteredRows} loading={loading} />}
 {/* User Balances table removed */}
-            {activeReport === "topItems" && <TopItemsReportTable data={reportData} loading={loading} />}
-            {activeReport === "newPatrons" && <NewPatronsReportTable data={reportData} loading={loading} />}
-            {activeReport === "transactions" && (
-              <>
-                {transactionsFilteredRows.length > 0 ? (
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 border-b bg-gray-50">
-                    <div className="rounded-md border bg-white p-3">
-                      <div className="text-xs text-gray-600">Requests</div>
-                      <div className="text-xl font-semibold">{transactionsKPIs?.requests ?? 0}</div>
+              {activeReport === "topItems" && <TopItemsReportTable data={reportData} loading={loading} />}
+              {activeReport === "transactions" && (
+                <>
+                  {transactionsFilteredRows.length > 0 ? (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 border-b bg-gray-50">
+                      <div className="rounded-md border bg-white p-3">
+                        <div className="text-xs text-gray-600">Requests</div>
+                        <div className="text-xl font-semibold">{transactionsKPIs?.requests ?? 0}</div>
+                      </div>
+                      <div className="rounded-md border bg-white p-3">
+                        <div className="text-xs text-gray-600">Approvals</div>
+                        <div className="text-xl font-semibold">{transactionsKPIs?.approvals ?? 0}</div>
+                      </div>
+                      <div className="rounded-md border bg-white p-3">
+                        <div className="text-xs text-gray-600">Rejections</div>
+                        <div className="text-xl font-semibold">{transactionsKPIs?.rejections ?? 0}</div>
+                      </div>
+                      <div className="rounded-md border bg-white p-3">
+                        <div className="text-xs text-gray-600">Approval Rate</div>
+                        <div className="text-xl font-semibold">{Math.round((transactionsKPIs?.approvalRate || 0)*100)}%</div>
+                      </div>
+                      <div className="rounded-md border bg-white p-3">
+                        <div className="text-xs text-gray-600">Avg Time → Approval</div>
+                        <div className="text-sm font-medium">{transactionsKPIs?.avgTimeToApprovalH ?? 0} h (med {transactionsKPIs?.medTimeToApprovalH ?? 0} h, p90 {transactionsKPIs?.p90TimeToApprovalH ?? 0} h)</div>
+                      </div>
+                      <div className="rounded-md border bg-white p-3">
+                        <div className="text-xs text-gray-600">Avg Time → Return</div>
+                        <div className="text-sm font-medium">{transactionsKPIs?.avgTimeToReturnH ?? 0} h</div>
+                      </div>
+                      <div className="rounded-md border bg-white p-3">
+                        <div className="text-xs text-gray-600">Pending Queue</div>
+                        <div className="text-xl font-semibold">{transactionsKPIs?.pendingQueue ?? 0}</div>
+                      </div>
                     </div>
-                    <div className="rounded-md border bg-white p-3">
-                      <div className="text-xs text-gray-600">Approvals</div>
-                      <div className="text-xl font-semibold">{transactionsKPIs?.approvals ?? 0}</div>
-                    </div>
-                    <div className="rounded-md border bg-white p-3">
-                      <div className="text-xs text-gray-600">Rejections</div>
-                      <div className="text-xl font-semibold">{transactionsKPIs?.rejections ?? 0}</div>
-                    </div>
-                    <div className="rounded-md border bg-white p-3">
-                      <div className="text-xs text-gray-600">Approval Rate</div>
-                      <div className="text-xl font-semibold">{Math.round((transactionsKPIs?.approvalRate || 0)*100)}%</div>
-                    </div>
-                    <div className="rounded-md border bg-white p-3">
-                      <div className="text-xs text-gray-600">Avg Time → Approval</div>
-                      <div className="text-sm font-medium">{transactionsKPIs?.avgTimeToApprovalH ?? 0} h (med {transactionsKPIs?.medTimeToApprovalH ?? 0} h, p90 {transactionsKPIs?.p90TimeToApprovalH ?? 0} h)</div>
-                    </div>
-                    <div className="rounded-md border bg-white p-3">
-                      <div className="text-xs text-gray-600">Avg Time → Return</div>
-                      <div className="text-sm font-medium">{transactionsKPIs?.avgTimeToReturnH ?? 0} h</div>
-                    </div>
-                    <div className="rounded-md border bg-white p-3">
-                      <div className="text-xs text-gray-600">Pending Queue</div>
-                      <div className="text-xl font-semibold">{transactionsKPIs?.pendingQueue ?? 0}</div>
-                    </div>
-                  </div>
-                ) : null}
-                <TransactionReportTable data={transactionsFilteredRows} loading={loading} />
-              </>
-            )}
-          </div>
+                  ) : null}
+                  <TransactionReportTable data={transactionsFilteredRows} loading={loading} />
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </section>
