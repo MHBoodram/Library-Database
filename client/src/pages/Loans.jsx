@@ -19,6 +19,9 @@ export default function Loans() {
   const [requests, setRequests] = useState([]);
   const [reqLoading, setReqLoading] = useState(true);
   const [reqError,setReqError] = useState("");
+  const [history, setHistory] = useState([]);
+  const [histLoading, setHistLoading] = useState(true);
+  const [histError, setHistError] = useState("");
 
   useEffect(() => {
     if (!token) {
@@ -33,8 +36,9 @@ export default function Loans() {
       setError("");
       setHoldsError("");
       setReqError("");
+      setHistError("");
       try {
-        const [loansData, requestData, holdsData] = await Promise.all([
+        const [loansData, requestData, historyData, holdsData] = await Promise.all([
           useApi("loans/my"),
           useApi("loans/myreqs"),
           useApi("loans/myhist"),
@@ -43,20 +47,24 @@ export default function Loans() {
         if (!active) return;
         const loans = Array.isArray(loansData?.rows) ? loansData.rows : Array.isArray(loansData) ? loansData : [];
         const reqRows = Array.isArray(requestData?.rows) ? requestData.rows : Array.isArray(requestData) ? requestData : [];
+        const histRows = Array.isArray(historyData?.rows) ? historyData.rows : Array.isArray(historyData) ? historyData : [];
         const holdRows = Array.isArray(holdsData?.rows) ? holdsData.rows : Array.isArray(holdsData) ? holdsData : [];
         setRows(loans);
         setRequests(reqRows);
+        setHistory(histRows);
         setHolds(holdRows);
       } catch (err) {
         if (!active) return;
         setError(err?.message || "Failed to load your loans.");
         setHoldsError(err?.message || "Failed to load your holds.");
         setReqError(err?.message || "Failed to load your checkout requests");
+        setHistError(err?.message || "Failed to load your past loans.");
       } finally {
         if (active) {
           setLoading(false);
           setHoldsLoading(false);
           setReqLoading(false);
+          setHistLoading(false);
         }
       }
     })();
@@ -133,8 +141,46 @@ export default function Loans() {
               )}
             </tbody>
           </table>
-        </div>
       </div>
+    </div>
+
+      <section style={{marginTop:10}}>
+        <h1>Your past loans</h1>
+        <p>Items you have returned.</p>
+        <div className="loans-container">
+          <div className="loans-header">
+            <span>Loans: {history.length}</span>
+            {histLoading && <span className="loading">Loading…</span>}
+            {histError && <span className="error">{histError}</span>}
+          </div>
+          <div style={{ overflowX: "auto" }}>
+            <table className="loans-table">
+              <thead>
+                <tr>
+                  <Th>Item</Th>
+                  <Th>Copy ID</Th>
+                  <Th>Return Date</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} className="loans-empty-state">{histLoading ? "" : "No past loans found."}</td>
+                  </tr>
+                ) : (
+                  history.map((r) => (
+                    <tr key={r.loan_id}>
+                      <Td title={r.item_title}>{r.item_title}</Td>
+                      <Td>{r.copy_id ? `#${r.copy_id}` : "—"}</Td>
+                      <Td>{formatDate(r.return_date)}</Td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
 
       <section style={{marginTop:10}}>
         <h1>Checkout Requests</h1>
