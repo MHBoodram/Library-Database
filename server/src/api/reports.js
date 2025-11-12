@@ -551,8 +551,32 @@ export const listTransactions = (JWT_SECRET) => async (req, res) => {
         return sendJSON(res, 200, rows);
       } catch (e2) {
         console.error('transactions fallback (transaction table) failed, trying loans-only:', e2.message);
-        // Loans-only fallback (approved/returned) using known columns
+        // Loans-only fallback, extended to include pending requests as "requested",
+        // and approvals/returns from loan timestamps. Also add best-effort rejected events
+        // directly from transaction table if available.
         const loansSql = `
+          SELECT
+            CONCAT('loan-', l.loan_id, '-requested')    AS transaction_id,
+            l.loan_id,
+            l.copy_id,
+            'requested'                                 AS event_type,
+            l.checkout_date                              AS event_timestamp,
+            'requested'                                 AS raw_type,
+            u.user_id,
+            u.email                                    AS user_email,
+            u.first_name                               AS user_first_name,
+            u.last_name                                AS user_last_name,
+            NULL                                       AS employee_id,
+            NULL                                       AS employee_first_name,
+            NULL                                       AS employee_last_name,
+            i.title                                    AS item_title,
+            'Pending'                                  AS current_status
+          FROM loan l
+          JOIN user u ON u.user_id = l.user_id
+          JOIN copy c ON c.copy_id = l.copy_id
+          JOIN item i ON i.item_id = c.item_id
+          WHERE l.status = 'pending' AND l.checkout_date IS NOT NULL AND l.checkout_date BETWEEN ? AND ?
+          UNION ALL
           SELECT
             CONCAT('loan-', l.loan_id, '-approved')    AS transaction_id,
             l.loan_id,
@@ -596,15 +620,204 @@ export const listTransactions = (JWT_SECRET) => async (req, res) => {
           JOIN copy c ON c.copy_id = l.copy_id
           JOIN item i ON i.item_id = c.item_id
           WHERE l.return_date IS NOT NULL AND l.return_date BETWEEN ? AND ?
+          UNION ALL
+          SELECT
+            t.transaction_id,
+            t.loan_id,
+            t.copy_id,
+            'rejected'                                 AS event_type,
+            t.\`date\`                                 AS event_timestamp,
+            'rejected'                                 AS raw_type,
+            u.user_id,
+            u.email                                    AS user_email,
+            u.first_name                               AS user_first_name,
+            u.last_name                                AS user_last_name,
+            NULL                                       AS employee_id,
+            NULL                                       AS employee_first_name,
+            NULL                                       AS employee_last_name,
+            i.title                                    AS item_title,
+            'Rejected'                                 AS current_status
+          FROM \`transaction\` t
+          JOIN user u ON u.user_id = t.user_id
+          JOIN copy c ON c.copy_id = t.copy_id
+          JOIN item i ON i.item_id = c.item_id
+          WHERE t.\`type\` IN ('rejected','checkout_rejected') AND t.\`date\` BETWEEN ? AND ?
           ORDER BY event_timestamp DESC
           LIMIT 500
         `;
-        const [rows] = await pool.query(loansSql, [startDate, endDate, startDate, endDate]);
+        const [rows] = await pool.query(loansSql, [startDate, endDate, startDate, endDate, startDate, endDate, startDate, endDate]);
         return sendJSON(res, 200, rows);
       }
     }
   }catch (err) {
     console.error("Failed to load transactions:", err.message);
+    return sendJSON(res, 500, { error: "transactions_query_failed" });
+  }
+};
+
+// New implementation using loan_events as the source of truth.
+// Keeps the same output shape expected by the UI.
+export const listTransactionsEvents = (JWT_SECRET) => async (req, res) => {
+  const auth = requireRole(req, res, JWT_SECRET, "staff"); if (!auth) return;
+  try {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const startDateParam = (url.searchParams.get("start_date") || "").trim();
+    const endDateParam = (url.searchParams.get("end_date") || "").trim();
+    const typesParam = (url.searchParams.get("types") || "").trim();
+    const statusesParam = (url.searchParams.get("statuses") || "").trim();
+    const staffParam = (url.searchParams.get("staff") || "").trim();
+    const qParam = (url.searchParams.get("q") || "").trim();
+
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    let startDate = startDateParam;
+    let endDate = endDateParam;
+    if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
+      const now = new Date();
+      endDate = now.toISOString().slice(0, 10);
+      const yearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+      startDate = yearAgo.toISOString().slice(0, 10);
+    }
+    if (new Date(startDate) > new Date(endDate)) {
+      [startDate, endDate] = [endDate, startDate];
+    }
+
+    const conditions = [];
+    const params = [];
+    // date range
+    conditions.push("le.event_date BETWEEN ? AND ?");
+    params.push(startDate, endDate);
+
+    // Normalize event types
+    const eventTypeExpr = `CASE
+      WHEN le.\`type\` IN ('requested','checkout_request') THEN 'requested'
+      WHEN le.\`type\` IN ('approved','checkout','checked_out') THEN 'approved'
+      WHEN le.\`type\` IN ('rejected','checkout_rejected') THEN 'rejected'
+      WHEN le.\`type\` IN ('returned','return','checkin','checked_in') THEN 'returned'
+      ELSE LOWER(le.\`type\`)
+    END`;
+
+    // Event type filter
+    let typeList = [];
+    if (typesParam) {
+      typeList = typesParam.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+      if (typeList.length) {
+        conditions.push(`${eventTypeExpr} IN (${typeList.map(() => '?').join(',')})`);
+        params.push(...typeList);
+      }
+    }
+
+    // Staff filter
+    if (staffParam) {
+      const isNumeric = /^\d+$/.test(staffParam);
+      if (isNumeric) {
+        conditions.push("le.employee_id = ?");
+        params.push(Number(staffParam));
+      } else {
+        conditions.push("(CONCAT(COALESCE(e.first_name,''),' ',COALESCE(e.last_name,'')) LIKE ?)");
+        params.push(`%${staffParam}%`);
+      }
+    }
+
+    // Free text search
+    if (qParam) {
+      const like = `%${qParam}%`;
+      conditions.push("(u.email LIKE ? OR CONCAT(u.first_name,' ',u.last_name) LIKE ? OR i.title LIKE ? OR CAST(le.loan_id AS CHAR) LIKE ? OR CAST(le.copy_id AS CHAR) LIKE ?)");
+      params.push(like, like, like, like, like);
+    }
+
+    // Current status per loan from latest loan_event (no date limit)
+    const latestStatusJoin = `
+      LEFT JOIN (
+        SELECT le2.loan_id,
+               CASE
+                 WHEN le2.\`type\` IN ('requested','checkout_request') THEN 'Pending'
+                 WHEN le2.\`type\` IN ('approved','checkout','checked_out') THEN 'Approved & Active'
+                 WHEN le2.\`type\` IN ('rejected','checkout_rejected') THEN 'Rejected'
+                 WHEN le2.\`type\` IN ('returned','return','checkin','checked_in') THEN 'Returned'
+                 ELSE '—'
+               END AS current_status
+        FROM \`loan_events\` le2
+        JOIN (
+          SELECT loan_id, MAX(\`event_date\`) AS max_date
+          FROM \`loan_events\`
+          WHERE loan_id IS NOT NULL
+          GROUP BY loan_id
+        ) last ON last.loan_id = le2.loan_id AND le2.\`event_date\` = last.max_date
+      ) ls ON ls.loan_id = le.loan_id
+    `;
+
+    // Status filter
+    let statusList = [];
+    if (statusesParam) {
+      statusList = statusesParam.split(',').map(s => s.trim()).filter(Boolean);
+      if (statusList.length) {
+        conditions.push("(ls.current_status IS NOT NULL AND ls.current_status IN (" + statusList.map(()=>'?').join(',') + "))");
+        params.push(...statusList);
+      }
+    }
+
+    const whereClause = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+    const sql = `
+      SELECT
+        le.event_id      AS transaction_id,
+        le.loan_id,
+        le.copy_id,
+        ${eventTypeExpr} AS event_type,
+        le.\`event_date\` AS event_timestamp,
+        le.\`type\`      AS raw_type,
+        u.user_id,
+        u.email           AS user_email,
+        u.first_name      AS user_first_name,
+        u.last_name       AS user_last_name,
+        e.employee_id,
+        e.first_name      AS employee_first_name,
+        e.last_name       AS employee_last_name,
+        i.title           AS item_title,
+        ls.current_status
+      FROM \`loan_events\` le
+      JOIN user u     ON u.user_id = le.user_id
+      JOIN copy c     ON c.copy_id = le.copy_id
+      JOIN item i     ON i.item_id = c.item_id
+      LEFT JOIN employee e ON e.employee_id = le.employee_id
+      ${latestStatusJoin}
+      ${whereClause}
+      ORDER BY le.\`event_date\` DESC, le.event_id DESC
+      LIMIT 500
+    `;
+
+    try {
+      const [rows] = await pool.query(sql, params);
+      return sendJSON(res, 200, rows);
+    } catch (e) {
+      console.error('loan_events main query failed:', e.message);
+      // Minimal fallback from loan_events without joins
+      const fb = `
+        SELECT
+          le.event_id AS transaction_id,
+          le.loan_id,
+          le.copy_id,
+          ${eventTypeExpr} AS event_type,
+          le.\`event_date\` AS event_timestamp,
+          le.\`type\` AS raw_type,
+          NULL AS user_id,
+          NULL AS user_email,
+          NULL AS user_first_name,
+          NULL AS user_last_name,
+          NULL AS employee_id,
+          NULL AS employee_first_name,
+          NULL AS employee_last_name,
+          NULL AS item_title,
+          NULL AS current_status
+        FROM \`loan_events\` le
+        ${whereClause}
+        ORDER BY le.\`event_date\` DESC, le.event_id DESC
+        LIMIT 500
+      `;
+      const [rows] = await pool.query(fb, params);
+      return sendJSON(res, 200, rows);
+    }
+  } catch (err) {
+    console.error("Failed to load transactions (loan_events)", err.message);
     return sendJSON(res, 500, { error: "transactions_query_failed" });
   }
 };

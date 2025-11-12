@@ -236,9 +236,20 @@ async function requestCheckout({ user_id, copy_id, barcode, employee_id }) {
     }
 
     await conn.commit();
-    // Log event to transaction table for robust reporting
+    // Log event to loan_events (authoritative) and legacy transaction table (best-effort)
     try {
-      await pool.query(`INSERT INTO transaction (loan_id, user_id, employee_id, copy_id, type, date) VALUES (?, ?, NULL, ?, 'requested', NOW())`, [insertResult.insertId, user_id, resolvedCopyId]);
+      await pool.query(
+        `INSERT INTO loan_events (loan_id, user_id, copy_id, employee_id, type, event_date)
+         VALUES (?, ?, ?, NULL, 'requested', NOW())`,
+        [insertResult.insertId, user_id, resolvedCopyId]
+      );
+    } catch {}
+    try {
+      await pool.query(
+        `INSERT INTO transaction (loan_id, user_id, employee_id, copy_id, type, date)
+         VALUES (?, ?, NULL, ?, 'requested', NOW())`,
+        [insertResult.insertId, user_id, resolvedCopyId]
+      );
     } catch {}
 
     return { loan_id: insertResult.insertId, due_date: dueDate, policy };
@@ -358,6 +369,14 @@ export const approveCheckout = (JWT_SECRET) => async (req, res) => {
 
     await conn.commit();
 
+    // Record approval event in loan_events and legacy transaction table (best-effort)
+    try {
+      await pool.query(
+        `INSERT INTO loan_events (loan_id, user_id, copy_id, employee_id, type, event_date)
+         VALUES (?, ?, ?, ?, 'approved', NOW())`,
+        [loan_id, loan.user_id, loan.copy_id, auth.employee_id || null]
+      );
+    } catch {}
     try {
       await pool.query(
         `INSERT INTO transaction (loan_id, user_id, employee_id, copy_id, type, date)
@@ -397,10 +416,17 @@ export const denyCheckout = (JWT_SECRET) => async (req, res) => {
       await conn.rollback();
       return sendJSON(res, 400, { error: 'invalid_status', message: 'Loan is not pending' });
     }
-    await conn.execute(`DELETE FROM loan_events WHERE loan_id = ?`, [loan_id]);
+    // Keep historical loan_events (requested), and add a rejected event below
     await conn.execute(`DELETE FROM loan WHERE loan_id = ?`, [loan_id]);
     await conn.execute(`UPDATE copy SET status='available' WHERE copy_id = ?`, [loan.copy_id]);
     await conn.commit();
+    try {
+      await pool.query(
+        `INSERT INTO loan_events (loan_id, user_id, copy_id, employee_id, type, event_date)
+         VALUES (?, ?, ?, ?, 'rejected', NOW())`,
+        [loan_id, loan.user_id, loan.copy_id, auth.employee_id || null]
+      );
+    } catch {}
     try {
       await pool.query(
         `INSERT INTO transaction (loan_id, user_id, employee_id, copy_id, type, date)
@@ -466,8 +492,18 @@ export const returnLoan = (JWT_SECRET) => async (req, res) => {
     );
 
     await conn.commit();
-    // log returned event
-    try { await pool.query(`INSERT INTO transaction (loan_id, user_id, employee_id, copy_id, type, date) VALUES (?, ?, ?, ?, 'returned', NOW())`, [loan_id, auth.user_id || null, employee_id || null, loan.copy_id]); } catch {}
+    // log returned event to loan_events and legacy transaction table
+    try {
+      const actorEmp = (auth.employee_id || employee_id || null);
+      await pool.query(
+        `INSERT INTO loan_events (loan_id, user_id, copy_id, employee_id, type, event_date)
+         VALUES (?, ?, ?, ?, 'returned', NOW())`,
+        [loan_id, auth.user_id || null, loan.copy_id, actorEmp]
+      );
+    } catch {}
+    try {
+      await pool.query(`INSERT INTO transaction (loan_id, user_id, employee_id, copy_id, type, date) VALUES (?, ?, ?, ?, 'returned', NOW())`, [loan_id, auth.user_id || null, employee_id || null, loan.copy_id]);
+    } catch {}
     return sendJSON(res, 200, { ok: true, message: "Loan returned successfully" });
     
   } catch (err) {
@@ -693,6 +729,15 @@ async function performCheckout({ user_id, copy_id, barcode, employee_id }) {
     );
 
     await conn.commit();
+
+    // Record direct checkout in loan_events (type 'checkout')
+    try {
+      await pool.query(
+        `INSERT INTO loan_events (loan_id, user_id, copy_id, employee_id, type, event_date)
+         VALUES (?, ?, ?, ?, 'checkout', NOW())`,
+        [insertResult.insertId, user_id, resolvedCopyId, employee_id || null]
+      );
+    } catch {}
 
     return {
       loan_id: insertResult.insertId,
