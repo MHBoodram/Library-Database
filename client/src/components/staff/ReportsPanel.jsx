@@ -183,44 +183,180 @@ function TransactionReportTable({data,loading}){
   if (data.length === 0) {
     return <div className="p-8 text-center text-gray-500">No loan activity in selected period</div>;
   }
+  // client-side sorting
+  const [sortKey, setSortKey] = React.useState('event_timestamp');
+  const [sortDir, setSortDir] = React.useState('desc');
+  const sorted = React.useMemo(() => {
+    const arr = [...data].map((r, i) => ({...r, __i:i}));
+    const cmp = (a,b) => {
+      const dir = sortDir === 'asc' ? 1 : -1;
+      let av = a[sortKey], bv = b[sortKey];
+      if (sortKey === 'event_timestamp') { av = new Date(av).getTime(); bv = new Date(bv).getTime(); }
+      else if (typeof av === 'string' && typeof bv === 'string') { av = av.toLowerCase(); bv = bv.toLowerCase(); }
+      if (av < bv) return -1*dir; if (av > bv) return 1*dir; return a.__i - b.__i; // stable
+    };
+    arr.sort(cmp);
+    return arr;
+  }, [data, sortKey, sortDir]);
+  const onSort = (key) => {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortKey(key); setSortDir('desc'); }
+  };
+  const SortableTh = ({label, keyName}) => (
+    <Th>
+      <button onClick={() => onSort(keyName)} className="inline-flex items-center gap-1">
+        {label}
+        {sortKey === keyName ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+      </button>
+    </Th>
+  );
   return (
     <div className="overflow-x-auto">
-      <span className="transactions-table-label">Total Transactions: {data.length}</span>
-      {loading && <span className="loading">Loading…</span>}
+      <div className="flex items-center justify-between px-2 py-1 text-sm text-gray-600">
+        <span className="transactions-table-label">Total Events: {data.length}</span>
+      </div>
       <table className="min-w-full text-sm">
         <thead className="bg-gray-100 text-left">
           <tr>
-            <Th>Patron ID</Th>
-            <Th>Patron</Th>
+            <SortableTh label="Patron ID" keyName="user_id" />
+            <SortableTh label="Patron" keyName="user_last_name" />
             <Th>Email</Th>
-            <Th>Item Title</Th>
-            <Th>Copy ID</Th>
-            <Th>Loan ID</Th>
-            <Th>Transaction</Th>
-            <Th>Date</Th>
-            <Th>Checked Out By</Th>
+            <SortableTh label="Item Title" keyName="item_title" />
+            <SortableTh label="Copy ID" keyName="copy_id" />
+            <SortableTh label="Loan ID" keyName="loan_id" />
+            <SortableTh label="Event Type" keyName="event_type" />
+            <SortableTh label="Event Timestamp" keyName="event_timestamp" />
+            <SortableTh label="Staff User" keyName="employee_last_name" />
+            <SortableTh label="Current Status" keyName="current_status" />
           </tr>
         </thead>
         <tbody>
-          {data.map((row, idx) => (
-            <tr key={idx}>
-              <Td>{row.user_id ? `#${row.user_id}` : "—"}</Td>
-              <Td>{row.user_first_name && row.user_last_name? `${row.user_first_name} ${row.user_last_name}`: "—"}</Td>
-              <Td>{row.user_email || "—"}</Td>
-              <Td>{row.item_title || "—"}</Td>
-              <Td>{row.copy_id ? `#${row.copy_id}` : "—"}</Td>
-              <Td>#{row.loan_id}</Td>
+          {sorted.map((row, idx) => (
+            <tr key={row.transaction_id || idx} className="border-t">
+              <Td>{row.user_id ? `#${row.user_id}` : '—'}</Td>
+              <Td>{row.user_first_name || row.user_last_name ? `${row.user_first_name || ''} ${row.user_last_name || ''}`.trim() : '—'}</Td>
+              <Td>{row.user_email || '—'}</Td>
+              <Td className="max-w-[30ch] truncate" title={row.item_title || ''}>{row.item_title || '—'}</Td>
+              <Td>{row.copy_id ? `#${row.copy_id}` : '—'}</Td>
+              <Td>{row.loan_id ? `#${row.loan_id}` : '—'}</Td>
               <Td>
-                <span className={`td-action-label td-action-label-${row.type}`}>
-                {(row.type || "").toUpperCase()}
+                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${row.event_type==='approved' ? 'bg-green-100 text-green-800' : row.event_type==='requested' ? 'bg-blue-100 text-blue-800' : row.event_type==='rejected' ? 'bg-red-100 text-red-800' : row.event_type==='returned' ? 'bg-gray-100 text-gray-800' : 'bg-gray-100 text-gray-600'}`}>
+                  {String(row.event_type || row.raw_type || '').toUpperCase()}
                 </span>
               </Td>
-              <Td>{formatDate(row.date)}</Td>
-              <Td>{row.employee_first_name && row.employee_last_name? `${row.employee_first_name} ${row.employee_last_name}`: "—"}</Td>
+              <Td>{row.event_timestamp ? new Date(row.event_timestamp).toLocaleString() : '—'}</Td>
+              <Td>{row.employee_first_name || row.employee_last_name ? `${row.employee_first_name || ''} ${row.employee_last_name || ''}`.trim() : '—'}</Td>
+              <Td>{row.current_status || '—'}</Td>
             </tr>
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function TransactionsFilters({
+  startDate,
+  endDate,
+  setStartDate,
+  setEndDate,
+  data,
+  onRefresh,
+  eventTypes,
+  setEventTypes,
+  statuses,
+  setStatuses,
+  staff,
+  setStaff,
+  search,
+  setSearch,
+}) {
+  const allTypes = ['requested','approved','rejected','returned'];
+  const allStatuses = ['Pending','Approved & Active','Rejected','Returned'];
+  const staffOptions = React.useMemo(() => {
+    const byId = new Map();
+    (data || []).forEach(r => {
+      if (r.employee_id) {
+        const name = `${r.employee_first_name || ''} ${r.employee_last_name || ''}`.trim() || `#${r.employee_id}`;
+        byId.set(r.employee_id, name);
+      }
+    });
+    return Array.from(byId.entries());
+  }, [data]);
+
+  const toggleIn = (list, value, setter) => {
+    const has = list.includes(value);
+    setter(has ? list.filter(v => v !== value) : [...list, value]);
+  };
+
+  const onGenerate = () => onRefresh && onRefresh();
+  const onReset = () => {
+    const d = new Date();
+    const sd = new Date(); sd.setFullYear(sd.getFullYear()-1);
+    setStartDate(sd.toISOString().slice(0,10));
+    setEndDate(d.toISOString().slice(0,10));
+    setEventTypes(allTypes);
+    setStatuses(allStatuses);
+    setStaff('');
+    setSearch('');
+    onRefresh && onRefresh();
+  };
+  const onClear = () => {
+    setStartDate('');
+    setEndDate('');
+    setEventTypes(allTypes);
+    setStatuses(allStatuses);
+    setStaff('');
+    setSearch('');
+    onRefresh && onRefresh();
+  };
+
+  return (
+    <div className="flex flex-wrap items-end gap-3">
+      <div>
+        <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
+        <input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm" />
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
+        <input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm" />
+      </div>
+      <div className="flex flex-col">
+        <span className="block text-xs font-medium text-gray-600 mb-1">Event Type</span>
+        <div className="flex flex-wrap gap-2">
+          {allTypes.map(t => (
+            <label key={t} className="inline-flex items-center gap-1 text-xs">
+              <input type="checkbox" checked={eventTypes.includes(t)} onChange={()=>toggleIn(eventTypes, t, setEventTypes)} /> {t}
+            </label>
+          ))}
+        </div>
+      </div>
+      <div className="flex flex-col">
+        <span className="block text-xs font-medium text-gray-600 mb-1">Current Status</span>
+        <div className="flex flex-wrap gap-2">
+          {['Pending','Approved & Active','Rejected','Returned'].map(s => (
+            <label key={s} className="inline-flex items-center gap-1 text-xs">
+              <input type="checkbox" checked={statuses.includes(s)} onChange={()=>toggleIn(statuses, s, setStatuses)} /> {s}
+            </label>
+          ))}
+        </div>
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-gray-600 mb-1">Staff User</label>
+        <select value={staff} onChange={e=>setStaff(e.target.value)} className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm">
+          <option value="">All</option>
+          {staffOptions.map(([id,name]) => (<option key={id} value={id}>{name}</option>))}
+        </select>
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-gray-600 mb-1">Search</label>
+        <input type="text" placeholder="Patron, item, Loan/Copy ID" value={search} onChange={e=>setSearch(e.target.value)} className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm" />
+      </div>
+      <div className="pt-1 space-x-2">
+        <button onClick={onGenerate} className="px-3 py-2 rounded-md bg-gray-700 text-white text-sm font-medium hover:bg-gray-800">Generate Report</button>
+        <button onClick={onReset} className="px-3 py-2 rounded-md bg-gray-200 text-gray-800 text-sm font-medium hover:bg-gray-300">Reset</button>
+        <button onClick={onClear} className="px-3 py-2 rounded-md bg-white border text-sm font-medium hover:bg-gray-50">Clear Filters</button>
+      </div>
     </div>
   );
 }
@@ -289,6 +425,11 @@ export default function ReportsPanel({ api }) {
     return d.toISOString().slice(0, 10);
   });
   const [transactionsEndDate, setTransactionsEndDate] = useState(() => new Date().toISOString().slice(0, 10));
+  // Transactions filters
+  const [txEventTypes, setTxEventTypes] = useState(['requested','approved','rejected','returned']);
+  const [txStatuses, setTxStatuses] = useState(['Pending','Approved & Active','Rejected','Returned']);
+  const [txStaff, setTxStaff] = useState('');
+  const [txSearch, setTxSearch] = useState('');
 
   const loadReport = useCallback(async (reportType) => {
     if (!api) return;
@@ -337,6 +478,10 @@ export default function ReportsPanel({ api }) {
           endpoint = "reports/transactions";
           params.set("start_date", transactionsStartDate);
           params.set("end_date", transactionsEndDate);
+          if (Array.isArray(txEventTypes) && txEventTypes.length) params.set('types', txEventTypes.join(','));
+          if (Array.isArray(txStatuses) && txStatuses.length) params.set('statuses', txStatuses.join(','));
+          if (txStaff) params.set('staff', String(txStaff));
+          if ((txSearch||'').trim()) params.set('q', (txSearch||'').trim());
           break;
         default:
           throw new Error("Unknown report type");
@@ -351,7 +496,7 @@ export default function ReportsPanel({ api }) {
     } finally {
       setLoading(false);
     }
-  }, [api, overdueStartDate, overdueEndDate, overdueBorrower, overdueGraceMode, overdueSortMode, balancesStartDate, balancesEndDate, topItemsStartDate, topItemsEndDate, newPatronsStartDate, newPatronsEndDate,transactionsStartDate,transactionsEndDate]);
+  }, [api, overdueStartDate, overdueEndDate, overdueBorrower, overdueGraceMode, overdueSortMode, balancesStartDate, balancesEndDate, topItemsStartDate, topItemsEndDate, newPatronsStartDate, newPatronsEndDate,transactionsStartDate,transactionsEndDate, txEventTypes, txStatuses, txStaff, txSearch]);
 
   // Derived media types from the currently loaded overdue dataset
   const mediaTypeOptions = useMemo(() => {
@@ -397,6 +542,83 @@ export default function ReportsPanel({ api }) {
     const max = total ? days[total-1] : 0;
     return { total, uniqueBorrowers, avg: Number(avg.toFixed(1)), med, max };
   }, [activeReport, overdueFilteredRows]);
+
+  // Transactions filtering and KPIs
+  const transactionsFilteredRows = useMemo(() => {
+    if (activeReport !== 'transactions') return reportData || [];
+    const types = new Set(txEventTypes);
+    const statuses = new Set(txStatuses);
+    const staffId = txStaff ? String(txStaff) : '';
+    const q = (txSearch || '').trim().toLowerCase();
+    return (reportData || []).filter(r => {
+      const typeOk = !r.event_type || types.has(String(r.event_type));
+      const statusOk = !r.current_status || statuses.has(String(r.current_status));
+      const staffOk = !staffId || String(r.employee_id||'') === staffId;
+      if (!q) return typeOk && statusOk && staffOk;
+      const patron = `${r.user_first_name||''} ${r.user_last_name||''}`.toLowerCase();
+      const email = String(r.user_email||'').toLowerCase();
+      const title = String(r.item_title||'').toLowerCase();
+      const loan = String(r.loan_id||'');
+      const copy = String(r.copy_id||'');
+      const hit = patron.includes(q) || email.includes(q) || title.includes(q) || loan.includes(q) || copy.includes(q);
+      return typeOk && statusOk && staffOk && hit;
+    });
+  }, [activeReport, reportData, txEventTypes, txStatuses, txStaff, txSearch]);
+
+  const transactionsKPIs = useMemo(() => {
+    if (activeReport !== 'transactions') return null;
+    const rows = transactionsFilteredRows;
+    const requests = rows.filter(r => r.event_type === 'requested');
+    const byLoan = new Map();
+    rows.forEach(r => {
+      if (!r.loan_id) return;
+      const list = byLoan.get(r.loan_id) || [];
+      list.push(r);
+      byLoan.set(r.loan_id, list);
+    });
+    let approvals = 0, rejections = 0, pendingQueue = 0;
+    const tta = []; // ms to approval
+    const ttr = []; // ms to return
+    byLoan.forEach(events => {
+      events.sort((a,b)=>new Date(a.event_timestamp)-new Date(b.event_timestamp));
+      const firstReq = events.find(e=>e.event_type==='requested');
+      const firstAppr = events.find(e=>e.event_type==='approved');
+      const firstRej = events.find(e=>e.event_type==='rejected');
+      const firstRet = events.find(e=>e.event_type==='returned');
+      if (firstReq && firstAppr) {
+        approvals += 1;
+        tta.push(new Date(firstAppr.event_timestamp) - new Date(firstReq.event_timestamp));
+      } else if (firstReq && firstRej) {
+        rejections += 1;
+      }
+      if (firstAppr && firstRet) {
+        ttr.push(new Date(firstRet.event_timestamp) - new Date(firstAppr.event_timestamp));
+      }
+      const latest = events[events.length-1];
+      if (latest && latest.event_type === 'requested' && !firstAppr && !firstRej) pendingQueue += 1;
+    });
+    const denom = approvals + rejections;
+    const approvalRate = denom ? (approvals/denom) : 0;
+    const avg = (arr)=> arr.length ? (arr.reduce((s,x)=>s+x,0)/arr.length) : 0;
+    const median = (arr)=>{
+      if (!arr.length) return 0; const a=[...arr].sort((x,y)=>x-y); const m=(a.length-1)/2; return (a[Math.floor(m)]+a[Math.ceil(m)])/2;
+    };
+    const p90 = (arr)=>{
+      if (!arr.length) return 0; const a=[...arr].sort((x,y)=>x-y); const idx=Math.floor(0.9*(a.length-1)); return a[idx];
+    };
+    const msToHours = (ms)=> Math.round((ms/36e5)*10)/10; // one decimal
+    return {
+      requests: requests.length,
+      approvals,
+      rejections,
+      approvalRate,
+      avgTimeToApprovalH: msToHours(avg(tta)),
+      medTimeToApprovalH: msToHours(median(tta)),
+      p90TimeToApprovalH: msToHours(p90(tta)),
+      avgTimeToReturnH: msToHours(avg(ttr)),
+      pendingQueue,
+    };
+  }, [activeReport, transactionsFilteredRows]);
 
   // Fines filtering and KPIs
   const finesFilteredRows = useMemo(() => {
@@ -558,7 +780,7 @@ export default function ReportsPanel({ api }) {
   // handleRefresh removed (unused)
 
   function handleExport() {
-    const exportRows = activeReport === 'overdue' ? overdueFilteredRows : (activeReport === 'fines' ? finesFilteredRows : reportData);
+    const exportRows = activeReport === 'overdue' ? overdueFilteredRows : (activeReport === 'fines' ? finesFilteredRows : (activeReport === 'transactions' ? transactionsFilteredRows : reportData));
     if (!exportRows || exportRows.length === 0) { alert("No data to export"); return; }
     const headers = Object.keys(exportRows[0]);
     const csvContent = [
@@ -682,7 +904,7 @@ export default function ReportsPanel({ api }) {
                   </div>
                 </div>
               )}
-              {activeReport === "fines" && (
+  {activeReport === "fines" && (
                 <div className="flex flex-wrap items-end gap-3">
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
@@ -703,7 +925,56 @@ export default function ReportsPanel({ api }) {
                     />
                   </div>
                 </div>
-              )}
+  )}
+
+  {activeReport === "transactions" && (
+    <div className="flex justify-end">
+      <div className="w-full md:w-72">
+        <div className="rounded-md border bg-white p-3 space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Event Type</label>
+            <div className="flex flex-wrap gap-2">
+              {['requested','approved','rejected','returned'].map(t => (
+                <label key={t} className="inline-flex items-center gap-2 text-xs">
+                  <input type="checkbox" checked={txEventTypes.includes(t)} onChange={()=>setTxEventTypes(prev => prev.includes(t)? prev.filter(x=>x!==t) : [...prev, t])} /> {t}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Current Status</label>
+            <div className="flex flex-wrap gap-2">
+              {['Pending','Approved & Active','Rejected','Returned'].map(s => (
+                <label key={s} className="inline-flex items-center gap-2 text-xs">
+                  <input type="checkbox" checked={txStatuses.includes(s)} onChange={()=>setTxStatuses(prev => prev.includes(s)? prev.filter(x=>x!==s) : [...prev, s])} /> {s}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Staff User</label>
+            <select value={txStaff} onChange={e=>setTxStaff(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm">
+              <option value="">All</option>
+              {Array.from(new Map((reportData||[]).filter(r=>r.employee_id).map(r=>[r.employee_id, `${r.employee_first_name||''} ${r.employee_last_name||''}`.trim()||`#${r.employee_id}`])).entries()).map(([id,name]) => (
+                <option key={id} value={id}>{name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Search</label>
+            <input type="text" placeholder="Patron, item, Loan/Copy ID" value={txSearch} onChange={e=>setTxSearch(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm" />
+          </div>
+          <div className="pt-1 space-y-2">
+            <button onClick={()=>loadReport('transactions')} disabled={loading} className="w-full px-3 py-2 rounded-md bg-gray-700 text-white text-sm font-medium hover:bg-gray-800 disabled:opacity-50">{loading ? 'Loading...' : 'Generate Report'}</button>
+            <div className="flex gap-2">
+              <button onClick={()=>{const d=new Date();const sd=new Date();sd.setFullYear(sd.getFullYear()-1);setTransactionStartDate(sd.toISOString().slice(0,10));setTransactionsEndDate(d.toISOString().slice(0,10));setTxEventTypes(['requested','approved','rejected','returned']);setTxStatuses(['Pending','Approved & Active','Rejected','Returned']);setTxStaff('');setTxSearch('');loadReport('transactions');}} disabled={loading} className="flex-1 px-3 py-2 rounded-md bg-gray-200 text-gray-800 text-sm font-medium hover:bg-gray-300 disabled:opacity-50">Reset</button>
+              <button onClick={()=>{setTransactionStartDate('');setTransactionsEndDate('');setTxEventTypes(['requested','approved','rejected','returned']);setTxStatuses(['Pending','Approved & Active','Rejected','Returned']);setTxStaff('');setTxSearch('');loadReport('transactions');}} disabled={loading} className="flex-1 px-3 py-2 rounded-md bg-white border text-sm font-medium hover:bg-gray-50 disabled:opacity-50">Clear</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )}
               {activeReport === "balances" && (
                 <div className="flex flex-wrap items-end gap-3">
                   <div>
@@ -770,28 +1041,7 @@ export default function ReportsPanel({ api }) {
                   </div>
                 </div>
               )}
-              {activeReport === "transactions" && (
-                <div className="flex flex-wrap items-end gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
-                    <input
-                      type="date"
-                      value={transactionsStartDate}
-                      onChange={(e) => setTransactionStartDate(e.target.value)}
-                      className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
-                    <input
-                      type="date"
-                      value={transactionsEndDate}
-                      onChange={(e) => setTransactionsEndDate(e.target.value)}
-                      className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
-                    />
-                  </div>
-                </div>
-              )}
+              {/* moved Transactions filters to right-side block below for consistent layout */}
             <div className="flex gap-2 ml-auto">
               <button
                 onClick={handleExport}
@@ -799,6 +1049,7 @@ export default function ReportsPanel({ api }) {
                   loading || (
                     activeReport === 'overdue' ? overdueFilteredRows.length === 0 :
                     activeReport === 'fines' ? finesFilteredRows.length === 0 :
+                    activeReport === 'transactions' ? transactionsFilteredRows.length === 0 :
                     reportData.length === 0
                   )
                 }
@@ -1051,7 +1302,43 @@ export default function ReportsPanel({ api }) {
             {activeReport === "balances" && <BalancesReportTable data={reportData} loading={loading} />}
             {activeReport === "topItems" && <TopItemsReportTable data={reportData} loading={loading} />}
             {activeReport === "newPatrons" && <NewPatronsReportTable data={reportData} loading={loading} />}
-            {activeReport === "transactions" && <TransactionReportTable data={reportData} loading={loading} />}
+            {activeReport === "transactions" && (
+              <>
+                {transactionsFilteredRows.length > 0 ? (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 border-b bg-gray-50">
+                    <div className="rounded-md border bg-white p-3">
+                      <div className="text-xs text-gray-600">Requests</div>
+                      <div className="text-xl font-semibold">{transactionsKPIs?.requests ?? 0}</div>
+                    </div>
+                    <div className="rounded-md border bg-white p-3">
+                      <div className="text-xs text-gray-600">Approvals</div>
+                      <div className="text-xl font-semibold">{transactionsKPIs?.approvals ?? 0}</div>
+                    </div>
+                    <div className="rounded-md border bg-white p-3">
+                      <div className="text-xs text-gray-600">Rejections</div>
+                      <div className="text-xl font-semibold">{transactionsKPIs?.rejections ?? 0}</div>
+                    </div>
+                    <div className="rounded-md border bg-white p-3">
+                      <div className="text-xs text-gray-600">Approval Rate</div>
+                      <div className="text-xl font-semibold">{Math.round((transactionsKPIs?.approvalRate || 0)*100)}%</div>
+                    </div>
+                    <div className="rounded-md border bg-white p-3">
+                      <div className="text-xs text-gray-600">Avg Time → Approval</div>
+                      <div className="text-sm font-medium">{transactionsKPIs?.avgTimeToApprovalH ?? 0} h (med {transactionsKPIs?.medTimeToApprovalH ?? 0} h, p90 {transactionsKPIs?.p90TimeToApprovalH ?? 0} h)</div>
+                    </div>
+                    <div className="rounded-md border bg-white p-3">
+                      <div className="text-xs text-gray-600">Avg Time → Return</div>
+                      <div className="text-sm font-medium">{transactionsKPIs?.avgTimeToReturnH ?? 0} h</div>
+                    </div>
+                    <div className="rounded-md border bg-white p-3">
+                      <div className="text-xs text-gray-600">Pending Queue</div>
+                      <div className="text-xl font-semibold">{transactionsKPIs?.pendingQueue ?? 0}</div>
+                    </div>
+                  </div>
+                ) : null}
+                <TransactionReportTable data={transactionsFilteredRows} loading={loading} />
+              </>
+            )}
           </div>
         </div>
       </div>
