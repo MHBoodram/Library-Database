@@ -5,6 +5,39 @@ import { pool } from "../lib/db.js";
 export const overdue = (JWT_SECRET) => async (req, res) => {
   const auth = requireRole(req, res, JWT_SECRET, "staff"); if (!auth) return;
   try {
+    // Ensure overdue loans without fines get one before reporting
+    try {
+      await pool.query(`
+        INSERT INTO fine (loan_id, user_id, assessed_at, reason, amount_assessed, status)
+        SELECT 
+          l.loan_id,
+          l.user_id,
+          NOW(),
+          'overdue',
+          ROUND(
+            LEAST(
+              COALESCE(l.max_fine_snapshot, 99999),
+              GREATEST(
+                0,
+                (GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) - COALESCE(l.grace_days_snapshot, 3))
+              ) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
+            ), 2
+          ),
+          'open'
+        FROM loan l
+        WHERE l.status = 'active' 
+          AND l.due_date < CURDATE()
+          AND GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) > COALESCE(l.grace_days_snapshot, 3)
+          AND NOT EXISTS (
+            SELECT 1 FROM fine f 
+            WHERE f.loan_id = l.loan_id 
+              AND f.status NOT IN ('paid', 'waived')
+          )
+      `);
+    } catch (err) {
+      console.error("Failed to auto-create overdue fines for report:", err.message);
+    }
+
     const url = new URL(req.url, `http://${req.headers.host}`);
     const startDateParam = (url.searchParams.get("start_date") || "").trim();
     const endDateParam = (url.searchParams.get("end_date") || "").trim();

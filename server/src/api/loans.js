@@ -121,10 +121,6 @@ async function requestCheckout({ user_id, copy_id, barcode, employee_id }) {
     // Count active + pending from loan plus legacy pending in transaction table
     const [cntActiveRows] = await conn.query(`SELECT COUNT(*) AS n FROM loan WHERE user_id=? AND status IN ('active','pending')`, [user_id]);
     let current = Number(cntActiveRows[0]?.n || 0);
-    try {
-      const [cntTx] = await conn.query(`SELECT COUNT(*) AS n FROM transaction WHERE user_id=? AND type='checkout_request'`, [user_id]);
-      current += Number(cntTx[0]?.n || 0);
-    } catch {}
     if (current >= loanLimit) {
       throw createAppError("loan_limit_exceeded", `Patron already has ${current} active/pending request(s); limit is ${loanLimit}.`, 409);
     }
@@ -272,26 +268,11 @@ export const listMyPendingCheckouts = (JWT_SECRET) => async (req, res) => {
       JOIN item i ON i.item_id = c.item_id
       LEFT JOIN device d ON d.item_id = i.item_id
       LEFT JOIN media m ON m.item_id = i.item_id
-      WHERE l.status = 'pending' AND l.user_id = ?`;
-    const sqlTx = `
-      SELECT NULL AS loan_id, t.date AS request_date, t.copy_id, 'pending' AS status,
-             u.user_id, u.first_name, u.last_name,
-             i.title AS item_title,
-             CASE WHEN d.item_id IS NOT NULL THEN 'device'
-                  WHEN m.item_id IS NOT NULL THEN LOWER(m.media_type)
-                  ELSE 'book' END AS media_type
-      FROM transaction t
-      JOIN user u ON u.user_id = t.user_id
-      JOIN copy c ON c.copy_id = t.copy_id
-      JOIN item i ON i.item_id = c.item_id
-      LEFT JOIN device d ON d.item_id = i.item_id
-      LEFT JOIN media m ON m.item_id = i.item_id
-      WHERE t.type = 'checkout_request' AND t.user_id = ?`;
+      WHERE l.status = 'pending' AND l.user_id = ?
+      ORDER BY l.checkout_date DESC
+      LIMIT 500`;
     const [loanRows] = await pool.query(sqlLoan, [user_id]);
-    let txRows = [];
-    try { const r = await pool.query(sqlTx, [user_id]); txRows = r[0] || []; } catch {}
-    const rows = [...loanRows, ...txRows].sort((a,b)=> new Date(b.request_date) - new Date(a.request_date)).slice(0,500);
-    return sendJSON(res, 200, { rows });
+    return sendJSON(res, 200, { rows: loanRows });
   } catch (err) {
     console.error("list my pending failed:", err.message);
     return sendJSON(res, 500, { error: "pending_list_failed" });
@@ -315,26 +296,11 @@ export const listPendingCheckouts = (JWT_SECRET) => async (req, res) => {
       JOIN item i ON i.item_id = c.item_id
       LEFT JOIN device d ON d.item_id = i.item_id
       LEFT JOIN media m ON m.item_id = i.item_id
-      WHERE l.status = 'pending'`;
-    const sqlTx = `
-      SELECT NULL AS loan_id, t.date AS request_date, t.copy_id, 'pending' AS status,
-             u.user_id, u.first_name, u.last_name,
-             i.title AS item_title,
-             CASE WHEN d.item_id IS NOT NULL THEN 'device'
-                  WHEN m.item_id IS NOT NULL THEN LOWER(m.media_type)
-                  ELSE 'book' END AS media_type
-      FROM transaction t
-      JOIN user u ON u.user_id = t.user_id
-      JOIN copy c ON c.copy_id = t.copy_id
-      JOIN item i ON i.item_id = c.item_id
-      LEFT JOIN device d ON d.item_id = i.item_id
-      LEFT JOIN media m ON m.item_id = i.item_id
-      WHERE t.type = 'checkout_request'`;
+      WHERE l.status = 'pending'
+      ORDER BY l.checkout_date DESC
+      LIMIT 500`;
     const [loanRows] = await pool.query(sqlLoan);
-    let txRows = [];
-    try { const r = await pool.query(sqlTx); txRows = r[0] || []; } catch {}
-    const rows = [...loanRows, ...txRows].sort((a,b)=> new Date(b.request_date) - new Date(a.request_date)).slice(0,500);
-    return sendJSON(res, 200, { rows });
+    return sendJSON(res, 200, { rows: loanRows });
   } catch (err) {
     console.error("list pending failed:", err.message);
     return sendJSON(res, 500, { error: "pending_list_failed" });
@@ -345,30 +311,108 @@ export const listPendingCheckouts = (JWT_SECRET) => async (req, res) => {
 export const approveCheckout = (JWT_SECRET) => async (req, res) => {
   const auth = requireRole(req, res, JWT_SECRET, 'staff'); if (!auth) return;
   const b = await readJSONBody(req);
-  const transaction_id = Number(b.transaction_id);
-  if (!transaction_id) return sendJSON(res, 400, { error: 'invalid_payload', message: 'transaction_id required' });
+  const loan_id = Number(b.loan_id);
+  if (!loan_id) return sendJSON(res, 400, { error: 'invalid_payload', message: 'loan_id required' });
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
-    const [rows] = await conn.query(`SELECT transaction_id, user_id, copy_id, type FROM transaction WHERE transaction_id = ? FOR UPDATE`, [transaction_id]);
-    if (!rows.length || rows[0].type !== 'checkout_request') {
+    const [rows] = await conn.query(
+      `SELECT loan_id, user_id, copy_id, status FROM loan WHERE loan_id = ? FOR UPDATE`,
+      [loan_id]
+    );
+    if (!rows.length) {
       await conn.rollback();
-      return sendJSON(res, 404, { error: 'not_found' });
+      return sendJSON(res, 404, { error: 'loan_not_found' });
     }
-    const user_id = rows[0].user_id;
-    const copy_id = rows[0].copy_id;
-    // perform checkout (outside helper due to connection differences)
+    const loan = rows[0];
+    if (loan.status !== 'pending') {
+      await conn.rollback();
+      return sendJSON(res, 400, { error: 'invalid_status', message: 'Loan is not pending' });
+    }
+    const [copyRows] = await conn.query(
+      `SELECT copy_id, status FROM copy WHERE copy_id = ? FOR UPDATE`,
+      [loan.copy_id]
+    );
+    if (!copyRows.length) {
+      await conn.rollback();
+      return sendJSON(res, 404, { error: 'copy_not_found' });
+    }
+    if (copyRows[0].status !== 'available') {
+      await conn.execute(`DELETE FROM loan WHERE loan_id = ?`, [loan_id]);
+      await conn.commit();
+      return sendJSON(res, 409, { error: 'copy_not_available', message: 'Copy is no longer available, request removed.' });
+    }
+
+    await conn.execute(
+      `UPDATE loan
+         SET status = 'active',
+             employee_id = COALESCE(employee_id, ?),
+             checkout_date = COALESCE(checkout_date, NOW())
+       WHERE loan_id = ?`,
+      [auth.employee_id || null, loan_id]
+    );
+    await conn.execute(
+      `UPDATE copy SET status='on_loan' WHERE copy_id = ?`,
+      [loan.copy_id]
+    );
+
     await conn.commit();
-    // Use shared helper which manages its own transaction
-    const result = await performCheckout({ user_id, copy_id, barcode: '', employee_id: auth.employee_id || null });
-    // Mark transaction as approved and link loan
-    await pool.query(`UPDATE transaction SET type='checkout_approved', loan_id = ? WHERE transaction_id = ?`, [result.loan_id, transaction_id]);
-    try { await pool.query(`INSERT INTO transaction (loan_id, user_id, employee_id, copy_id, type, date) VALUES (?, ?, ?, ?, 'approved', NOW())`, [result.loan_id, user_id, auth.employee_id || null, copy_id]); } catch {}
-    return sendJSON(res, 200, { ok: true, loan_id: result.loan_id, due_date: result.due_date });
+
+    try {
+      await pool.query(
+        `INSERT INTO transaction (loan_id, user_id, employee_id, copy_id, type, date)
+         VALUES (?, ?, ?, ?, 'approved', NOW())`,
+        [loan_id, loan.user_id, auth.employee_id || null, loan.copy_id]
+      );
+    } catch {}
+
+    return sendJSON(res, 200, { ok: true, loan_id });
   } catch (err) {
     try { await conn.rollback(); } catch {}
     console.error('approve checkout failed:', err.message);
     return sendJSON(res, 500, { error: 'approve_failed' });
+  } finally {
+    conn.release();
+  }
+};
+
+export const denyCheckout = (JWT_SECRET) => async (req, res) => {
+  const auth = requireRole(req, res, JWT_SECRET, 'staff'); if (!auth) return;
+  const b = await readJSONBody(req);
+  const loan_id = Number(b.loan_id);
+  if (!loan_id) return sendJSON(res, 400, { error: 'invalid_payload', message: 'loan_id required' });
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [rows] = await conn.query(
+      `SELECT loan_id, user_id, copy_id, status FROM loan WHERE loan_id = ? FOR UPDATE`,
+      [loan_id]
+    );
+    if (!rows.length) {
+      await conn.rollback();
+      return sendJSON(res, 404, { error: 'loan_not_found' });
+    }
+    const loan = rows[0];
+    if (loan.status !== 'pending') {
+      await conn.rollback();
+      return sendJSON(res, 400, { error: 'invalid_status', message: 'Loan is not pending' });
+    }
+    await conn.execute(`DELETE FROM loan_events WHERE loan_id = ?`, [loan_id]);
+    await conn.execute(`DELETE FROM loan WHERE loan_id = ?`, [loan_id]);
+    await conn.execute(`UPDATE copy SET status='available' WHERE copy_id = ?`, [loan.copy_id]);
+    await conn.commit();
+    try {
+      await pool.query(
+        `INSERT INTO transaction (loan_id, user_id, employee_id, copy_id, type, date)
+         VALUES (?, ?, ?, ?, 'rejected', NOW())`,
+        [loan_id, loan.user_id, auth.employee_id || null, loan.copy_id]
+      );
+    } catch {}
+    return sendJSON(res, 200, { ok: true });
+  } catch (err) {
+    try { await conn.rollback(); } catch {}
+    console.error('deny checkout failed:', err.message);
+    return sendJSON(res, 500, { error: 'deny_failed' });
   } finally {
     conn.release();
   }

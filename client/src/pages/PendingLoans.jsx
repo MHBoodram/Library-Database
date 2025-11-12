@@ -48,7 +48,7 @@ export default function PendingLoans() {
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <tr key={r.transaction_id} className="border-t">
+                  <tr key={r.loan_id} className="border-t">
                     <td className="px-3 py-2">{r.first_name} {r.last_name}</td>
                     <td className="px-3 py-2">{r.user_id}</td>
                     <td className="px-3 py-2">{r.copy_id}</td>
@@ -66,4 +66,3 @@ export default function PendingLoans() {
     </div>
   );
 }
-

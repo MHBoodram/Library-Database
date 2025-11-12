@@ -253,10 +253,10 @@ function PendingCheckoutsPanel({ api, onChanged }) {
 
   React.useEffect(() => { load(); }, [load]);
 
-  const approve = async (transaction_id) => {
-    if (!transaction_id) return;
+  const approve = async (loan_id) => {
+    if (!loan_id) return;
     try {
-      await api('staff/loans/approve', { method: 'POST', body: { transaction_id } });
+      await api('staff/loans/approve', { method: 'POST', body: { loan_id } });
       await load();
       if (typeof onChanged === 'function') {
         try { onChanged(); } catch { /* no-op */ }
@@ -264,6 +264,21 @@ function PendingCheckoutsPanel({ api, onChanged }) {
       alert('Approved');
     } catch (e) {
       alert(e?.data?.message || e?.message || 'Approval failed');
+    }
+  };
+
+  const deny = async (loan_id) => {
+    if (!loan_id) return;
+    if (!window.confirm("Deny this checkout request?")) return;
+    try {
+      await api('staff/loans/deny', { method: 'POST', body: { loan_id } });
+      await load();
+      if (typeof onChanged === 'function') {
+        try { onChanged(); } catch { /* no-op */ }
+      }
+      alert('Denied request');
+    } catch (e) {
+      alert(e?.data?.message || e?.message || 'Deny failed');
     }
   };
 
@@ -292,7 +307,7 @@ function PendingCheckoutsPanel({ api, onChanged }) {
                 </thead>
                 <tbody>
                   {rows.map(r => (
-                    <tr key={r.transaction_id} className="border-t">
+                    <tr key={r.loan_id} className="border-t">
                       <Td>{r.first_name} {r.last_name}</Td>
                       <Td>{r.user_id}</Td>
                       <Td>{r.copy_id}</Td>
@@ -300,7 +315,22 @@ function PendingCheckoutsPanel({ api, onChanged }) {
                       <Td>{new Date(r.request_date).toLocaleString()}</Td>
                       <Td className="max-w-[30ch] truncate" title={r.item_title}>{r.item_title}</Td>
                       <Td>{(r.media_type || 'book').toUpperCase()}</Td>
-                      <Td><button className="px-2 py-1 rounded bg-green-600 text-white" onClick={() => approve(r.transaction_id)}>Approve</button></Td>
+                      <Td>
+                        <div className="flex gap-2">
+                          <button
+                            className="inline-flex items-center rounded-md bg-green-600 px-3 py-1 text-xs font-semibold text-white shadow-sm hover:bg-green-500"
+                            onClick={() => approve(r.loan_id)}
+                          >
+                            Approve
+                          </button>
+                          <button
+                            className="inline-flex items-center rounded-md bg-red-600 px-3 py-1 text-xs font-semibold text-white shadow-sm hover:bg-red-500"
+                            onClick={() => deny(r.loan_id)}
+                          >
+                            Deny
+                          </button>
+                        </div>
+                      </Td>
                     </tr>
                   ))}
                 </tbody>

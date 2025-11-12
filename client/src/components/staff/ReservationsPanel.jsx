@@ -10,9 +10,6 @@ export default function ReservationsPanel({ api, staffUser, onChanged }) {
   const [form, setForm] = useState({ user_id: "", room_id: "", start_time: "", end_time: "" });
   const [submitMessage, setSubmitMessage] = useState("");
   const [submitError, setSubmitError] = useState("");
-  const [roomForm, setRoomForm] = useState({ room_number: "", capacity: "", features: "" });
-  const [roomMessage, setRoomMessage] = useState("");
-  const [roomError, setRoomError] = useState("");
   const [refreshFlag, setRefreshFlag] = useState(0);
   // Rooms management state
   const [rooms, setRooms] = useState([]);
@@ -146,77 +143,6 @@ export default function ReservationsPanel({ api, staffUser, onChanged }) {
             </button>
             {submitMessage && <span className="text-sm text-green-700">{submitMessage}</span>}
             {submitError && <span className="text-sm text-red-600">{submitError}</span>}
-          </div>
-        </form>
-      </div>
-
-      <div className="rounded-xl border bg-white p-4 shadow-sm">
-        <h3 className="text-md font-semibold mb-2">Add Room</h3>
-        <p className="text-xs text-gray-600 mb-3">Creates a room entry that can be used for reservations.</p>
-        <form
-          className="grid grid-cols-1 md:grid-cols-3 gap-3"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            setRoomMessage("");
-            setRoomError("");
-            try {
-              await api("staff/rooms", {
-                method: "POST",
-                body: {
-                  room_number: roomForm.room_number,
-                  capacity: roomForm.capacity ? Number(roomForm.capacity) : undefined,
-                  features: roomForm.features,
-                },
-              });
-              setRoomMessage(`Room ${roomForm.room_number} added.`);
-              setRoomForm({ room_number: "", capacity: "", features: "" });
-              setRefreshFlag((f) => f + 1);
-            } catch (err) {
-              const code = err?.data?.error;
-              const msg = err?.data?.message || err.message;
-              if (code === "room_exists") {
-                setRoomError(msg || "That room number already exists.");
-              } else if (code === "invalid_payload") {
-                setRoomError(msg || "Room number is required.");
-              } else {
-                setRoomError(msg || "Failed to add room.");
-              }
-            }
-          }}
-        >
-          <Field label="Room Number">
-            <input
-              className="w-full rounded-md border px-3 py-2"
-              value={roomForm.room_number}
-              onChange={(e) => setRoomForm((prev) => ({ ...prev, room_number: e.target.value }))}
-              placeholder="e.g., A201"
-              required
-            />
-          </Field>
-          <Field label="Capacity">
-            <input
-              type="number"
-              min={0}
-              className="w-full rounded-md border px-3 py-2"
-              value={roomForm.capacity}
-              onChange={(e) => setRoomForm((prev) => ({ ...prev, capacity: e.target.value }))}
-              placeholder="Optional"
-            />
-          </Field>
-          <Field label="Features">
-            <input
-              className="w-full rounded-md border px-3 py-2"
-              value={roomForm.features}
-              onChange={(e) => setRoomForm((prev) => ({ ...prev, features: e.target.value }))}
-              placeholder="Optional description"
-            />
-          </Field>
-          <div className="md:col-span-3 flex items-center gap-3">
-            <button type="submit" className="rounded-md btn-primary px-4 py-2">
-              Add Room
-            </button>
-            {roomMessage && <span className="text-sm text-green-700">{roomMessage}</span>}
-            {roomError && <span className="text-sm text-red-600">{roomError}</span>}
           </div>
         </form>
       </div>
