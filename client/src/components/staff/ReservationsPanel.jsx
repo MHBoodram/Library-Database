@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Field, Th, Td } from "./shared/CommonComponents";
 import { formatLibraryDateTime, localDateTimeToUTCISOString } from "../../utils";
 
-export default function ReservationsPanel({ api, staffUser }) {
+export default function ReservationsPanel({ api, staffUser, onChanged }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -72,6 +72,7 @@ export default function ReservationsPanel({ api, staffUser }) {
       setSubmitMessage("Reservation created successfully.");
       setForm({ user_id: "", room_id: "", start_time: "", end_time: "" });
       setRefreshFlag((f) => f + 1);
+      try { if (typeof onChanged === 'function') onChanged(); } catch { /* no-op */ }
     } catch (err) {
       const code = err?.data?.error;
       const msg = err?.data?.message || err.message;
@@ -439,6 +440,7 @@ export default function ReservationsPanel({ api, staffUser }) {
                               try {
                                 await api(`reservations/${r.reservation_id}/cancel`, { method: 'PATCH' });
                                 setRefreshFlag((f) => f + 1);
+                                try { if (typeof onChanged === 'function') onChanged(); } catch { /* no-op */ }
                               } catch (err) {
                                 console.error("Cancel error:", err);
                                 const errCode = err.data?.error || err.error;
@@ -458,6 +460,7 @@ export default function ReservationsPanel({ api, staffUser }) {
                             try {
                               await api(`staff/reservations/${r.reservation_id}`, { method: 'DELETE' });
                               setRefreshFlag((f) => f + 1);
+                              try { if (typeof onChanged === 'function') onChanged(); } catch { /* no-op */ }
                             } catch (err) {
                               console.error("Delete error:", err);
                               const errCode = err.data?.error || err.error;

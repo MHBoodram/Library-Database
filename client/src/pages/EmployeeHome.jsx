@@ -223,7 +223,7 @@ export default function EmployeeDashboard() {
   {tab === "return" && <ReturnLoanPanel api={api} staffUser={user} onChanged={loadCounts} />}
   {tab === "activeLoans" && <ActiveLoansPanel api={api} />}
   {tab === "holds" && <HoldsPanel api={api} onChanged={loadCounts} />}
-  {tab === "reservations" && <ReservationsPanel api={api} staffUser={user} />}
+  {tab === "reservations" && <ReservationsPanel api={api} staffUser={user} onChanged={loadCounts} />}
   {tab === "reports" && <ReportsPanel api={api} />}
   {tab === "pendingCheckouts" && <PendingCheckoutsPanel api={api} onChanged={loadCounts} />}
   {tab === "addItem" && <AddItemPanel api={api} />}
