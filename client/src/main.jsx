@@ -13,6 +13,7 @@ import Reports from "./pages/Reports.jsx";
 import Loans from "./pages/Loans.jsx";
 import Rooms from "./pages/Rooms.jsx";
 import BookPage from "./pages/BookPage.jsx";
+import { getCustomCoverForTitle, DEFAULT_BOOK_PLACEHOLDER } from "./coverImages";
 import PendingLoans from "./pages/PendingLoans.jsx";
 import ManageAccounts from "./pages/ManageAccounts.jsx";
 
@@ -32,6 +33,7 @@ function BookRoute() {
       ? copies.filter((c) => c.status === "available").length
       : 0;
     const firstAuthor = Array.isArray(row?.authors) ? row.authors[0] : row?.authors;
+    const mappedCover = getCustomCoverForTitle(row?.title);
     return {
       id: Number(id),
       title: row?.title || "",
@@ -39,7 +41,7 @@ function BookRoute() {
       publisher: row?.publisher || "",
       publishedYear: row?.publication_year || "",
       summary: row?.subject || "",
-      coverUrl: null,
+      coverUrl: mappedCover || null,
       rating: null,
       availableCount,
     };
@@ -54,7 +56,7 @@ function BookRoute() {
     return (Array.isArray(recs) ? recs : [])
       .filter((r) => r.item_id !== Number(id))
       .slice(0, 10)
-      .map((r) => ({ id: r.item_id, title: r.title, coverUrl: null }));
+      .map((r) => ({ id: r.item_id, title: r.title, coverUrl: getCustomCoverForTitle(r.title) || null }));
   };
 
   const onCheckout = async (id, qty = 1) => {

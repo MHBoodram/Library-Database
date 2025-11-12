@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="450" viewBox="0 0 300 450" role="img" aria-label="No cover available">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#e5e7eb"/>
+      <stop offset="100%" stop-color="#cbd5e1"/>
+    </linearGradient>
+  </defs>
+  <rect width="300" height="450" fill="url(#bg)" rx="8"/>
+  <g fill="#334155" font-family="Segoe UI, Roboto, Arial, sans-serif" text-anchor="middle">
+    <text x="150" y="210" font-size="28" font-weight="600">No Cover</text>
+    <text x="150" y="246" font-size="16" opacity="0.75">Available</text>
+  </g>
+</svg>
+

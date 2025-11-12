@@ -4,6 +4,7 @@ import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
 import { getItemCopies, placeHold } from "../api";
 import "./Books.css";
+import { getCustomCoverForTitle, DEFAULT_BOOK_PLACEHOLDER } from "../coverImages";
 
 // Helper to generate cover image URL
 function getCoverImage(item) {
@@ -19,6 +20,15 @@ function getCoverImage(item) {
   const type = (item.item_type || 'book').toLowerCase();
   const emoji = type === 'device' ? '💻' : type === 'media' ? '🎬' : '📚';
   return `https://via.placeholder.com/200x300/187772/ffffff?text=${emoji}`;
+}
+
+// Enhanced cover resolver with local mapping and placeholder
+function getCoverImageSmart(item) {
+  const custom = getCustomCoverForTitle(item?.title);
+  if (custom) return custom;
+  if (item?.cover_image_url) return item.cover_image_url;
+  if (item?.isbn) return `https://covers.openlibrary.org/b/isbn/${item.isbn}-L.jpg`;
+  return DEFAULT_BOOK_PLACEHOLDER;
 }
 
 export default function Books() {
@@ -261,11 +271,9 @@ export default function Books() {
               >
                 <div className="catalog-card-cover">
                   <img
-                    src={getCoverImage(item)}
+                    src={getCoverImageSmart(item)}
                     alt={item.title}
-                    onError={(e) => {
-                      e.target.src = `https://via.placeholder.com/200x300/187772/ffffff?text=${encodeURIComponent(item.title.slice(0, 20))}`;
-                    }}
+                    onError={(e) => { e.target.src = DEFAULT_BOOK_PLACEHOLDER; }}
                   />
                   {item.available_copies > 0 ? (
                     <div className="catalog-card-status available">Available</div>
@@ -302,11 +310,9 @@ export default function Books() {
             <div className="catalog-modal-content">
               <div className="catalog-modal-left">
                 <img
-                  src={getCoverImage(selectedItem)}
+                  src={getCoverImageSmart(selectedItem)}
                   alt={selectedItem.title}
-                  onError={(e) => {
-                    e.target.src = `https://via.placeholder.com/300x450/187772/ffffff?text=${encodeURIComponent(selectedItem.title.slice(0, 20))}`;
-                  }}
+                  onError={(e) => { e.target.src = DEFAULT_BOOK_PLACEHOLDER; }}
                 />
               </div>
 
