@@ -118,7 +118,6 @@ async function requestCheckout({ user_id, copy_id, barcode, employee_id }) {
     const isFaculty = accountRole === "faculty";
     const userCategory = isFaculty ? "faculty" : "student";
     const loanLimit = determineLoanLimit(accountRole);
-    // Count active + pending from loan plus legacy pending in transaction table
     const [cntActiveRows] = await conn.query(`SELECT COUNT(*) AS n FROM loan WHERE user_id=? AND status IN ('active','pending')`, [user_id]);
     let current = Number(cntActiveRows[0]?.n || 0);
     if (current >= loanLimit) {
@@ -236,21 +235,6 @@ async function requestCheckout({ user_id, copy_id, barcode, employee_id }) {
     }
 
     await conn.commit();
-    // Log event to loan_events (authoritative) and legacy transaction table (best-effort)
-    try {
-      await pool.query(
-        `INSERT INTO loan_events (loan_id, user_id, copy_id, employee_id, type, event_date)
-         VALUES (?, ?, ?, NULL, 'requested', NOW())`,
-        [insertResult.insertId, user_id, resolvedCopyId]
-      );
-    } catch {}
-    try {
-      await pool.query(
-        `INSERT INTO transaction (loan_id, user_id, employee_id, copy_id, type, date)
-         VALUES (?, ?, NULL, ?, 'requested', NOW())`,
-        [insertResult.insertId, user_id, resolvedCopyId]
-      );
-    } catch {}
 
     return { loan_id: insertResult.insertId, due_date: dueDate, policy };
   } catch (err) {
@@ -369,14 +353,6 @@ export const approveCheckout = (JWT_SECRET) => async (req, res) => {
 
     await conn.commit();
 
-    // Record approval event in loan_events and legacy transaction table (best-effort)
-    try {
-      await pool.query(
-        `INSERT INTO loan_events (loan_id, user_id, copy_id, employee_id, type, event_date)
-         VALUES (?, ?, ?, ?, 'approved', NOW())`,
-        [loan_id, loan.user_id, loan.copy_id, auth.employee_id || null]
-      );
-    } catch {}
     try {
       await pool.query(
         `INSERT INTO transaction (loan_id, user_id, employee_id, copy_id, type, date)
@@ -416,24 +392,48 @@ export const denyCheckout = (JWT_SECRET) => async (req, res) => {
       await conn.rollback();
       return sendJSON(res, 400, { error: 'invalid_status', message: 'Loan is not pending' });
     }
-    // Keep historical loan_events (requested), and add a rejected event below
+    await conn.execute(`
+      UPDATE loan SET status = 'rejected', employee_id = COALESCE(employee_id, ?), return_date = NOW()
+      WHERE loan_id = ?`,
+      [auth.employee_id || null, loan_id]
+    );
+    await conn.execute(`UPDATE copy SET status='available' WHERE copy_id = ?`, [loan.copy_id]);
+    await conn.commit();
+    return sendJSON(res, 200, { ok: true });
+  } catch (err) {
+    try { await conn.rollback(); } catch {}
+    console.error('deny checkout failed:', err.message);
+    return sendJSON(res, 500, { error: 'deny_failed' });
+  } finally {
+    conn.release();
+  }
+};
+
+export const cancelRequest = (JWT_SECRET) => async (req, res) => {
+  const b = await readJSONBody(req);
+  const loan_id = Number(b.loan_id);
+  if (!loan_id) return sendJSON(res, 400, { error: 'invalid_payload', message: 'loan_id required' });
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [rows] = await conn.query(
+      `SELECT loan_id, user_id, copy_id, status FROM loan WHERE loan_id = ? FOR UPDATE`,
+      [loan_id]
+    );
+    if (!rows.length) {
+      await conn.rollback();
+      return sendJSON(res, 404, { error: 'loan_not_found' });
+    }
+    const loan = rows[0];
+    if (loan.status !== 'pending') {
+      await conn.rollback();
+      return sendJSON(res, 400, { error: 'invalid_status', message: 'Loan is not pending' });
+    }
+    await conn.execute(`DELETE FROM loan_events WHERE loan_id = ?`, [loan_id]);
     await conn.execute(`DELETE FROM loan WHERE loan_id = ?`, [loan_id]);
     await conn.execute(`UPDATE copy SET status='available' WHERE copy_id = ?`, [loan.copy_id]);
     await conn.commit();
-    try {
-      await pool.query(
-        `INSERT INTO loan_events (loan_id, user_id, copy_id, employee_id, type, event_date)
-         VALUES (?, ?, ?, ?, 'rejected', NOW())`,
-        [loan_id, loan.user_id, loan.copy_id, auth.employee_id || null]
-      );
-    } catch {}
-    try {
-      await pool.query(
-        `INSERT INTO transaction (loan_id, user_id, employee_id, copy_id, type, date)
-         VALUES (?, ?, ?, ?, 'rejected', NOW())`,
-        [loan_id, loan.user_id, auth.employee_id || null, loan.copy_id]
-      );
-    } catch {}
+
     return sendJSON(res, 200, { ok: true });
   } catch (err) {
     try { await conn.rollback(); } catch {}
@@ -492,18 +492,8 @@ export const returnLoan = (JWT_SECRET) => async (req, res) => {
     );
 
     await conn.commit();
-    // log returned event to loan_events and legacy transaction table
-    try {
-      const actorEmp = (auth.employee_id || employee_id || null);
-      await pool.query(
-        `INSERT INTO loan_events (loan_id, user_id, copy_id, employee_id, type, event_date)
-         VALUES (?, ?, ?, ?, 'returned', NOW())`,
-        [loan_id, auth.user_id || null, loan.copy_id, actorEmp]
-      );
-    } catch {}
-    try {
-      await pool.query(`INSERT INTO transaction (loan_id, user_id, employee_id, copy_id, type, date) VALUES (?, ?, ?, ?, 'returned', NOW())`, [loan_id, auth.user_id || null, employee_id || null, loan.copy_id]);
-    } catch {}
+    // log returned event
+    try { await pool.query(`INSERT INTO transaction (loan_id, user_id, employee_id, copy_id, type, date) VALUES (?, ?, ?, ?, 'returned', NOW())`, [loan_id, auth.user_id || null, employee_id || null, loan.copy_id]); } catch {}
     return sendJSON(res, 200, { ok: true, message: "Loan returned successfully" });
     
   } catch (err) {
