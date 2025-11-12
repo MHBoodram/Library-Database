@@ -32,12 +32,9 @@ export const adminOverview = (JWT_SECRET) => async (req, res) => {
     const [[fineStats]] = await pool.query(
       `SELECT
          COUNT(*) AS open_fines,
-         COALESCE(SUM(f.amount_assessed), 0) AS open_fine_amount
-       FROM fine f
-       JOIN loan l ON l.loan_id = f.loan_id
-       WHERE LOWER(f.status) NOT IN ('paid','waived','written_off')
-         AND f.reason = 'overdue'
-         AND l.status = 'active'`
+         COALESCE(SUM(amount_assessed), 0) AS open_fine_amount
+       FROM fine
+       WHERE LOWER(status) NOT IN ('paid','waived','written_off')`
     );
 
     return sendJSON(res, 200, {
