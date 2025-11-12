@@ -482,6 +482,19 @@ export default function AdminPanel({ api }) {
               type="submit"
               className="w-full rounded-md bg-emerald-600 px-4 py-2 text-white font-medium hover:bg-emerald-700 disabled:opacity-50"
               disabled={submitting}
+              style={{ 
+                marginTop: "1rem",
+                display: "block",
+                width: "100%",
+                backgroundColor: "#059669",
+                color: "white",
+                padding: "0.75rem 1rem",
+                borderRadius: "0.375rem",
+                fontWeight: "600",
+                border: "none",
+                cursor: submitting ? "not-allowed" : "pointer",
+                opacity: submitting ? 0.5 : 1
+              }}
             >
               {submitting ? "Creating…" : "Create Account"}
             </button>
