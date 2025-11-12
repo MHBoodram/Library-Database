@@ -262,7 +262,7 @@ export default function Home() {
         identifier_type: 'copy_id'
       };
       
-      await api('loans/checkout', {
+      await api('loans/request', {
         method: 'POST',
         body: checkoutData
       });
