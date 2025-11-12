@@ -780,7 +780,7 @@ export default function ReportsPanel({ api }) {
   // handleRefresh removed (unused)
 
   function handleExport() {
-    const exportRows = activeReport === 'overdue' ? overdueFilteredRows : (activeReport === 'fines' ? finesFilteredRows : (activeReport === 'transactions' ? transactionsFilteredRows : reportData));
+    const exportRows = activeReport === 'overdue' ? overdueFilteredRows : (activeReport === 'transactions' ? transactionsFilteredRows : reportData);
     if (!exportRows || exportRows.length === 0) { alert("No data to export"); return; }
     const headers = Object.keys(exportRows[0]);
     const csvContent = [
@@ -828,26 +828,7 @@ export default function ReportsPanel({ api }) {
             >
               Overdue Loans
             </button>
-            <button
-              onClick={() => setActiveReport("fines")}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                activeReport === "fines"
-                  ? "bg-blue-600 text-white"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-              }`}
-            >
-              Fines
-            </button>
-            <button
-              onClick={() => setActiveReport("balances")}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                activeReport === "balances"
-                  ? "bg-blue-600 text-white"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-              }`}
-            >
-              User Balances
-            </button>
+            {/* Fines and User Balances removed */}
             <button
               onClick={() => setActiveReport("topItems")}
               className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
@@ -886,7 +867,6 @@ export default function ReportsPanel({ api }) {
                 disabled={
                   loading || (
                     activeReport === 'overdue' ? overdueFilteredRows.length === 0 :
-                    activeReport === 'fines' ? finesFilteredRows.length === 0 :
                     activeReport === 'transactions' ? transactionsFilteredRows.length === 0 :
                     reportData.length === 0
                   )
@@ -922,7 +902,7 @@ export default function ReportsPanel({ api }) {
                 </div>
               </div>
             )}
-            {activeReport === "fines" && (
+{false && (
               <div className="flex flex-wrap items-end gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
@@ -1004,28 +984,7 @@ export default function ReportsPanel({ api }) {
                 </div>
               </div>
             )}
-            {activeReport === "balances" && (
-              <div className="flex flex-wrap items-end gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
-                  <input
-                    type="date"
-                    value={balancesStartDate}
-                    onChange={(e) => setBalancesStartDate(e.target.value)}
-                    className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
-                  <input
-                    type="date"
-                    value={balancesEndDate}
-                    onChange={(e) => setBalancesEndDate(e.target.value)}
-                    className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
-                  />
-                </div>
-              </div>
-            )}
+            {/* Balances filters removed */}
             {activeReport === "topItems" && (
               <div className="flex flex-wrap items-end gap-3">
                 <div>
@@ -1217,7 +1176,7 @@ export default function ReportsPanel({ api }) {
               {/* Top borrowers chart removed per request */}
             </div>
           )}
-          {activeReport === 'fines' && (
+{false && (
             <div className="space-y-3">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="rounded-md border bg-white p-3 text-sm"><div className="text-gray-500">Total Fines</div><div className="text-xl font-semibold">{finesKPIs?.total || 0}</div></div>
@@ -1261,7 +1220,7 @@ export default function ReportsPanel({ api }) {
 
           <div className="rounded-lg border overflow-hidden">
             {activeReport === "overdue" && <OverdueReportTable data={overdueFilteredRows} loading={loading} />}
-            {activeReport === "fines" && (
+{false && (
               <div className="overflow-x-auto">
                 {finesFilteredRows.length === 0 ? (
                   <div className="p-6 text-center text-gray-500">No fines to display</div>
@@ -1310,7 +1269,7 @@ export default function ReportsPanel({ api }) {
                 )}
               </div>
             )}
-            {activeReport === "balances" && <BalancesReportTable data={reportData} loading={loading} />}
+{/* User Balances table removed */}
             {activeReport === "topItems" && <TopItemsReportTable data={reportData} loading={loading} />}
             {activeReport === "newPatrons" && <NewPatronsReportTable data={reportData} loading={loading} />}
             {activeReport === "transactions" && (
