@@ -24,6 +24,16 @@ export function formatCurrency(value) {
 
 // Library-specific timezone for consistent display of reservation times
 export const LIBRARY_TIMEZONE = "America/Chicago";
+const LIBRARY_TZ_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  timeZone: LIBRARY_TIMEZONE,
+  hour12: false,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+});
 
 // Formats a date/time value in the library's timezone for consistent wall-clock display
 export function formatLibraryDateTime(value) {
@@ -42,6 +52,23 @@ export function formatLibraryDateTime(value) {
   }
 }
 
+// Represent a timestamp as components in the library timezone for comparisons
+export function toLibraryTimeParts(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const parts = LIBRARY_TZ_FORMATTER.formatToParts(date);
+  const map = Object.fromEntries(parts.map((p) => [p.type, p.value]));
+  return {
+    date,
+    year: Number(map.year),
+    month: Number(map.month),
+    day: Number(map.day),
+    hour: Number(map.hour),
+    minute: Number(map.minute),
+    second: Number(map.second || 0),
+  };
+}
+
 // Convert a naive local datetime string (e.g., from <input type="datetime-local">)
 // to a UTC ISO string for transport to the server
 export function localDateTimeToUTCISOString(value) {
@@ -49,4 +76,3 @@ export function localDateTimeToUTCISOString(value) {
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? value : d.toISOString();
 }
-

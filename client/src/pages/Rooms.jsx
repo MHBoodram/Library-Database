@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
-import { formatLibraryDateTime, localDateTimeToUTCISOString } from "../utils";
+import { formatLibraryDateTime, localDateTimeToUTCISOString, toLibraryTimeParts } from "../utils";
 import "./Rooms.css";
 
 function RoomCalendarViewPatron({ api, onReservationCreated }) {
@@ -71,43 +71,58 @@ function RoomCalendarViewPatron({ api, onReservationCreated }) {
     timeSlots.push(hour);
   }
 
+  function slotRangeParts(hour) {
+    const startStr = `${selectedDate}T${String(hour).padStart(2, "0")}:00:00`;
+    const endStr = `${selectedDate}T${String(hour + 1).padStart(2, "0")}:00:00`;
+    return {
+      start: toLibraryTimeParts(startStr),
+      end: toLibraryTimeParts(endStr),
+    };
+  }
+
+  function compareParts(a, b) {
+    if (a.year !== b.year) return a.year - b.year;
+    if (a.month !== b.month) return a.month - b.month;
+    if (a.day !== b.day) return a.day - b.day;
+    if (a.hour !== b.hour) return a.hour - b.hour;
+    if (a.minute !== b.minute) return a.minute - b.minute;
+    return a.second - b.second;
+  }
+
+  function overlapsSlot(reservation, slotStart, slotEnd) {
+    const resStart = toLibraryTimeParts(reservation.start_time);
+    const resEnd = toLibraryTimeParts(reservation.end_time);
+    if (!resStart || !resEnd || !slotStart || !slotEnd) return false;
+    const startsBeforeSlotEnds = compareParts(resStart, slotEnd) < 0;
+    const endsAfterSlotStarts = compareParts(resEnd, slotStart) > 0;
+    return startsBeforeSlotEnds && endsAfterSlotStarts;
+  }
+
   // Check if a time slot is reserved
   const isReserved = (reservations, hour) => {
-    const slotStart = new Date(`${selectedDate}T${String(hour).padStart(2, '0')}:00:00`);
-    const slotEnd = new Date(`${selectedDate}T${String(hour + 1).padStart(2, '0')}:00:00`);
-    
-    return reservations.some(res => {
-      const resStart = new Date(res.start_time);
-      const resEnd = new Date(res.end_time);
-      // Check if reservation overlaps with this hour slot
-      return resStart < slotEnd && resEnd > slotStart;
-    });
+    const { start, end } = slotRangeParts(hour);
+    return reservations.some((res) => overlapsSlot(res, start, end));
   };
 
   // Check if reservation belongs to current user
   const isMine = (reservations, hour) => {
-    const slotStart = new Date(`${selectedDate}T${String(hour).padStart(2, '0')}:00:00`);
-    const slotEnd = new Date(`${selectedDate}T${String(hour + 1).padStart(2, '0')}:00:00`);
-    
-    return reservations.some(res => {
-      const resStart = new Date(res.start_time);
-      const resEnd = new Date(res.end_time);
-      return res.is_mine && resStart < slotEnd && resEnd > slotStart;
-    });
+    const { start, end } = slotRangeParts(hour);
+    return reservations.some((res) => res.is_mine && overlapsSlot(res, start, end));
   };
 
   // Check if time slot is in the past or outside operation hours
   const isSlotBookable = (hour) => {
-    const now = new Date();
-    const slotStart = new Date(`${selectedDate}T${String(hour).padStart(2, '0')}:00:00`);
-    
-    // Check if slot is in the past
-    if (slotStart < now) {
-      return false;
-    }
+    const nowParts = toLibraryTimeParts(new Date());
+    const slotParts = toLibraryTimeParts(`${selectedDate}T${String(hour).padStart(2, "0")}:00:00`);
+    if (!nowParts || !slotParts) return false;
+
+    const slotKey = `${slotParts.year}-${slotParts.month}-${slotParts.day}`;
+    const nowKey = `${nowParts.year}-${nowParts.month}-${nowParts.day}`;
+    if (slotKey < nowKey) return false;
+    if (slotKey === nowKey && slotParts.hour <= nowParts.hour) return false;
 
     // Get day of week (0 = Sunday, 1 = Monday, etc.)
-    const dayOfWeek = slotStart.getDay();
+    const dayOfWeek = new Date(`${selectedDate}T00:00:00`).getDay();
     
     // Check library operation hours
     // Monday - Friday: 7:00 AM - 6:00 PM
