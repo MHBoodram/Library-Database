@@ -683,8 +683,8 @@ export const listTransactionsEvents = (JWT_SECRET) => async (req, res) => {
 
     const conditions = [];
     const params = [];
-    // date range
-    conditions.push("le.event_date BETWEEN ? AND ?");
+    // date range (end is exclusive to include entire day)
+    conditions.push("(le.event_date >= ? AND le.event_date < DATE_ADD(?, INTERVAL 1 DAY))");
     params.push(startDate, endDate);
 
     // Normalize event types
