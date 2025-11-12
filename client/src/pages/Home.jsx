@@ -97,11 +97,28 @@ export default function Home() {
               const totalInStock = copyList.filter(c => (c.status || '').toLowerCase() !== 'lost').length;
               const availableCount = copyList.filter(c => (c.status || '').toLowerCase() === 'available').length;
               
+              // Generate a better fallback cover URL with book title
+              const fallbackCover = `https://placehold.co/300x450/6366f1/white?text=${encodeURIComponent((item.title || 'Book').substring(0, 50))}`;
+              
+              // Validate cover_image_url - only use it if it's a valid URL
+              let coverUrl = fallbackCover;
+              if (item.cover_image_url && item.cover_image_url.trim() !== '') {
+                try {
+                  const url = new URL(item.cover_image_url);
+                  if (url.protocol === 'http:' || url.protocol === 'https:') {
+                    coverUrl = item.cover_image_url;
+                  }
+                } catch {
+                  // Invalid URL, use fallback
+                  console.warn(`Invalid cover URL for ${item.title}:`, item.cover_image_url);
+                }
+              }
+              
               updated.push({
                 id: item.item_id,
                 title: item.title,
                 author: item.authors || "Unknown Author",
-                cover: item.cover_image_url || "https://via.placeholder.com/300x450?text=No+Cover",
+                cover: coverUrl,
                 genre: item.subject || "General",
                 description: item.description || "No description available.",
                 isbn: item.isbn || "",
@@ -326,7 +343,11 @@ export default function Home() {
                     alt={book.title}
                     className="book-cover"
                     onError={(e) => {
-                      e.target.src = 'https://via.placeholder.com/200x300/4a5568/ffffff?text=' + encodeURIComponent(book.title);
+                      // Prevent infinite loop
+                      if (!e.target.dataset.errored) {
+                        e.target.dataset.errored = 'true';
+                        e.target.src = `https://placehold.co/300x450/6366f1/white?text=${encodeURIComponent(book.title || 'Book')}`;
+                      }
                     }}
                   />
                 </div>
