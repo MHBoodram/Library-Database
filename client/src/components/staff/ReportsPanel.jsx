@@ -816,233 +816,71 @@ export default function ReportsPanel({ api }) {
         </div>
 
         <div className="p-5 space-y-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex-1 flex gap-2">
-              <button
-                onClick={() => setActiveReport("overdue")}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  activeReport === "overdue"
-                    ? "bg-blue-600 text-white"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
-              >
-                Overdue Loans
-              </button>
-              <button
-                onClick={() => setActiveReport("fines")}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  activeReport === "fines"
-                    ? "bg-blue-600 text-white"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
-              >
-                Fines
-              </button>
-              <button
-                onClick={() => setActiveReport("balances")}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  activeReport === "balances"
-                    ? "bg-blue-600 text-white"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
-              >
-                User Balances
-              </button>
-              <button
-                onClick={() => setActiveReport("topItems")}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  activeReport === "topItems"
-                    ? "bg-blue-600 text-white"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
-              >
-                Top Items
-              </button>
-              <button
-                onClick={() => setActiveReport("newPatrons")}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  activeReport === "newPatrons"
-                    ? "bg-blue-600 text-white"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
-              >
-                New Patrons
-              </button>
-              <button
-                onClick={() => setActiveReport("transactions")}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  activeReport === "transactions"
-                    ? "bg-blue-600 text-white"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
-              >
-                Transaction History
-              </button>
-            </div>
-
-            <div className="flex items-start gap-4">
-              {/* Right-side date filters for each report type */}
-              {activeReport === "overdue" && (
-                <div className="flex flex-wrap items-end gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
-                    <input
-                      type="date"
-                      value={overdueStartDate}
-                      onChange={(e) => setOverdueStartDate(e.target.value)}
-                      className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
-                    <input
-                      type="date"
-                      value={overdueEndDate}
-                      onChange={(e) => setOverdueEndDate(e.target.value)}
-                      className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
-                    />
-                  </div>
-                </div>
-              )}
-  {activeReport === "fines" && (
-                <div className="flex flex-wrap items-end gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
-                    <input
-                      type="date"
-                      value={finesStartDate}
-                      onChange={(e) => setFinesStartDate(e.target.value)}
-                      className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
-                    <input
-                      type="date"
-                      value={finesEndDate}
-                      onChange={(e) => setFinesEndDate(e.target.value)}
-                      className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
-                    />
-                  </div>
-                </div>
-  )}
-
-  {activeReport === "transactions" && (
-    <div className="flex justify-end">
-      <div className="w-full md:w-72">
-        <div className="rounded-md border bg-white p-3 space-y-3">
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Event Type</label>
-            <div className="flex flex-wrap gap-2">
-              {['requested','approved','rejected','returned'].map(t => (
-                <label key={t} className="inline-flex items-center gap-2 text-xs">
-                  <input type="checkbox" checked={txEventTypes.includes(t)} onChange={()=>setTxEventTypes(prev => prev.includes(t)? prev.filter(x=>x!==t) : [...prev, t])} /> {t}
-                </label>
-              ))}
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Current Status</label>
-            <div className="flex flex-wrap gap-2">
-              {['Pending','Approved & Active','Rejected','Returned'].map(s => (
-                <label key={s} className="inline-flex items-center gap-2 text-xs">
-                  <input type="checkbox" checked={txStatuses.includes(s)} onChange={()=>setTxStatuses(prev => prev.includes(s)? prev.filter(x=>x!==s) : [...prev, s])} /> {s}
-                </label>
-              ))}
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Staff User</label>
-            <select value={txStaff} onChange={e=>setTxStaff(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm">
-              <option value="">All</option>
-              {Array.from(new Map((reportData||[]).filter(r=>r.employee_id).map(r=>[r.employee_id, `${r.employee_first_name||''} ${r.employee_last_name||''}`.trim()||`#${r.employee_id}`])).entries()).map(([id,name]) => (
-                <option key={id} value={id}>{name}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Search</label>
-            <input type="text" placeholder="Patron, item, Loan/Copy ID" value={txSearch} onChange={e=>setTxSearch(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm" />
-          </div>
-          <div className="pt-1 space-y-2">
-            <button onClick={()=>loadReport('transactions')} disabled={loading} className="w-full px-3 py-2 rounded-md bg-gray-700 text-white text-sm font-medium hover:bg-gray-800 disabled:opacity-50">{loading ? 'Loading...' : 'Generate Report'}</button>
-            <div className="flex gap-2">
-              <button onClick={()=>{const d=new Date();const sd=new Date();sd.setFullYear(sd.getFullYear()-1);setTransactionStartDate(sd.toISOString().slice(0,10));setTransactionsEndDate(d.toISOString().slice(0,10));setTxEventTypes(['requested','approved','rejected','returned']);setTxStatuses(['Pending','Approved & Active','Rejected','Returned']);setTxStaff('');setTxSearch('');loadReport('transactions');}} disabled={loading} className="flex-1 px-3 py-2 rounded-md bg-gray-200 text-gray-800 text-sm font-medium hover:bg-gray-300 disabled:opacity-50">Reset</button>
-              <button onClick={()=>{setTransactionStartDate('');setTransactionsEndDate('');setTxEventTypes(['requested','approved','rejected','returned']);setTxStatuses(['Pending','Approved & Active','Rejected','Returned']);setTxStaff('');setTxSearch('');loadReport('transactions');}} disabled={loading} className="flex-1 px-3 py-2 rounded-md bg-white border text-sm font-medium hover:bg-gray-50 disabled:opacity-50">Clear</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )}
-              {activeReport === "balances" && (
-                <div className="flex flex-wrap items-end gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
-                    <input
-                      type="date"
-                      value={balancesStartDate}
-                      onChange={(e) => setBalancesStartDate(e.target.value)}
-                      className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
-                    <input
-                      type="date"
-                      value={balancesEndDate}
-                      onChange={(e) => setBalancesEndDate(e.target.value)}
-                      className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
-                    />
-                  </div>
-                </div>
-              )}
-              {activeReport === "topItems" && (
-                <div className="flex flex-wrap items-end gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
-                    <input
-                      type="date"
-                      value={topItemsStartDate}
-                      onChange={(e) => setTopItemsStartDate(e.target.value)}
-                      className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
-                    <input
-                      type="date"
-                      value={topItemsEndDate}
-                      onChange={(e) => setTopItemsEndDate(e.target.value)}
-                      className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
-                    />
-                  </div>
-                </div>
-              )}
-              {activeReport === "newPatrons" && (
-                <div className="flex flex-wrap items-end gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
-                    <input
-                      type="date"
-                      value={newPatronsStartDate}
-                      onChange={(e) => setNewPatronsStartDate(e.target.value)}
-                      className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
-                    <input
-                      type="date"
-                      value={newPatronsEndDate}
-                      onChange={(e) => setNewPatronsEndDate(e.target.value)}
-                      className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
-                    />
-                  </div>
-                </div>
-              )}
-              {/* moved Transactions filters to right-side block below for consistent layout */}
-            <div className="flex gap-2 ml-auto">
+          {/* Panel buttons row */}
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setActiveReport("overdue")}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeReport === "overdue"
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+            >
+              Overdue Loans
+            </button>
+            <button
+              onClick={() => setActiveReport("fines")}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeReport === "fines"
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+            >
+              Fines
+            </button>
+            <button
+              onClick={() => setActiveReport("balances")}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeReport === "balances"
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+            >
+              User Balances
+            </button>
+            <button
+              onClick={() => setActiveReport("topItems")}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeReport === "topItems"
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+            >
+              Top Items
+            </button>
+            <button
+              onClick={() => setActiveReport("newPatrons")}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeReport === "newPatrons"
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+            >
+              New Patrons
+            </button>
+            <button
+              onClick={() => setActiveReport("transactions")}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeReport === "transactions"
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+            >
+              Transaction History
+            </button>
+            
+            {/* Export button aligned to the right */}
+            <div className="ml-auto">
               <button
                 onClick={handleExport}
                 disabled={
@@ -1058,7 +896,180 @@ export default function ReportsPanel({ api }) {
                 Export CSV
               </button>
             </div>
-            </div>
+          </div>
+
+          {/* Filters section - now below the panels */}
+          <div className="space-y-3">
+            {activeReport === "overdue" && (
+              <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
+                  <input
+                    type="date"
+                    value={overdueStartDate}
+                    onChange={(e) => setOverdueStartDate(e.target.value)}
+                    className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
+                  <input
+                    type="date"
+                    value={overdueEndDate}
+                    onChange={(e) => setOverdueEndDate(e.target.value)}
+                    className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                  />
+                </div>
+              </div>
+            )}
+            {activeReport === "fines" && (
+              <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
+                  <input
+                    type="date"
+                    value={finesStartDate}
+                    onChange={(e) => setFinesStartDate(e.target.value)}
+                    className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
+                  <input
+                    type="date"
+                    value={finesEndDate}
+                    onChange={(e) => setFinesEndDate(e.target.value)}
+                    className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                  />
+                </div>
+              </div>
+            )}
+            {activeReport === "transactions" && (
+              <div className="flex justify-end">
+                <div className="w-full md:w-72">
+                  <div className="rounded-md border bg-white p-3 space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-2">Event Type</label>
+                      <div className="grid grid-cols-4 gap-2">
+                        {['requested','approved','rejected','returned'].map(t => (
+                          <label key={t} className="inline-flex items-center gap-1.5 text-xs cursor-pointer">
+                            <input 
+                              type="checkbox" 
+                              checked={txEventTypes.includes(t)} 
+                              onChange={()=>setTxEventTypes(prev => prev.includes(t)? prev.filter(x=>x!==t) : [...prev, t])}
+                              className="w-4 h-4"
+                            /> 
+                            <span className="capitalize">{t}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-2">Current Status</label>
+                      <div className="grid grid-cols-4 gap-2">
+                        {['Pending','Approved & Active','Rejected','Returned'].map(s => (
+                          <label key={s} className="inline-flex items-center gap-1.5 text-xs cursor-pointer">
+                            <input 
+                              type="checkbox" 
+                              checked={txStatuses.includes(s)} 
+                              onChange={()=>setTxStatuses(prev => prev.includes(s)? prev.filter(x=>x!==s) : [...prev, s])}
+                              className="w-4 h-4"
+                            /> 
+                            <span>{s}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Staff User</label>
+                      <select value={txStaff} onChange={e=>setTxStaff(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm">
+                        <option value="">All</option>
+                        {Array.from(new Map((reportData||[]).filter(r=>r.employee_id).map(r=>[r.employee_id, `${r.employee_first_name||''} ${r.employee_last_name||''}`.trim()||`#${r.employee_id}`])).entries()).map(([id,name]) => (
+                          <option key={id} value={id}>{name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Search</label>
+                      <input type="text" placeholder="Patron, item, Loan/Copy ID" value={txSearch} onChange={e=>setTxSearch(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm" />
+                    </div>
+                    <div className="pt-1 space-y-2">
+                      <button onClick={()=>loadReport('transactions')} disabled={loading} className="w-full px-3 py-2 rounded-md bg-gray-700 text-white text-sm font-medium hover:bg-gray-800 disabled:opacity-50">{loading ? 'Loading...' : 'Generate Report'}</button>
+                      <div className="flex gap-2">
+                        <button onClick={()=>{const d=new Date();const sd=new Date();sd.setFullYear(sd.getFullYear()-1);setTransactionStartDate(sd.toISOString().slice(0,10));setTransactionsEndDate(d.toISOString().slice(0,10));setTxEventTypes(['requested','approved','rejected','returned']);setTxStatuses(['Pending','Approved & Active','Rejected','Returned']);setTxStaff('');setTxSearch('');loadReport('transactions');}} disabled={loading} className="flex-1 px-3 py-2 rounded-md bg-gray-200 text-gray-800 text-sm font-medium hover:bg-gray-300 disabled:opacity-50">Reset</button>
+                        <button onClick={()=>{setTransactionStartDate('');setTransactionsEndDate('');setTxEventTypes(['requested','approved','rejected','returned']);setTxStatuses(['Pending','Approved & Active','Rejected','Returned']);setTxStaff('');setTxSearch('');loadReport('transactions');}} disabled={loading} className="flex-1 px-3 py-2 rounded-md bg-white border text-sm font-medium hover:bg-gray-50 disabled:opacity-50">Clear</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            {activeReport === "balances" && (
+              <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
+                  <input
+                    type="date"
+                    value={balancesStartDate}
+                    onChange={(e) => setBalancesStartDate(e.target.value)}
+                    className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
+                  <input
+                    type="date"
+                    value={balancesEndDate}
+                    onChange={(e) => setBalancesEndDate(e.target.value)}
+                    className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                  />
+                </div>
+              </div>
+            )}
+            {activeReport === "topItems" && (
+              <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
+                  <input
+                    type="date"
+                    value={topItemsStartDate}
+                    onChange={(e) => setTopItemsStartDate(e.target.value)}
+                    className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
+                  <input
+                    type="date"
+                    value={topItemsEndDate}
+                    onChange={(e) => setTopItemsEndDate(e.target.value)}
+                    className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                  />
+                </div>
+              </div>
+            )}
+            {activeReport === "newPatrons" && (
+              <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
+                  <input
+                    type="date"
+                    value={newPatronsStartDate}
+                    onChange={(e) => setNewPatronsStartDate(e.target.value)}
+                    className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
+                  <input
+                    type="date"
+                    value={newPatronsEndDate}
+                    onChange={(e) => setNewPatronsEndDate(e.target.value)}
+                    className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Right-aligned filter block shown under the panel bar for Overdue Loans and Fines (dates moved to toolbar; export moved to toolbar) */}
