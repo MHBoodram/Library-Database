@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
 import { formatLibraryDateTime, libraryDateTimeToUTCISOString, toLibraryTimeParts } from "../utils";
+import { useConfig } from "../ConfigContext.jsx";
 import "./Rooms.css";
 
 function RoomCalendarViewPatron({ api, onReservationCreated }) {
@@ -12,6 +13,7 @@ function RoomCalendarViewPatron({ api, onReservationCreated }) {
   const [error, setError] = useState("");
   const [filterCapacity, setFilterCapacity] = useState("");
   const [filterFeatures, setFilterFeatures] = useState("");
+  const { libraryTimezone } = useConfig();
 
   // Fetch room availability for selected date
   useEffect(() => {
@@ -188,6 +190,7 @@ function RoomCalendarViewPatron({ api, onReservationCreated }) {
     <div className="calendar-container">
       <div className="calendar-header">
         <h2 className="calendar-title">Room Availability Calendar</h2>
+        <p className="calendar-note">All times shown in {libraryTimezone}.</p>
         
         {/* Date Navigation */}
         <div className="calendar-nav">
@@ -323,6 +326,7 @@ function RoomCalendarViewPatron({ api, onReservationCreated }) {
 
 export default function Rooms() {
   const { token, useApi: api } = useAuth();
+  const { libraryTimezone } = useConfig();
   const navigate = useNavigate();
 
   // My reservations state
@@ -391,6 +395,9 @@ export default function Rooms() {
         </div>
         <div className="note">
           Note: Reservations must be within operating hours, cannot span multiple days, and are limited to a maximum of 2 hours.
+        </div>
+        <div className="note">
+          Times listed below follow {libraryTimezone}.
         </div>
       </div>
 

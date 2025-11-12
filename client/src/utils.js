@@ -22,27 +22,61 @@ export function formatCurrency(value) {
   return num.toLocaleString(undefined, { style: "currency", currency: "USD" });
 }
 
-// Library-specific timezone for consistent display of reservation times
-export const LIBRARY_TIMEZONE = "America/Chicago";
-const LIBRARY_TZ_FORMATTER = new Intl.DateTimeFormat("en-US", {
-  timeZone: LIBRARY_TIMEZONE,
-  hour12: false,
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  second: "2-digit",
-});
+const DEFAULT_LIBRARY_TIMEZONE = "America/Chicago";
+let libraryTimezone = DEFAULT_LIBRARY_TIMEZONE;
+let libraryTimePartsFormatter = null;
+
+function buildPartsFormatter(timeZone) {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function getTimePartsFormatter() {
+  if (!libraryTimePartsFormatter) {
+    libraryTimePartsFormatter = buildPartsFormatter(libraryTimezone);
+  }
+  return libraryTimePartsFormatter;
+}
+
+function resetTimeFormatters() {
+  libraryTimePartsFormatter = null;
+}
+
+export function getLibraryTimezone() {
+  return libraryTimezone;
+}
+
+export function setLibraryTimezone(nextTz) {
+  if (!nextTz || typeof nextTz !== "string") return libraryTimezone;
+  const trimmed = nextTz.trim();
+  if (!trimmed || trimmed === libraryTimezone) return libraryTimezone;
+  try {
+    // Validate the timezone before adopting it
+    new Intl.DateTimeFormat("en-US", { timeZone: trimmed }).format(new Date());
+    libraryTimezone = trimmed;
+    resetTimeFormatters();
+  } catch {
+    console.warn(`[utils] Ignoring invalid library timezone "${trimmed}"`);
+  }
+  return libraryTimezone;
+}
 
 // Formats a date/time value in the library's timezone for consistent wall-clock display
 export function formatLibraryDateTime(value) {
-  if (!value) return "—";
+  if (!value) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
   try {
     return new Intl.DateTimeFormat(undefined, {
-      timeZone: LIBRARY_TIMEZONE,
+      timeZone: getLibraryTimezone(),
       dateStyle: "medium",
       timeStyle: "short",
     }).format(date);
@@ -66,7 +100,7 @@ export function toLibraryTimeParts(value) {
     date = value instanceof Date ? value : new Date(value);
   }
   if (Number.isNaN(date.getTime())) return null;
-  const parts = LIBRARY_TZ_FORMATTER.formatToParts(date);
+  const parts = getTimePartsFormatter().formatToParts(date);
   const map = Object.fromEntries(parts.map((p) => [p.type, p.value]));
   return {
     date,
@@ -87,19 +121,8 @@ export function localDateTimeToUTCISOString(value) {
   return Number.isNaN(d.getTime()) ? value : d.toISOString();
 }
 
-const LIBRARY_TZ_OFFSET_FORMATTER = new Intl.DateTimeFormat("en-US", {
-  timeZone: LIBRARY_TIMEZONE,
-  hour12: false,
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  second: "2-digit",
-});
-
 function getLibraryOffsetMinutes(date) {
-  const parts = LIBRARY_TZ_OFFSET_FORMATTER.formatToParts(date);
+  const parts = getTimePartsFormatter().formatToParts(date);
   const map = Object.fromEntries(parts.map((p) => [p.type, p.value]));
   const asUTC = Date.UTC(
     Number(map.year),

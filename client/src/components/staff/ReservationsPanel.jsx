@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Field, Th, Td } from "./shared/CommonComponents";
 import { formatLibraryDateTime, libraryDateTimeToUTCISOString } from "../../utils";
+import { useConfig } from "../../ConfigContext.jsx";
 
 export default function ReservationsPanel({ api, staffUser, onChanged }) {
   const [rows, setRows] = useState([]);
@@ -17,6 +18,8 @@ export default function ReservationsPanel({ api, staffUser, onChanged }) {
   const [roomsError, setRoomsError] = useState("");
   const [editingRoomId, setEditingRoomId] = useState(null);
   const [editRoomForm, setEditRoomForm] = useState({ room_number: "", capacity: "", features: "" });
+
+  const { libraryTimezone } = useConfig();
 
   const fetchReservations = useCallback(async () => {
     setLoading(true);
@@ -98,6 +101,9 @@ export default function ReservationsPanel({ api, staffUser, onChanged }) {
           </div>
           <div className="mt-1 text-xs text-gray-600">
             Reservations must be within operating hours, cannot span multiple days, and are limited to a maximum of 2 hours.
+          </div>
+          <div className="mt-1 text-xs text-gray-600">
+            All times shown in {libraryTimezone}.
           </div>
         </div>
         <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">

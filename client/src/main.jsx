@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
 import { AuthProvider, useAuth } from "./AuthContext.jsx";
+import { ConfigProvider } from "./ConfigContext.jsx";
 import Protected from "./components/Protected.jsx";
 
 import Home from "./pages/Home.jsx";
@@ -91,49 +92,51 @@ function BookRoute() {
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <AuthProvider>
-      <BrowserRouter>
-        <ReadyHoldNotifications />
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/Login" element={<Navigate to="/login" replace />} /> {/* optional redirect */}
-          <Route path="/books" element={<Books />} />
-          <Route path="/books/:id" element={<Protected><BookRoute /></Protected>} />
-          <Route path="/loans" element={<Loans />} />
-          {/** Pending Loans merged into Manage Loans; route removed **/}
-          <Route path="/rooms" element={<Rooms />} />
-          <Route path="/reports" element={<Reports />} />
+    <ConfigProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <ReadyHoldNotifications />
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/Login" element={<Navigate to="/login" replace />} /> {/* optional redirect */}
+            <Route path="/books" element={<Books />} />
+            <Route path="/books/:id" element={<Protected><BookRoute /></Protected>} />
+            <Route path="/loans" element={<Loans />} />
+            {/** Pending Loans merged into Manage Loans; route removed **/}
+            <Route path="/rooms" element={<Rooms />} />
+            <Route path="/reports" element={<Reports />} />
 
-          <Route
-            path="/app"
-            element={
-              <Protected>
-                <Login />
-              </Protected>
-            }
-          />
+            <Route
+              path="/app"
+              element={
+                <Protected>
+                  <Login />
+                </Protected>
+              }
+            />
 
-          <Route
-            path="/staff"
-            element={
-              <Protected role="staff">
-                <EmployeeHome />
-              </Protected>
-            }
-          />
-          <Route
-            path="/manage/accounts"
-            element={
-              <Protected role="staff" employeeRole="admin">
-                <ManageAccounts />
-              </Protected>
-            }
-          />
+            <Route
+              path="/staff"
+              element={
+                <Protected role="staff">
+                  <EmployeeHome />
+                </Protected>
+              }
+            />
+            <Route
+              path="/manage/accounts"
+              element={
+                <Protected role="staff" employeeRole="admin">
+                  <ManageAccounts />
+                </Protected>
+              }
+            />
 
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
+    </ConfigProvider>
   </React.StrictMode>
 );

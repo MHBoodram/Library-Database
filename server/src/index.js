@@ -28,6 +28,7 @@ import { getProfile, updateProfile } from "./api/profile.js";
 import { listAccounts, updateAccount as updateManagedAccount, flagAccount } from "./api/manageAcc.js";
 import { searchPatrons } from "./api/patrons.js";
 import { updateRoom, deleteRoom } from "./api/rooms.js";
+import { getClientConfig } from "./api/config.js";
 
 const PORT = Number(process.env.PORT) || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || "devsecret";
@@ -35,6 +36,7 @@ const JWT_SECRET = process.env.JWT_SECRET || "devsecret";
 const r = router();
 
 r.add("GET", "/api/health", async (_req, res) => sendJSON(res, 200, { ok: true, node: process.version }));
+r.add("GET", "/api/config", getClientConfig());
 
 r.add("POST", "/api/auth/login", login(JWT_SECRET));
 
