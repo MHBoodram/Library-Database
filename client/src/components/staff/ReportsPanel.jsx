@@ -12,8 +12,6 @@ const timeframePresets = [
   { label: "By Year", value: "year" },
 ];
 const fallbackUserTypeOptions = ["student", "faculty", "staff", "community"];
-const fallbackSourceOptions = ["Online Registration", "In-Person Kiosk", "Event Sign-Up", "Faculty Outreach"];
-const fallbackBranchOptions = ["Main Campus Library", "Science Library", "Downtown Branch"];
 
 const toTitle = (value = "") =>
   value
@@ -126,32 +124,6 @@ function DonutChart({ title, breakdown, total, palette = donutPalette }) {
           ))}
         </ul>
       </div>
-    </div>
-  );
-}
-
-function BreakdownList({ title, data, total }) {
-  const entries = Object.entries(data || {}).sort((a, b) => Number(b[1]) - Number(a[1]));
-  const denominator = total || entries.reduce((sum, [, value]) => sum + Number(value || 0), 0);
-  return (
-    <div className="rounded-xl border bg-white p-4 shadow-sm">
-      <p className="text-sm text-gray-500 mb-3">{title}</p>
-      {entries.length ? (
-        <ul className="space-y-2 text-sm">
-          {entries.slice(0, 5).map(([label, value]) => {
-            const percent = denominator ? ((Number(value || 0) / denominator) * 100).toFixed(1) : "0.0";
-            return (
-              <li key={label} className="flex items-center justify-between gap-3">
-                <span className="text-gray-700 truncate">{label}</span>
-                <span className="text-gray-900 font-semibold">{numberFormatter.format(value || 0)}</span>
-                <span className="text-xs text-gray-500 w-12 text-right">{percent}%</span>
-              </li>
-            );
-          })}
-        </ul>
-      ) : (
-        <p className="text-sm text-gray-500">No data captured yet.</p>
-      )}
     </div>
   );
 }
@@ -273,10 +245,8 @@ function NewPatronInsights({ report, loading }) {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2">
         <DonutChart title="User Type Breakdown" breakdown={breakdowns.byType} total={meta.totalNewPatrons || 0} />
-        <BreakdownList title="By Branch" data={breakdowns.byBranch} total={meta.totalNewPatrons} />
-        <BreakdownList title="By Source" data={breakdowns.bySource} total={meta.totalNewPatrons} />
         <RetentionSnapshotCard retention={report.retention} loading={loading} />
       </div>
 
@@ -741,13 +711,9 @@ export default function ReportsPanel({ api }) {
   const [newPatronsEndDate, setNewPatronsEndDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [newPatronsTimeframe, setNewPatronsTimeframe] = useState("month");
   const [newPatronsUserTypes, setNewPatronsUserTypes] = useState([]);
-  const [newPatronsBranch, setNewPatronsBranch] = useState("all");
-  const [newPatronsSources, setNewPatronsSources] = useState([]);
   const [newPatronsReport, setNewPatronsReport] = useState(null);
   const [newPatronsFilterOptions, setNewPatronsFilterOptions] = useState({
     userTypes: [],
-    branches: [],
-    sources: [],
   });
 
   const [transactionsStartDate, setTransactionStartDate] = useState(() => {
@@ -767,12 +733,6 @@ export default function ReportsPanel({ api }) {
         (value) => value.toLowerCase()
       )
     )
-  );
-  const branchOptions = Array.from(
-    new Set(newPatronsFilterOptions.branches?.length ? newPatronsFilterOptions.branches : fallbackBranchOptions)
-  );
-  const sourceOptions = Array.from(
-    new Set(newPatronsFilterOptions.sources?.length ? newPatronsFilterOptions.sources : fallbackSourceOptions)
   );
 
   const loadReport = useCallback(async (reportType) => {
@@ -825,12 +785,6 @@ export default function ReportsPanel({ api }) {
           if (Array.isArray(newPatronsUserTypes) && newPatronsUserTypes.length) {
             params.set("user_type", newPatronsUserTypes.join(","));
           }
-          if (newPatronsBranch && newPatronsBranch !== "all") {
-            params.set("branch", newPatronsBranch);
-          }
-          if (Array.isArray(newPatronsSources) && newPatronsSources.length) {
-            params.set("source", newPatronsSources.join(","));
-          }
           break;
         case "transactions":
           endpoint = "reports/transactions";
@@ -850,8 +804,6 @@ export default function ReportsPanel({ api }) {
         setNewPatronsReport(data || null);
         setNewPatronsFilterOptions({
           userTypes: data?.filterOptions?.userTypes || [],
-          branches: data?.filterOptions?.branches || [],
-          sources: data?.filterOptions?.sources || [],
         });
         setReportData(Array.isArray(data?.tableRows) ? data.tableRows : []);
       } else {
@@ -863,7 +815,7 @@ export default function ReportsPanel({ api }) {
     } finally {
       setLoading(false);
     }
-  }, [api, activeReport, overdueStartDate, overdueEndDate, overdueBorrower, overdueGraceMode, overdueSortMode, balancesStartDate, balancesEndDate, topItemsStartDate, topItemsEndDate, newPatronsStartDate, newPatronsEndDate, newPatronsTimeframe, newPatronsUserTypes, newPatronsBranch, newPatronsSources, transactionsStartDate, transactionsEndDate, txEventTypes, txStatuses, txStaff, txSearch]);
+  }, [api, activeReport, overdueStartDate, overdueEndDate, overdueBorrower, overdueGraceMode, overdueSortMode, balancesStartDate, balancesEndDate, topItemsStartDate, topItemsEndDate, newPatronsStartDate, newPatronsEndDate, newPatronsTimeframe, newPatronsUserTypes, transactionsStartDate, transactionsEndDate, txEventTypes, txStatuses, txStaff, txSearch]);
 
   // Derived media types from the currently loaded overdue dataset
   const mediaTypeOptions = useMemo(() => {
@@ -1052,12 +1004,6 @@ export default function ReportsPanel({ api }) {
     );
   };
 
-  const handleSourceToggle = (source) => {
-    setNewPatronsSources((prev) =>
-      prev.includes(source) ? prev.filter((s) => s !== source) : [...prev, source]
-    );
-  };
-
   function handleNewPatronsReset() {
     const now = new Date();
     const yearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
@@ -1065,8 +1011,6 @@ export default function ReportsPanel({ api }) {
     setNewPatronsEndDate(new Date().toISOString().slice(0, 10));
     setNewPatronsTimeframe("month");
     setNewPatronsUserTypes([]);
-    setNewPatronsBranch("all");
-    setNewPatronsSources([]);
     loadReport("newPatrons");
   }
 
@@ -1240,7 +1184,7 @@ export default function ReportsPanel({ api }) {
                     />
                   </div>
                 </div>
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-4 md:grid-cols-2">
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <label className="block text-xs font-medium text-gray-600">User Types</label>
@@ -1269,55 +1213,6 @@ export default function ReportsPanel({ api }) {
                       })}
                     </div>
                     <p className="mt-2 text-[11px] text-gray-500">Leave unchecked to include every patron type.</p>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Branch / Location</label>
-                    <select
-                      value={newPatronsBranch}
-                      onChange={(e) => setNewPatronsBranch(e.target.value)}
-                      disabled={branchOptions.length <= 1}
-                      className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm disabled:bg-gray-100 disabled:text-gray-500"
-                    >
-                      <option value="all">All branches</option>
-                      {branchOptions.map((branch) => (
-                        <option key={branch} value={branch}>
-                          {branch}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="mt-2 text-[11px] text-gray-500">
-                      {branchOptions.length > 1
-                        ? "Drill into a single campus or view the entire system."
-                        : "Branch tracking defaults to Main Campus until other sites sync data."}
-                    </p>
-                  </div>
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="block text-xs font-medium text-gray-600">Registration Source</label>
-                      <button
-                        type="button"
-                        onClick={() => setNewPatronsSources([])}
-                        className="text-[11px] text-blue-600 hover:underline"
-                      >
-                        Clear
-                      </button>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      {sourceOptions.map((source) => (
-                        <label key={source} className="inline-flex items-center gap-1 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={newPatronsSources.includes(source)}
-                            onChange={() => handleSourceToggle(source)}
-                            className="h-4 w-4"
-                          />
-                          <span>{source}</span>
-                        </label>
-                      ))}
-                    </div>
-                    <p className="mt-2 text-[11px] text-gray-500">
-                      Track outreach funnels such as online forms, events, or faculty referrals.
-                    </p>
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">

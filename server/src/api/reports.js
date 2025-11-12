@@ -125,22 +125,6 @@ function normalizeUserType(role, isFaculty) {
   return isFaculty ? "faculty" : "student";
 }
 
-function inferBranch(userId) {
-  const id = Number(userId) || 0;
-  const mod = id % 3;
-  if (mod === 1) return "Main Campus Library";
-  if (mod === 2) return "Science Library";
-  return "Downtown Branch";
-}
-
-function inferSource(row, userType) {
-  const email = (row.email || "").toLowerCase();
-  if (email.includes("event")) return "Event Sign-Up";
-  if (email.includes("faculty") || userType === "faculty") return "Faculty Outreach";
-  if (email.includes("staff") || userType === "staff") return "Staff Invitation";
-  return Number(row.user_id || 0) % 2 === 0 ? "Online Registration" : "In-Person Kiosk";
-}
-
 function percentDiff(current, previous) {
   if (previous === null || previous === undefined) return null;
   if (previous === 0) {
@@ -469,8 +453,6 @@ export const newPatronsByMonth = (JWT_SECRET) => async (req, res) => {
     const timeframeParam = (url.searchParams.get("timeframe") || "month").trim().toLowerCase();
     const timeframe = TIMEFRAMES.has(timeframeParam) ? timeframeParam : "month";
     const userTypeFilter = parseListParam(url.searchParams.get("user_type"));
-    const branchFilter = parseListParam(url.searchParams.get("branch"));
-    const sourceFilter = parseListParam(url.searchParams.get("source"));
 
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
     let startDate = startDateParam;
@@ -520,8 +502,6 @@ export const newPatronsByMonth = (JWT_SECRET) => async (req, res) => {
         label: bucketLabel(cursor, timeframe),
         total: 0,
         breakdown: {},
-        branches: {},
-        sources: {},
       });
       cursor = advanceBucket(cursor, timeframe);
     }
@@ -533,25 +513,17 @@ export const newPatronsByMonth = (JWT_SECRET) => async (req, res) => {
     };
 
     const availableUserTypes = new Set();
-    const availableBranches = new Set();
-    const availableSources = new Set();
 
     const normalizedRows = rawRows
       .map((row) => {
         const userType = normalizeUserType(row.account_role, row.is_faculty);
-        const branch = inferBranch(row.user_id);
-        const signupSource = inferSource(row, userType);
         const joined_at = normalizeDateString(row.joined_at);
         if (!joined_at) return null;
         availableUserTypes.add(userType);
-        availableBranches.add(branch);
-        availableSources.add(signupSource);
         return {
           user_id: Number(row.user_id),
           joined_at,
           user_type: userType,
-          branch,
-          source: signupSource,
           email: row.email,
         };
       })
@@ -559,27 +531,19 @@ export const newPatronsByMonth = (JWT_SECRET) => async (req, res) => {
 
     const filteredRows = normalizedRows.filter((row) => {
       if (userTypeFilter.length && !userTypeFilter.includes(row.user_type)) return false;
-      if (branchFilter.length && !branchFilter.includes(row.branch.toLowerCase())) return false;
-      if (sourceFilter.length && !sourceFilter.includes(row.source.toLowerCase())) return false;
       return true;
     });
 
     const totalsByType = {};
-    const totalsByBranch = {};
-    const totalsBySource = {};
 
     filteredRows.forEach((row) => {
       totalsByType[row.user_type] = (totalsByType[row.user_type] || 0) + 1;
-      totalsByBranch[row.branch] = (totalsByBranch[row.branch] || 0) + 1;
-      totalsBySource[row.source] = (totalsBySource[row.source] || 0) + 1;
       const joinedDate = parseDateOnly(row.joined_at);
       const bucketKey = `${timeframe}:${isoDate(startOfBucket(joinedDate, timeframe))}`;
       const bucket = bucketMap.get(bucketKey);
       if (!bucket) return;
       bucket.total += 1;
       bucket.breakdown[row.user_type] = (bucket.breakdown[row.user_type] || 0) + 1;
-      bucket.branches[row.branch] = (bucket.branches[row.branch] || 0) + 1;
-      bucket.sources[row.source] = (bucket.sources[row.source] || 0) + 1;
     });
 
     const totalNewPatrons = filteredRows.length;
@@ -598,8 +562,6 @@ export const newPatronsByMonth = (JWT_SECRET) => async (req, res) => {
         bucketEnd: isoDate(bucket.end),
         total: bucket.total,
         breakdown: bucket.breakdown,
-        branches: bucket.branches,
-        sources: bucket.sources,
         cumulative: runningTotal,
         percentOfTotal,
         changePercent: change === null ? null : Number(change.toFixed(1)),
@@ -701,20 +663,14 @@ export const newPatronsByMonth = (JWT_SECRET) => async (req, res) => {
       tableRows,
       breakdowns: {
         byType: totalsByType,
-        byBranch: totalsByBranch,
-        bySource: totalsBySource,
       },
       topPeriods,
       retention: retentionSummary,
       filterOptions: {
         userTypes: Array.from(availableUserTypes).sort(),
-        branches: Array.from(availableBranches).sort(),
-        sources: Array.from(availableSources).sort(),
       },
       appliedFilters: {
         userTypes: userTypeFilter,
-        branches: branchFilter,
-        sources: sourceFilter,
       },
     });
   } catch (err) {
