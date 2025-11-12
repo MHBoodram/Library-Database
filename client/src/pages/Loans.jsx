@@ -42,7 +42,7 @@ export default function Loans() {
           useApi("loans/my"),
           useApi("loans/myreqs"),
           useApi("loans/myhist"),
-          listMyHolds(token),
+          listMyHolds(token)
         ]);
         if (!active) return;
         const loans = Array.isArray(loansData?.rows) ? loansData.rows : Array.isArray(loansData) ? loansData : [];
@@ -53,6 +53,7 @@ export default function Loans() {
         setRequests(reqRows);
         setHistory(histRows);
         setHolds(holdRows);
+        console.log("ROWS: ", reqRows);
       } catch (err) {
         if (!active) return;
         setError(err?.message || "Failed to load your loans.");
@@ -201,10 +202,10 @@ export default function Loans() {
                 </tr>
               </thead>
               <tbody>
-                {rows.length === 0 ? (
+                {requests.length === 0 ? (
                   <tr><td colSpan={2} className="loans-empty-state">{loading ? "" : "No Requests found."}</td></tr>
                 ) : (
-                  rows.map((r) => (
+                  requests.map((r) => (
                     <tr key={r.loan_id}>
                       <Td title={r.item_title}>{r.item_title}</Td>
                       <Td>{formatDate(r.due_date)}</Td>

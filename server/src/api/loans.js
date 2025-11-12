@@ -760,7 +760,7 @@ function defaultLoanDays(role) {
   return 14;
 }
 
-export const fetchUserLoans = (JWT_SECRET, mode = "active") => async (req, res) => {
+export const fetchUserLoans = (JWT_SECRET, mode) => async (req, res) => {
   const auth = requireAuth(req, res, JWT_SECRET); if (!auth) return;
   const userId = Number(auth.uid || auth.user_id || auth.userId || 0);
   if (!userId) return sendJSON(res, 400, { error: "invalid_user" });
@@ -771,6 +771,7 @@ export const fetchUserLoans = (JWT_SECRET, mode = "active") => async (req, res) 
   };
   // Default to active if mode not found
   const status = filters[mode] || filters.active;
+  console.log(mode, "STATUS: ",status, "USER ID: ", userId);
   const params = [userId, status];
   try {
     // Include outstanding fine totals per loan so the UI can surface what each borrower still owes.
@@ -822,6 +823,7 @@ export const fetchUserLoans = (JWT_SECRET, mode = "active") => async (req, res) 
       LIMIT 50
     `;
     const [rows] = await pool.query(sql, params);
+    console.log("ROWS: ",rows);
     return sendJSON(res, 200, { rows });
   } catch (err) {
       console.error("Failed to list user loans:", err.message);
