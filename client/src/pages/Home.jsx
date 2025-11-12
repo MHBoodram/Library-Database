@@ -4,119 +4,44 @@ import { useAuth } from '../AuthContext';
 import NavBar from '../components/NavBar';
 import './Home.css';
 
-// Featured books metadata (availability loaded dynamically)
-const featuredBooksSeed = [
-  {
-    id: 1,
-    title: "To Kill a Mockingbird",
-    author: "Harper Lee",
-    cover: "https://images.penguinrandomhouse.com/cover/9780061120084",
-    genre: "Classic Literature",
-    description: "A gripping tale of racial injustice and childhood innocence in the American South. Scout Finch narrates her father's courageous defense of a Black man falsely accused of assault.",
-    isbn: "9780061120084",
-    available: 5,
-    total: 8
-  },
-  {
-    id: 2,
-    title: "1984",
-    author: "George Orwell",
-    cover: "https://images.penguinrandomhouse.com/cover/9780452284234",
-    genre: "Dystopian Fiction",
-    description: "George Orwell's chilling prophecy about the future. In a totalitarian regime where Big Brother watches everything, Winston Smith struggles to maintain his humanity and independent thought.",
-    isbn: "9780452284234",
-    available: 3,
-    total: 6
-  },
-  {
-    id: 3,
-    title: "The Great Gatsby",
-    author: "F. Scott Fitzgerald",
-    cover: "https://images.penguinrandomhouse.com/cover/9780743273565",
-    genre: "Classic Literature",
-    description: "A portrait of the Jazz Age in all its decadence and excess. Jay Gatsby's obsessive quest for his lost love Daisy Buchanan reveals the corruption beneath the American Dream.",
-    isbn: "9780743273565",
-    available: 4,
-    total: 7
-  },
-  {
-    id: 4,
-    title: "Pride and Prejudice",
-    author: "Jane Austen",
-    cover: "https://images.penguinrandomhouse.com/cover/9780141439518",
-    genre: "Romance",
-    description: "The classic romance that explores love, class, and personal growth in Regency England. Elizabeth Bennet must overcome her pride while Mr. Darcy confronts his prejudice.",
-    isbn: "9780141439518",
-    available: 6,
-    total: 10
-  },
-  {
-    id: 5,
-    title: "The Catcher in the Rye",
-    author: "J.D. Salinger",
-    cover: "https://images.penguinrandomhouse.com/cover/9780316769174",
-    genre: "Coming of Age",
-    description: "Holden Caulfield's odyssey through New York City after being expelled from prep school. A raw and honest portrayal of teenage angst, alienation, and the search for authenticity.",
-    isbn: "9780316769174",
-    available: 2,
-    total: 5
-  },
-  {
-    id: 6,
-    title: "Animal Farm",
-    author: "George Orwell",
-    cover: "https://images.penguinrandomhouse.com/cover/9780452284241",
-    genre: "Political Satire",
-    description: "A brilliant satire of totalitarianism where farm animals rebel against their human farmer. This allegorical novella reveals how power corrupts and revolutionaries become oppressors.",
-    isbn: "9780452284241",
-    available: 7,
-    total: 9
-  },
-  {
-    id: 7,
-    title: "The Hobbit",
-    author: "J.R.R. Tolkien",
-    cover: "https://images.penguinrandomhouse.com/cover/9780547928227",
-    genre: "Fantasy",
-    description: "Bilbo Baggins' unexpected journey from his comfortable hobbit-hole to the Lonely Mountain. A classic adventure tale filled with dragons, dwarves, and the discovery of courage.",
-    isbn: "9780547928227",
-    available: 8,
-    total: 12
-  },
-  {
-    id: 8,
-    title: "Harry Potter and the Sorcerer's Stone",
-    author: "J.K. Rowling",
-    cover: "https://images.penguinrandomhouse.com/cover/9780590353427",
-    genre: "Fantasy",
-    description: "The Boy Who Lived begins his magical education at Hogwarts. Harry Potter discovers his true heritage and faces the dark wizard who killed his parents in this beloved fantasy adventure.",
-    isbn: "9780590353427",
-    available: 10,
-    total: 15
-  },
-  {
-    id: 9,
-    title: "The Lord of the Rings",
-    author: "J.R.R. Tolkien",
-    cover: "https://images.penguinrandomhouse.com/cover/9780544003415",
-    genre: "Fantasy",
-    description: "The epic quest to destroy the One Ring and defeat the Dark Lord Sauron. Frodo and the Fellowship journey through Middle-earth in this masterwork of fantasy literature.",
-    isbn: "9780544003415",
-    available: 4,
-    total: 8
-  },
-  {
-    id: 10,
-    title: "Brave New World",
-    author: "Aldous Huxley",
-    cover: "https://images.penguinrandomhouse.com/cover/9780060850524",
-    genre: "Dystopian Fiction",
-    description: "A disturbing vision of a future where humans are genetically engineered and conditioned for a rigid caste system. Huxley explores the cost of stability and the loss of individuality.",
-    isbn: "9780060850524",
-    available: 3,
-    total: 6
-  }
-];
+// Fallback books in case API is unavailable or returns no data
+function getFallbackBooks() {
+  return [
+    {
+      id: 1,
+      title: "To Kill a Mockingbird",
+      author: "Harper Lee",
+      cover: "https://images.penguinrandomhouse.com/cover/9780061120084",
+      genre: "Classic Literature",
+      description: "A gripping tale of racial injustice and childhood innocence in the American South.",
+      isbn: "9780061120084",
+      available: 0,
+      total: 0
+    },
+    {
+      id: 2,
+      title: "1984",
+      author: "George Orwell",
+      cover: "https://images.penguinrandomhouse.com/cover/9780452284234",
+      genre: "Dystopian Fiction",
+      description: "George Orwell's chilling prophecy about the future.",
+      isbn: "9780452284234",
+      available: 0,
+      total: 0
+    },
+    {
+      id: 3,
+      title: "The Great Gatsby",
+      author: "F. Scott Fitzgerald",
+      cover: "https://images.penguinrandomhouse.com/cover/9780743273565",
+      genre: "Classic Literature",
+      description: "A portrait of the Jazz Age in all its decadence and excess.",
+      isbn: "9780743273565",
+      available: 0,
+      total: 0
+    }
+  ];
+}
 
 export default function Home() {
   const { user, useApi: api } = useAuth();
@@ -126,41 +51,90 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [availabilityError, setAvailabilityError] = useState("");
-  const [dynamicFeatured, setDynamicFeatured] = useState(featuredBooksSeed.map(b => ({ ...b, available: null, total: null })));
+  const [dynamicFeatured, setDynamicFeatured] = useState([]);
   const [availabilityLoaded, setAvailabilityLoaded] = useState(false);
   const [preloadComplete, setPreloadComplete] = useState(false);
+
+  // Fetch top books from the API
   useEffect(() => {
-    if (preloadComplete) return; // Only run once
+    if (preloadComplete || !api) return;
     let cancel = false;
-    async function loadAll() {
-      const updated = [];
-      for (const book of featuredBooksSeed) {
-        try {
-          const params = new URLSearchParams({ title: book.title });
-          const items = await api(`items?${params.toString()}`);
-          const list = Array.isArray(items?.rows) ? items.rows : Array.isArray(items) ? items : [];
-          const exact = list.find(it => (it.title || "").toLowerCase() === book.title.toLowerCase());
-          const item = exact || list[0];
-          if (item) {
-            const copies = await api(`items/${item.item_id}/copies`);
-            const copyList = Array.isArray(copies) ? copies : [];
-            const totalInStock = copyList.filter(c => (c.status || '').toLowerCase() !== 'lost').length;
-            const availableCount = copyList.filter(c => (c.status || '').toLowerCase() === 'available').length;
-            updated.push({ ...book, available: availableCount, total: totalInStock, item_id: item.item_id });
-          } else {
-            updated.push({ ...book, available: 0, total: 0 });
+
+    async function loadTopBooks() {
+      try {
+        // Get top items from last 90 days
+        const end = new Date();
+        const start = new Date();
+        start.setMonth(start.getMonth() - 3); // Last 3 months
+        
+        const params = new URLSearchParams({
+          start_date: start.toISOString().slice(0, 10),
+          end_date: end.toISOString().slice(0, 10)
+        });
+        
+        const topItems = await api(`reports/top-items?${params}`);
+        const items = Array.isArray(topItems) ? topItems : [];
+        
+        // Filter only books (not devices or media)
+        const books = items.filter(item => item.media_type === 'book');
+        
+        // Take top 10 books
+        const topBooks = books.slice(0, 10);
+        
+        // Load full details for each book
+        const updated = [];
+        for (const book of topBooks) {
+          try {
+            const params = new URLSearchParams({ title: book.title });
+            const itemsResult = await api(`items?${params.toString()}`);
+            const list = Array.isArray(itemsResult?.rows) ? itemsResult.rows : Array.isArray(itemsResult) ? itemsResult : [];
+            const exact = list.find(it => (it.title || "").toLowerCase() === book.title.toLowerCase());
+            const item = exact || list[0];
+            
+            if (item) {
+              const copies = await api(`items/${item.item_id}/copies`);
+              const copyList = Array.isArray(copies) ? copies : [];
+              const totalInStock = copyList.filter(c => (c.status || '').toLowerCase() !== 'lost').length;
+              const availableCount = copyList.filter(c => (c.status || '').toLowerCase() === 'available').length;
+              
+              updated.push({
+                id: item.item_id,
+                title: item.title,
+                author: item.authors || "Unknown Author",
+                cover: item.cover_image_url || "https://via.placeholder.com/300x450?text=No+Cover",
+                genre: item.subject || "General",
+                description: item.description || "No description available.",
+                isbn: item.isbn || "",
+                available: availableCount,
+                total: totalInStock,
+                item_id: item.item_id,
+                loans_count: book.loans_count
+              });
+            }
+          } catch (err) {
+            console.error(`Failed to load details for ${book.title}:`, err);
           }
-        } catch { // individual book load failure
-          // Ignore individual book load errors; mark counts as zero
-          updated.push({ ...book, available: 0, total: 0 });
+        }
+        
+        if (!cancel && updated.length > 0) {
+          setDynamicFeatured(updated);
+          setPreloadComplete(true);
+        } else if (!cancel && updated.length === 0) {
+          // Fallback to static data if no top books found
+          setDynamicFeatured(getFallbackBooks());
+          setPreloadComplete(true);
+        }
+      } catch (err) {
+        console.error('Failed to load top books:', err);
+        if (!cancel) {
+          // Fallback to static data on error
+          setDynamicFeatured(getFallbackBooks());
+          setPreloadComplete(true);
         }
       }
-      if (!cancel) {
-        setDynamicFeatured(updated);
-        setPreloadComplete(true);
-      }
     }
-    loadAll();
+
+    loadTopBooks();
     return () => { cancel = true; };
   }, [api, preloadComplete]);
 
