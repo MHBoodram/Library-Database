@@ -179,18 +179,35 @@ export const updateAccount = (JWT_SECRET) => async (req, res, params) => {
     }
 
     if (firstName || lastName) {
-      const updates = [];
-      const params = [];
+      const userUpdates = [];
+      const userParams = [];
       if (firstName) {
-        updates.push("first_name = ?");
-        params.push(firstName);
+        userUpdates.push("first_name = ?");
+        userParams.push(firstName);
       }
       if (lastName) {
-        updates.push("last_name = ?");
-        params.push(lastName);
+        userUpdates.push("last_name = ?");
+        userParams.push(lastName);
       }
-      params.push(account.user_id);
-      await conn.execute(`UPDATE user SET ${updates.join(", ")} WHERE user_id = ?`, params);
+      userParams.push(account.user_id);
+      await conn.execute(`UPDATE user SET ${userUpdates.join(", ")} WHERE user_id = ?`, userParams);
+
+      if (account.employee_id) {
+        const empUpdates = [];
+        const empParams = [];
+        if (firstName) {
+          empUpdates.push("first_name = ?");
+          empParams.push(firstName);
+        }
+        if (lastName) {
+          empUpdates.push("last_name = ?");
+          empParams.push(lastName);
+        }
+        if (empUpdates.length) {
+          empParams.push(account.employee_id);
+          await conn.execute(`UPDATE employee SET ${empUpdates.join(", ")} WHERE employee_id = ?`, empParams);
+        }
+      }
     }
 
     const accountUpdates = [];
