@@ -46,7 +46,7 @@
 .employee-dashboard-header {
   background: linear-gradient(135deg, var(--primary-main) 0%, var(--primary-dark) 100%);
   color: white;
-  padding: 1.5rem 0;
+  padding: 1 rem 0;
   box-shadow: var(--shadow-lg);
   position: sticky;
   top: var(--nav-height, 60px);
