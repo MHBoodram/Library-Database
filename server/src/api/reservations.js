@@ -1,7 +1,61 @@
 import { sendJSON, readJSONBody, requireRole, requireAuth } from "../lib/http.js";
 import { pool } from "../lib/db.js";
 
-const LIBRARY_TZ = process.env.LIBRARY_TZ || "America/Chicago";
+const RAW_LIBRARY_TZ = (process.env.LIBRARY_TZ || "America/Chicago").trim();
+const LIBRARY_TZ = RAW_LIBRARY_TZ || "America/Chicago";
+const WEEKDAY_INDEX = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+let activeTimeZone = LIBRARY_TZ;
+let libraryFormatter;
+
+function buildFormatter(timeZone) {
+  const baseOptions = {
+    timeZone,
+    weekday: "short",
+    hour12: false,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  };
+  try {
+    const fmt = new Intl.DateTimeFormat("en-US", baseOptions);
+    activeTimeZone = fmt.resolvedOptions().timeZone || timeZone;
+    return fmt;
+  } catch (err) {
+    console.warn(
+      `[reservations] Failed to initialize timezone formatter for "${timeZone}". Falling back to UTC.`,
+      err
+    );
+    activeTimeZone = "UTC";
+    return new Intl.DateTimeFormat("en-US", { ...baseOptions, timeZone: "UTC" });
+  }
+}
+
+function getLibraryFormatter() {
+  if (!libraryFormatter) {
+    libraryFormatter = buildFormatter(LIBRARY_TZ);
+  }
+  return libraryFormatter;
+}
+
+function getLibraryTimeParts(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
+  const parts = getLibraryFormatter().formatToParts(date);
+  const map = Object.fromEntries(parts.map((p) => [p.type, p.value]));
+  const weekdayRaw = (map.weekday || "").slice(0, 3).toLowerCase();
+  return {
+    year: map.year,
+    month: map.month,
+    day: map.day,
+    hour: map.hour,
+    minute: map.minute,
+    second: map.second || "00",
+    weekdayIndex: WEEKDAY_INDEX[weekdayRaw] ?? 0,
+    ymd: `${map.year}-${map.month}-${map.day}`,
+  };
+}
 
 function normalizeDateInput(value) {
   if (!value) return null;
@@ -68,7 +122,7 @@ export const createReservation = (JWT_SECRET) => async (req, res) => {
       return sendJSON(res, 404, { error: "foreign_key_violation", message: err.sqlMessage });
     }
     console.error("Create reservation failed:", err);
-    return sendJSON(res, 500, { error: "reservation_failed", details: err.message });
+    return sendJSON(res, 500, { error: "reservation_failed", message: err.message });
   }
 };
 
@@ -105,11 +159,11 @@ export const listReservations = (JWT_SECRET) => async (req, res) => {
   }
 };
 
-// Format a JS Date using local components for storage in MySQL DATETIME.
-// With session time_zone set to LIBRARY_TZ on the DB connection, this aligns with library wall time.
+// Format a JS Date using the library's timezone for MySQL DATETIME storage.
 function toMySQLDateTime(date) {
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  const parts = getLibraryTimeParts(date);
+  if (!parts) return null;
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
 }
 
 /**
@@ -121,64 +175,46 @@ function toMySQLDateTime(date) {
 function validateLibraryHours(startDate, endDate) {
   const errors = [];
 
-  // Helper to get day/hour/min in the library's timezone using Intl
-  const getTzParts = (d) => {
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone: LIBRARY_TZ,
-      weekday: "short",
-      hour12: false,
-      hour: "2-digit",
-      minute: "2-digit",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).formatToParts(d);
-    const map = Object.fromEntries(parts.map(p => [p.type, p.value]));
-    // weekday short to number: Sun=0..Sat=6
-    const weekdayMap = { Sun:0, Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6 };
-    const day = weekdayMap[map.weekday] ?? 0;
-    const hour = Number(map.hour);
-    const minute = Number(map.minute);
-    const ymd = `${map.year}-${map.month}-${map.day}`;
-    return { day, hour, minute, ymd };
-  };
-
-  const s = getTzParts(startDate);
-  const e = getTzParts(endDate);
-  const startTime = s.hour + s.minute / 60;
-  const endTime = e.hour + e.minute / 60;
+  const s = getLibraryTimeParts(startDate);
+  const e = getLibraryTimeParts(endDate);
+  if (!s || !e) {
+    errors.push("Invalid date provided.");
+    return errors;
+  }
+  const startTime = Number(s.hour) + Number(s.minute) / 60;
+  const endTime = Number(e.hour) + Number(e.minute) / 60;
 
   // Monday - Friday: 7:00 AM - 10:00 PM
-  if (s.day >= 1 && s.day <= 5) {
+  if (s.weekdayIndex >= 1 && s.weekdayIndex <= 5) {
     if (startTime < 7 || startTime >= 22) {
       errors.push("Monday-Friday library hours are 7:00 AM - 10:00 PM. Start time is outside these hours.");
     }
   }
-  if (e.day >= 1 && e.day <= 5) {
+  if (e.weekdayIndex >= 1 && e.weekdayIndex <= 5) {
     if (endTime > 22) {
       errors.push("Monday-Friday library hours are 7:00 AM - 10:00 PM. End time is outside these hours.");
     }
   }
 
   // Saturday: 9:00 AM - 8:00 PM
-  if (s.day === 6) {
+  if (s.weekdayIndex === 6) {
     if (startTime < 9 || startTime >= 20) {
       errors.push("Saturday library hours are 9:00 AM - 8:00 PM. Start time is outside these hours.");
     }
   }
-  if (e.day === 6) {
+  if (e.weekdayIndex === 6) {
     if (endTime > 20) {
       errors.push("Saturday library hours are 9:00 AM - 8:00 PM. End time is outside these hours.");
     }
   }
 
   // Sunday: 10:00 AM - 6:00 PM
-  if (s.day === 0) {
+  if (s.weekdayIndex === 0) {
     if (startTime < 10 || startTime >= 18) {
       errors.push("Sunday library hours are 10:00 AM - 6:00 PM. Start time is outside these hours.");
     }
   }
-  if (e.day === 0) {
+  if (e.weekdayIndex === 0) {
     if (endTime > 18) {
       errors.push("Sunday library hours are 10:00 AM - 6:00 PM. End time is outside these hours.");
     }
@@ -238,7 +274,7 @@ export const createReservationSelf = (JWT_SECRET) => async (req, res) => {
     return sendJSON(res, 201, { reservation_id: result.insertId, ok: true });
   } catch (err) {
     console.error("Create self reservation failed:", err);
-    return sendJSON(res, 500, { error: "reservation_failed", details: err.message });
+    return sendJSON(res, 500, { error: "reservation_failed", message: err.message });
   }
 };
 
