@@ -132,7 +132,7 @@ export default function Books() {
   async function checkoutCopy(copy_id) {
     setCheckoutLoading(true);
     try {
-      await apiWithAuth("loans/checkout", {
+      await apiWithAuth("loans/request", {
         method: "POST",
         body: { copy_id, user_id: user?.user_id, identifier_type: "copy_id" },
       });

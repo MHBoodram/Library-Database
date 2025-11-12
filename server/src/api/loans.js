@@ -46,23 +46,222 @@ export const checkout = (JWT_SECRET) => async (req, res) => {
   }
 };
 
-// Patrons submit a checkout request instead of immediate checkout
-export const requestCheckout = (JWT_SECRET) => async (req, res) => {
+export const reqCheckout = (JWT_SECRET) => async (req, res) => {
   const auth = requireAuth(req, res, JWT_SECRET); if (!auth) return;
   const b = await readJSONBody(req);
-  const user_id = Number(auth.uid || auth.user_id);
-  const copy_id = Number(b.copy_id);
-  if (!user_id || !copy_id) {
-    return sendJSON(res, 400, { error: "invalid_payload", message: "copy_id is required" });
+  const user_id = Number(b.user_id || auth.user_id);
+  const identifierType = (b.identifier_type || "").toString().trim().toLowerCase();
+  const explicitMode = identifierType === "barcode" ? "barcode" : identifierType === "copy_id" ? "copy_id" : null;
+  const copyIdInput = Number(b.copy_id);
+  const barcodeInput = typeof b.barcode === "string" ? b.barcode.trim() : "";
+  const employee_id = Number(b.employee_id) || null;
+
+  if (!user_id) {
+    return sendJSON(res, 400, { error:"invalid_payload", message: "User ID is required." });
   }
+
+  const mode = explicitMode || (copyIdInput ? "copy_id" : barcodeInput ? "barcode" : "copy_id");
+  if (mode === "copy_id" && (!Number.isInteger(copyIdInput) || copyIdInput <= 0)) {
+    return sendJSON(res, 400, { error:"invalid_payload", message: "Valid copy_id is required." });
+  }
+  if (mode === "barcode" && !barcodeInput) {
+    return sendJSON(res, 400, { error:"invalid_payload", message: "Barcode is required." });
+  }
+
   try {
-    const sql = `INSERT INTO transaction (loan_id, user_id, employee_id, copy_id, type, date)
-                 VALUES (NULL, ?, NULL, ?, 'checkout_request', NOW())`;
-    await pool.query(sql, [user_id, copy_id]);
-    return sendJSON(res, 201, { ok: true });
+    const result = await requestCheckout({
+      user_id,
+      copy_id: mode === "copy_id" ? copyIdInput : null,
+      barcode: mode === "barcode" ? barcodeInput : "",
+      employee_id,
+    });
+    return sendJSON(res, 201, {
+      ok: true,
+      loan_id: result.loan_id,
+      due_date: result.due_date,
+      policy_id: result.policy?.policy_id ?? null,
+      policy_media_type: result.policy?.media_type ?? null,
+    });
+  } catch (e) {
+    if (e?.appCode) {
+      return sendJSON(res, e.status || 400, { error: e.appCode, message: e.message });
+    }
+    console.error("Checkout failed:", e);
+    return sendJSON(res, 400, { error: "checkout_failed", details: e.message });
+  }
+};
+
+// Patrons submit a checkout request instead of immediate checkout
+async function requestCheckout({ user_id, copy_id, barcode, employee_id }) {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const [userRows] = await conn.query(
+      `
+        SELECT
+          u.user_id,
+          COALESCE(a.role, 'student') AS account_role
+        FROM user u
+        LEFT JOIN account a ON a.user_id = u.user_id
+        WHERE u.user_id = ?
+        ORDER BY a.account_id ASC
+        LIMIT 1
+      `,
+      [user_id]
+    );
+    if (!userRows.length) {
+      throw createAppError("user_not_found", "User not found.", 404);
+    }
+    const accountRole = (userRows[0]?.account_role || "student").toLowerCase();
+    const isFaculty = accountRole === "faculty";
+    const userCategory = isFaculty ? "faculty" : "student";
+    const loanLimit = determineLoanLimit(accountRole);
+
+    const [loanCountRows] = await conn.query(
+      `
+        SELECT COUNT(*) AS active_loans
+        FROM loan
+        WHERE user_id = ? AND status = 'active'
+      `,
+      [user_id]
+    );
+    const activeLoans = Number(loanCountRows[0]?.active_loans ?? 0);
+    if (activeLoans >= loanLimit) {
+      throw createAppError(
+        "loan_limit_exceeded",
+        `Patron already has ${activeLoans} active or pending loan(s); limit is ${loanLimit}.`,
+        409
+      );
+    }
+
+    let resolvedCopyId = Number(copy_id) || null;
+    let copy = null;
+    if (!resolvedCopyId && barcode) {
+      const [copyLookup] = await conn.query(
+        `
+          SELECT copy_id, status, item_id
+          FROM copy
+          WHERE barcode = ?
+          FOR UPDATE
+        `,
+        [barcode]
+      );
+      if (!copyLookup.length) {
+        throw createAppError("copy_not_found", "Copy barcode not found.", 404);
+      }
+      resolvedCopyId = Number(copyLookup[0].copy_id);
+      copy = copyLookup[0];
+    }
+
+    if (!resolvedCopyId) {
+      throw createAppError("invalid_payload", "Copy identifier is required.", 400);
+    }
+
+    if (!copy) {
+      const [copyRows] = await conn.query(
+        `
+          SELECT c.copy_id, c.status, c.item_id
+          FROM copy c
+          WHERE c.copy_id = ?
+          FOR UPDATE
+        `,
+        [resolvedCopyId]
+      );
+      if (!copyRows.length) {
+        throw createAppError("copy_not_found", "Copy not found.", 404);
+      }
+      copy = copyRows[0];
+    }
+    if (copy.status !== "available") {
+      throw createAppError(
+        "copy_not_available", 
+        `Copy is not currently available for checkout. Current status: ${copy.status}`, 
+        409
+      );
+    }
+
+    const policy = await resolvePolicy(conn, copy.item_id, userCategory);
+    const loanDays = Number(policy?.loan_days) || defaultLoanDays(accountRole);
+    const dueDate = getDueDateISO(loanDays);
+
+    let insertResult;
+    try {
+      // Preferred: insert with policy + snapshot columns
+      const [res] = await conn.execute(
+        `
+          INSERT INTO loan (
+            user_id,
+            copy_id,
+            employee_id,
+            policy_id,
+            checkout_date,
+            due_date,
+            status,
+            daily_fine_rate_snapshot,
+            grace_days_snapshot,
+            max_fine_snapshot,
+            replacement_fee_snapshot
+          )
+          VALUES (
+            ?, ?, ?, ?, NOW(), ?, 'pending', ?, ?, ?, ?
+          )
+        `,
+        [
+          user_id,
+          resolvedCopyId,
+          employee_id,
+          policy?.policy_id ?? null,
+          dueDate,
+          policy?.daily_rate ?? null,
+          policy?.grace_days ?? null,
+          policy?.max_fine ?? null,
+          policy?.replacement_fee ?? null,
+        ]
+      );
+      insertResult = res;
+    } catch (e) {
+      // Fallback for legacy schemas without policy/snapshot columns
+      const msg = String(e?.message || "");
+      if (e?.code === 'ER_BAD_FIELD_ERROR' || /Unknown column/.test(msg)) {
+        const [res] = await conn.execute(
+          `
+            INSERT INTO loan (
+              user_id,
+              copy_id,
+              employee_id,
+              checkout_date,
+              due_date,
+              status
+            ) VALUES (
+              ?, ?, ?, NOW(), ?, 'pending'
+            )
+          `,
+          [user_id, resolvedCopyId, employee_id, dueDate]
+        );
+        insertResult = res;
+      } else {
+        throw e;
+      }
+    }
+
+    await conn.execute(
+      "UPDATE copy SET status='on_loan' WHERE copy_id=?",
+      [resolvedCopyId]
+    );
+
+    await conn.commit();
+
+    return {
+      loan_id: insertResult.insertId,
+      due_date: dueDate,
+      policy,
+    };
   } catch (err) {
-    console.error("checkout request failed:", err.message);
-    return sendJSON(res, 500, { error: "checkout_request_failed" });
+    try { await conn.rollback(); } catch {}
+    throw err;
+  } finally {
+    conn.release();
   }
 };
 
