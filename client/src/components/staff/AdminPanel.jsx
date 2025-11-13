@@ -9,6 +9,9 @@ const DEFAULT_ADMIN_FORM = {
   last_name: "",
   email: "",
   password: "",
+  date_of_birth: "",
+  address: "",
+  phone_number: "",
   account_type: "employee",
   account_role: "student",
   employee_role: "assistant",
@@ -177,6 +180,9 @@ export default function AdminPanel({ api }) {
         account_type: accountType,
         account_role: form.account_role,
       };
+      if (form.date_of_birth) payload.date_of_birth = form.date_of_birth;
+      if (form.phone_number.trim()) payload.phone_number = form.phone_number.trim();
+      if (form.address.trim()) payload.address = form.address.trim();
       if (accountType === "employee") payload.employee_role = form.employee_role;
 
       await api("admin/accounts", { method: "POST", body: payload });
@@ -409,6 +415,40 @@ export default function AdminPanel({ api }) {
                 value={form.email}
                 onChange={(e) => updateForm("email", e.target.value)}
                 required
+              />
+            </label>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <label className="text-sm text-gray-600">
+                Day of birth
+                <input
+                  type="date"
+                  className="mt-1 w-full rounded-md border px-3 py-2"
+                  value={form.date_of_birth}
+                  onChange={(e) => updateForm("date_of_birth", e.target.value)}
+                  placeholder="YYYY-MM-DD"
+                  max={new Date().toISOString().slice(0, 10)}
+                />
+              </label>
+              <label className="text-sm text-gray-600">
+                Phone number
+                <input
+                  type="tel"
+                  className="mt-1 w-full rounded-md border px-3 py-2"
+                  value={form.phone_number}
+                  onChange={(e) => updateForm("phone_number", e.target.value)}
+                  placeholder="(555) 123-4567"
+                />
+              </label>
+            </div>
+
+            <label className="text-sm text-gray-600">
+              Address
+              <textarea
+                className="mt-1 w-full rounded-md border px-3 py-2 min-h-[96px] resize-y"
+                value={form.address}
+                onChange={(e) => updateForm("address", e.target.value)}
+                placeholder="Street, City, State, ZIP"
               />
             </label>
 
