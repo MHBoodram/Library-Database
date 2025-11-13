@@ -1461,11 +1461,11 @@ export default function ReportsPanel({ api }) {
 
           {activeReport === 'overdue' && (
             <div className="space-y-3">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div className="rounded-md border bg-white p-3 text-sm"><div className="text-gray-500">Total Overdue</div><div className="text-xl font-semibold">{overdueKPIs?.total || 0}</div></div>
-                <div className="rounded-md border bg-white p-3 text-sm"><div className="text-gray-500">Distinct Borrowers</div><div className="text-xl font-semibold">{overdueKPIs?.uniqueBorrowers || 0}</div></div>
-                <div className="rounded-md border bg-white p-3 text-sm"><div className="text-gray-500">Avg Days</div><div className="text-xl font-semibold">{overdueKPIs?.avg ?? 0}</div></div>
-                <div className="rounded-md border bg-white p-3 text-sm"><div className="text-gray-500">Median / Max</div><div className="text-xl font-semibold">{overdueKPIs?.med ?? 0} / {overdueKPIs?.max ?? 0}</div></div>
+              <div className="flex justify-between gap-3">
+                <div className="rounded-md border bg-white p-3 text-sm flex-1"><div className="text-gray-500 whitespace-nowrap">Total Overdue</div><div className="text-xl font-semibold">{overdueKPIs?.total || 0}</div></div>
+                <div className="rounded-md border bg-white p-3 text-sm flex-1"><div className="text-gray-500 whitespace-nowrap">Distinct Borrowers</div><div className="text-xl font-semibold">{overdueKPIs?.uniqueBorrowers || 0}</div></div>
+                <div className="rounded-md border bg-white p-3 text-sm flex-1"><div className="text-gray-500 whitespace-nowrap">Avg Days</div><div className="text-xl font-semibold">{overdueKPIs?.avg ?? 0}</div></div>
+                <div className="rounded-md border bg-white p-3 text-sm flex-1"><div className="text-gray-500 whitespace-nowrap">Median / Max</div><div className="text-xl font-semibold whitespace-nowrap">{overdueKPIs?.med ?? 0} / {overdueKPIs?.max ?? 0}</div></div>
               </div>
               <div className="text-sm text-gray-700">
                 {overdueFilteredRows.length === 0 ? (
