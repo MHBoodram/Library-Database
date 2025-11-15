@@ -1230,11 +1230,12 @@ export default function ReportsPanel({ api }) {
             )}
             {activeReport === "transactions" && (
               <div className="flex justify-end">
-                <div className="w-full md:w-72">
+                <div className="w-full">
                   <div className="rounded-md border bg-white p-3 space-y-3">
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-2">Event Type</label>
-                      <div className="grid grid-cols-4 gap-2">
+                      <div className="relative">
+                        <div className="flex gap-3 flex-wrap" style={{ paddingBottom: 6 }}>
                         {['requested','approved','rejected','returned'].map(t => (
                           <label key={t} className="inline-flex items-center gap-1.5 text-xs cursor-pointer">
                             <input 
@@ -1246,11 +1247,13 @@ export default function ReportsPanel({ api }) {
                             <span className="capitalize">{t}</span>
                           </label>
                         ))}
+                        </div>
                       </div>
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-2">Current Status</label>
-                      <div className="grid grid-cols-4 gap-2">
+                      <div className="relative">
+                        <div className="flex gap-3 flex-wrap" style={{ paddingBottom: 6 }}>
                         {['Pending','Approved & Active','Rejected','Returned'].map(s => (
                           <label key={s} className="inline-flex items-center gap-1.5 text-xs cursor-pointer">
                             <input 
@@ -1262,6 +1265,7 @@ export default function ReportsPanel({ api }) {
                             <span>{s}</span>
                           </label>
                         ))}
+                        </div>
                       </div>
                     </div>
                     <div>
@@ -1501,33 +1505,33 @@ export default function ReportsPanel({ api }) {
               {activeReport === "transactions" && (
                 <>
                   {transactionsFilteredRows.length > 0 ? (
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 border-b bg-gray-50">
-                      <div className="rounded-md border bg-white p-3">
-                        <div className="text-xs text-gray-600">Requests</div>
+                    <div className="flex justify-between gap-3 p-4 border-b bg-gray-50 overflow-x-auto">
+                      <div className="rounded-md border bg-white p-3 text-center flex-1 min-w-0">
+                        <div className="text-xs text-gray-600 whitespace-nowrap">Requests</div>
                         <div className="text-xl font-semibold">{transactionsKPIs?.requests ?? 0}</div>
                       </div>
-                      <div className="rounded-md border bg-white p-3">
-                        <div className="text-xs text-gray-600">Approvals</div>
+                      <div className="rounded-md border bg-white p-3 text-center flex-1 min-w-0">
+                        <div className="text-xs text-gray-600 whitespace-nowrap">Approvals</div>
                         <div className="text-xl font-semibold">{transactionsKPIs?.approvals ?? 0}</div>
                       </div>
-                      <div className="rounded-md border bg-white p-3">
-                        <div className="text-xs text-gray-600">Rejections</div>
+                      <div className="rounded-md border bg-white p-3 text-center flex-1 min-w-0">
+                        <div className="text-xs text-gray-600 whitespace-nowrap">Rejections</div>
                         <div className="text-xl font-semibold">{transactionsKPIs?.rejections ?? 0}</div>
                       </div>
-                      <div className="rounded-md border bg-white p-3">
-                        <div className="text-xs text-gray-600">Approval Rate</div>
+                      <div className="rounded-md border bg-white p-3 text-center flex-1 min-w-0">
+                        <div className="text-xs text-gray-600 whitespace-nowrap">Approval Rate</div>
                         <div className="text-xl font-semibold">{Math.round((transactionsKPIs?.approvalRate || 0)*100)}%</div>
                       </div>
-                      <div className="rounded-md border bg-white p-3">
-                        <div className="text-xs text-gray-600">Avg Time → Approval</div>
+                      <div className="rounded-md border bg-white p-3 text-center flex-1 min-w-0">
+                        <div className="text-xs text-gray-600 whitespace-nowrap">Avg Time → Approval</div>
                         <div className="text-sm font-medium">{transactionsKPIs?.avgTimeToApprovalH ?? 0} h (med {transactionsKPIs?.medTimeToApprovalH ?? 0} h, p90 {transactionsKPIs?.p90TimeToApprovalH ?? 0} h)</div>
                       </div>
-                      <div className="rounded-md border bg-white p-3">
-                        <div className="text-xs text-gray-600">Avg Time → Return</div>
+                      <div className="rounded-md border bg-white p-3 text-center flex-1 min-w-0">
+                        <div className="text-xs text-gray-600 whitespace-nowrap">Avg Time → Return</div>
                         <div className="text-sm font-medium">{transactionsKPIs?.avgTimeToReturnH ?? 0} h</div>
                       </div>
-                      <div className="rounded-md border bg-white p-3">
-                        <div className="text-xs text-gray-600">Pending Queue</div>
+                      <div className="rounded-md border bg-white p-3 text-center flex-1 min-w-0">
+                        <div className="text-xs text-gray-600 whitespace-nowrap">Pending Queue</div>
                         <div className="text-xl font-semibold">{transactionsKPIs?.pendingQueue ?? 0}</div>
                       </div>
                     </div>
