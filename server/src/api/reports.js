@@ -688,6 +688,11 @@ export const listTransactions = (JWT_SECRET) => async (req, res) => {
 
     const conditions = [];
     const params = [];
+    // Pagination
+    const pageParam = Number(url.searchParams.get("page") || 1);
+    const pageSizeParam = Number(url.searchParams.get("pageSize") || 50);
+    const page = Number.isFinite(pageParam) && pageParam > 0 ? Math.max(1, Math.floor(pageParam)) : 1;
+    const pageSize = Number.isFinite(pageSizeParam) && pageSizeParam > 0 ? Math.min(500, Math.floor(pageSizeParam)) : 50;
 
     // date range
     conditions.push("t.date BETWEEN ? AND ?");
@@ -757,7 +762,7 @@ export const listTransactions = (JWT_SECRET) => async (req, res) => {
     if (statusesParam) {
       statusList = statusesParam.split(',').map(s => s.trim()).filter(Boolean);
       if (statusList.length) {
-        conditions.push("(ls.current_status IS NOT NULL AND ls.current_status IN (" + statusList.map(()=>'?').join(',') + "))");
+        conditions.push("(ls.current_status IS NOT NULL AND ls.current_status COLLATE utf8mb4_unicode_ci IN (" + statusList.map(()=>'?').join(',') + "))");
         params.push(...statusList);
       }
     }
@@ -788,11 +793,23 @@ export const listTransactions = (JWT_SECRET) => async (req, res) => {
       ${latestStatusJoin}
       ${whereClause}
       ORDER BY t.\`date\` DESC, t.transaction_id DESC
-      LIMIT 500
+      LIMIT ? OFFSET ?
     `;
     try {
-      const [rows] = await pool.query(sql, params);
-      return sendJSON(res, 200, rows);
+      // total count for pagination
+      const countSql = `SELECT COUNT(*) AS total
+        FROM \`transaction\` t
+        JOIN user u     ON u.user_id = t.user_id
+        JOIN copy c     ON c.copy_id = t.copy_id
+        JOIN item i     ON i.item_id = c.item_id
+        LEFT JOIN employee e ON e.employee_id = t.employee_id
+        ${latestStatusJoin}
+        ${whereClause}`;
+      const [[countRow]] = await pool.query(countSql, params);
+      const total = Number(countRow?.total || 0);
+      const offset = (page - 1) * pageSize;
+      const [rows] = await pool.query(sql, [...params, pageSize, offset]);
+      return sendJSON(res, 200, { rows, page, pageSize, total });
     } catch (e) {
       console.error('transactions main query failed, falling back:', e.message);
       // Fallback to simpler shape if some schemas differ
@@ -829,8 +846,14 @@ export const listTransactions = (JWT_SECRET) => async (req, res) => {
         LIMIT 500
       `;
       try {
-        const [rows] = await pool.query(fbSql, params);
-        return sendJSON(res, 200, rows);
+        // pagination-aware fallback
+        const countFallbackSql = `SELECT COUNT(*) AS total FROM ( ${fbSql.replace(/\n\s*ORDER BY[\s\S]*$/i, "").replace(/\n\s*LIMIT\s+500\s*$/i, "")} ) q`;
+        const [[countRow]] = await pool.query(countFallbackSql, params);
+        const total = Number(countRow?.total || 0);
+        const offset = (page - 1) * pageSize;
+        const pagedFbSql = fbSql.replace(/LIMIT\s+500\s*$/i, 'LIMIT ? OFFSET ?');
+        const [rows] = await pool.query(pagedFbSql, [...params, pageSize, offset]);
+        return sendJSON(res, 200, { rows, page, pageSize, total });
       } catch (e2) {
         console.error('transactions fallback (transaction table) failed, trying loans-only:', e2.message);
         // Loans-only fallback, extended to include pending requests as "requested",
@@ -927,8 +950,15 @@ export const listTransactions = (JWT_SECRET) => async (req, res) => {
           ORDER BY event_timestamp DESC
           LIMIT 500
         `;
-        const [rows] = await pool.query(loansSql, [startDate, endDate, startDate, endDate, startDate, endDate, startDate, endDate]);
-        return sendJSON(res, 200, rows);
+        // pagination for loans fallback
+        const baseLoansSql = loansSql.replace(/\n\s*ORDER BY[\s\S]*$/i, '');
+        const countLoansSql = `SELECT COUNT(*) AS total FROM ( ${baseLoansSql} ) q`;
+        const [[countLoans]] = await pool.query(countLoansSql, [startDate, endDate, startDate, endDate, startDate, endDate, startDate, endDate]);
+        const total = Number(countLoans?.total || 0);
+        const offset = (page - 1) * pageSize;
+        const pagedLoansSql = loansSql.replace(/LIMIT\s+500\s*$/i, 'LIMIT ? OFFSET ?');
+        const [rows] = await pool.query(pagedLoansSql, [startDate, endDate, startDate, endDate, startDate, endDate, startDate, endDate, pageSize, offset]);
+        return sendJSON(res, 200, { rows, page, pageSize, total });
       }
     }
   }catch (err) {
@@ -965,6 +995,11 @@ export const listTransactionsEvents = (JWT_SECRET) => async (req, res) => {
 
     const conditions = [];
     const params = [];
+    // Pagination
+    const pageParam = Number(url.searchParams.get("page") || 1);
+    const pageSizeParam = Number(url.searchParams.get("pageSize") || 50);
+    const page = Number.isFinite(pageParam) && pageParam > 0 ? Math.max(1, Math.floor(pageParam)) : 1;
+    const pageSize = Number.isFinite(pageSizeParam) && pageSizeParam > 0 ? Math.min(500, Math.floor(pageSizeParam)) : 50;
     // date range (end is exclusive to include entire day)
     conditions.push("(le.event_date >= ? AND le.event_date < DATE_ADD(?, INTERVAL 1 DAY))");
     params.push(startDate, endDate);
@@ -1033,12 +1068,13 @@ export const listTransactionsEvents = (JWT_SECRET) => async (req, res) => {
     if (statusesParam) {
       statusList = statusesParam.split(',').map(s => s.trim()).filter(Boolean);
       if (statusList.length) {
-        conditions.push("(ls.current_status IS NOT NULL AND ls.current_status IN (" + statusList.map(()=>'?').join(',') + "))");
+        conditions.push("(ls.current_status IS NOT NULL AND ls.current_status COLLATE utf8mb4_unicode_ci IN (" + statusList.map(()=>'?').join(',') + "))");
         params.push(...statusList);
       }
     }
 
     const whereClause = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+    const whereClauseNoStatus = conditions.length ? `WHERE ${conditions.filter(c => !c.includes('ls.current_status')).join(" AND ")}` : "";
     const sql = `
       SELECT
         le.event_id      AS transaction_id,
@@ -1064,12 +1100,24 @@ export const listTransactionsEvents = (JWT_SECRET) => async (req, res) => {
       ${latestStatusJoin}
       ${whereClause}
       ORDER BY le.\`event_date\` DESC, le.event_id DESC
-      LIMIT 500
+      LIMIT ? OFFSET ?
     `;
 
     try {
-      const [rows] = await pool.query(sql, params);
-      return sendJSON(res, 200, rows);
+      // Count total matching rows for pagination
+      const countSql = `SELECT COUNT(*) AS total 
+        FROM \`loan_events\` le
+        JOIN user u     ON u.user_id = le.user_id
+        JOIN copy c     ON c.copy_id = le.copy_id
+        JOIN item i     ON i.item_id = c.item_id
+        LEFT JOIN employee e ON e.employee_id = le.employee_id
+        ${latestStatusJoin}
+        ${whereClause}`;
+      const [[countRow]] = await pool.query(countSql, params);
+      const total = Number(countRow?.total || 0);
+      const offset = (page - 1) * pageSize;
+      const [rows] = await pool.query(sql, [...params, pageSize, offset]);
+      return sendJSON(res, 200, { rows, page, pageSize, total });
     } catch (e) {
       console.error('loan_events main query failed:', e.message);
       // Minimal fallback from loan_events without joins
@@ -1091,12 +1139,117 @@ export const listTransactionsEvents = (JWT_SECRET) => async (req, res) => {
           NULL AS item_title,
           NULL AS current_status
         FROM \`loan_events\` le
-        ${whereClause}
+        ${whereClauseNoStatus}
         ORDER BY le.\`event_date\` DESC, le.event_id DESC
         LIMIT 500
       `;
-      const [rows] = await pool.query(fb, params);
-      return sendJSON(res, 200, rows);
+      try {
+        const countFbSql = `SELECT COUNT(*) AS total FROM ( ${fb.replace(/\n\s*ORDER BY[\s\S]*$/i, '').replace(/\n\s*LIMIT\s+500\s*$/i, '')} ) q`;
+        const [[countFb]] = await pool.query(countFbSql, params);
+        const total = Number(countFb?.total || 0);
+        const offset = (page - 1) * pageSize;
+        const [rows] = await pool.query(fb.replace(/LIMIT\s+500\s*$/i, 'LIMIT ? OFFSET ?'), [...params, pageSize, offset]);
+        return sendJSON(res, 200, { rows, page, pageSize, total });
+      } catch (e2) {
+        console.error('loan_events fallback failed, switching to transaction table:', e2.message);
+        // Final fallback: use transaction table (same filters adapted)
+        const tEventTypeExpr = `CASE
+          WHEN t.\`type\` IN ('requested','checkout_request') THEN 'requested'
+          WHEN t.\`type\` IN ('approved','checkout_approved','checked_out') THEN 'approved'
+          WHEN t.\`type\` IN ('rejected','checkout_rejected') THEN 'rejected'
+          WHEN t.\`type\` IN ('returned','checkin','checked_in') THEN 'returned'
+          ELSE LOWER(t.\`type\`)
+        END`;
+        const tConditions = [];
+        const tParams = [];
+        tConditions.push("t.date BETWEEN ? AND ?");
+        tParams.push(startDate, endDate);
+        if (typesParam) {
+          const typeList = typesParam.split(',').map(s=>s.trim().toLowerCase()).filter(Boolean);
+          if (typeList.length) {
+            tConditions.push(`${tEventTypeExpr} IN (${typeList.map(()=>'?').join(',')})`);
+            tParams.push(...typeList);
+          }
+        }
+        if (staffParam) {
+          const isNumeric = /^\d+$/.test(staffParam);
+          if (isNumeric) { tConditions.push('t.employee_id = ?'); tParams.push(Number(staffParam)); }
+          else { tConditions.push("(CONCAT(COALESCE(e.first_name,''),' ',COALESCE(e.last_name,'')) LIKE ?)"); tParams.push(`%${staffParam}%`); }
+        }
+        if (qParam) {
+          const like = `%${qParam}%`;
+          tConditions.push("(u.email LIKE ? OR CONCAT(u.first_name,' ',u.last_name) LIKE ? OR i.title LIKE ? OR CAST(t.loan_id AS CHAR) LIKE ? OR CAST(t.copy_id AS CHAR) LIKE ?)");
+          tParams.push(like, like, like, like, like);
+        }
+        const tLatestStatusJoin = `
+          LEFT JOIN (
+            SELECT t2.loan_id,
+                   CASE
+                     WHEN t2.\`type\` IN ('requested','checkout_request') THEN 'Pending'
+                     WHEN t2.\`type\` IN ('approved','checkout_approved','checked_out') THEN 'Approved & Active'
+                     WHEN t2.\`type\` IN ('rejected','checkout_rejected') THEN 'Rejected'
+                     WHEN t2.\`type\` IN ('returned','checkin','checked_in') THEN 'Returned'
+                     ELSE '—'
+                   END AS current_status
+            FROM \`transaction\` t2
+            JOIN (
+              SELECT loan_id, MAX(\`date\`) AS max_date
+              FROM \`transaction\`
+              WHERE loan_id IS NOT NULL
+              GROUP BY loan_id
+            ) last ON last.loan_id = t2.loan_id AND t2.\`date\` = last.max_date
+          ) ls ON ls.loan_id = t.loan_id
+        `;
+        let tWhere = tConditions.length ? `WHERE ${tConditions.join(' AND ')}` : '';
+        // apply statuses filter based on derived latest status
+        if (statusesParam) {
+          const statusList = statusesParam.split(',').map(s=>s.trim()).filter(Boolean);
+          if (statusList.length) {
+            tWhere = (tWhere ? tWhere + ' AND ' : 'WHERE ') + '(ls.current_status IS NOT NULL AND ls.current_status COLLATE utf8mb4_unicode_ci IN (' + statusList.map(()=>'?').join(',') + '))';
+            tParams.push(...statusList);
+          }
+        }
+        const tCountSql = `SELECT COUNT(*) AS total
+          FROM \`transaction\` t
+          JOIN user u     ON u.user_id = t.user_id
+          JOIN copy c     ON c.copy_id = t.copy_id
+          JOIN item i     ON i.item_id = c.item_id
+          LEFT JOIN employee e ON e.employee_id = t.employee_id
+          ${tLatestStatusJoin}
+          ${tWhere}`;
+        const [[tCount]] = await pool.query(tCountSql, tParams);
+        const total = Number(tCount?.total || 0);
+        const offset = (page - 1) * pageSize;
+        const tSql = `
+          SELECT
+            t.transaction_id,
+            t.loan_id,
+            t.copy_id,
+            ${tEventTypeExpr} AS event_type,
+            t.\`date\`      AS event_timestamp,
+            t.\`type\`      AS raw_type,
+            u.user_id,
+            u.email        AS user_email,
+            u.first_name   AS user_first_name,
+            u.last_name    AS user_last_name,
+            e.employee_id,
+            e.first_name   AS employee_first_name,
+            e.last_name    AS employee_last_name,
+            i.title        AS item_title,
+            ls.current_status
+          FROM \`transaction\` t
+          JOIN user u     ON u.user_id = t.user_id
+          JOIN copy c     ON c.copy_id = t.copy_id
+          JOIN item i     ON i.item_id = c.item_id
+          LEFT JOIN employee e ON e.employee_id = t.employee_id
+          ${tLatestStatusJoin}
+          ${tWhere}
+          ORDER BY t.\`date\` DESC, t.transaction_id DESC
+          LIMIT ? OFFSET ?
+        `;
+        const [rows] = await pool.query(tSql, [...tParams, pageSize, offset]);
+        return sendJSON(res, 200, { rows, page, pageSize, total });
+      }
     }
   } catch (err) {
     console.error("Failed to load transactions (loan_events)", err.message);

@@ -722,6 +722,10 @@ export default function ReportsPanel({ api }) {
     return d.toISOString().slice(0, 10);
   });
   const [transactionsEndDate, setTransactionsEndDate] = useState(() => new Date().toISOString().slice(0, 10));
+  // Pagination for transactions
+  const [txPage, setTxPage] = useState(1);
+  const [txPageSize, setTxPageSize] = useState(50);
+  const [txTotal, setTxTotal] = useState(0);
   // Transactions filters
   const [txEventTypes, setTxEventTypes] = useState(['requested','approved','rejected','returned']);
   const [txStatuses, setTxStatuses] = useState(['Pending','Approved & Active','Rejected','Returned']);
@@ -790,6 +794,9 @@ export default function ReportsPanel({ api }) {
           endpoint = "reports/transactions";
           params.set("start_date", transactionsStartDate);
           params.set("end_date", transactionsEndDate);
+          // include pagination params
+          params.set('page', String(txPage));
+          params.set('pageSize', String(txPageSize));
           if (Array.isArray(txEventTypes) && txEventTypes.length) params.set('types', txEventTypes.join(','));
           if (Array.isArray(txStatuses) && txStatuses.length) params.set('statuses', txStatuses.join(','));
           if (txStaff) params.set('staff', String(txStaff));
@@ -806,8 +813,14 @@ export default function ReportsPanel({ api }) {
           userTypes: data?.filterOptions?.userTypes || [],
         });
         setReportData(Array.isArray(data?.tableRows) ? data.tableRows : []);
-      } else {
+        } else {
         const rows = Array.isArray(data?.rows) ? data.rows : (Array.isArray(data) ? data : []);
+          // Save pagination info for transactions
+          if (targetReport === 'transactions') {
+            setTxTotal(Number(data?.total || 0));
+            setTxPage(Number(data?.page || txPage));
+            setTxPageSize(Number(data?.pageSize || txPageSize));
+          }
         setReportData(rows);
       }
     } catch (err) {
@@ -815,7 +828,7 @@ export default function ReportsPanel({ api }) {
     } finally {
       setLoading(false);
     }
-  }, [api, activeReport, overdueStartDate, overdueEndDate, overdueBorrower, overdueGraceMode, overdueSortMode, balancesStartDate, balancesEndDate, topItemsStartDate, topItemsEndDate, newPatronsStartDate, newPatronsEndDate, newPatronsTimeframe, newPatronsUserTypes, transactionsStartDate, transactionsEndDate, txEventTypes, txStatuses, txStaff, txSearch]);
+  }, [api, activeReport, overdueStartDate, overdueEndDate, overdueBorrower, overdueGraceMode, overdueSortMode, balancesStartDate, balancesEndDate, topItemsStartDate, topItemsEndDate, newPatronsStartDate, newPatronsEndDate, newPatronsTimeframe, newPatronsUserTypes, transactionsStartDate, transactionsEndDate, txEventTypes, txStatuses, txStaff, txSearch, txPage, txPageSize]);
 
   // Derived media types from the currently loaded overdue dataset
   const mediaTypeOptions = useMemo(() => {
@@ -1232,6 +1245,16 @@ export default function ReportsPanel({ api }) {
               <div className="flex justify-end">
                 <div className="w-full">
                   <div className="rounded-md border bg-white p-3 space-y-3">
+                        <div className="flex gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
+                            <input type="date" value={transactionsStartDate} onChange={e=>setTransactionStartDate(e.target.value)} className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
+                            <input type="date" value={transactionsEndDate} onChange={e=>setTransactionsEndDate(e.target.value)} className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm" />
+                          </div>
+                        </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-2">Event Type</label>
                       <div className="relative">
@@ -1282,10 +1305,10 @@ export default function ReportsPanel({ api }) {
                       <input type="text" placeholder="Patron, item, Loan/Copy ID" value={txSearch} onChange={e=>setTxSearch(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm" />
                     </div>
                     <div className="pt-1 space-y-2">
-                      <button onClick={()=>loadReport('transactions')} disabled={loading} className="w-full px-3 py-2 rounded-md bg-gray-700 text-white text-sm font-medium hover:bg-gray-800 disabled:opacity-50">{loading ? 'Loading...' : 'Generate Report'}</button>
+                      <button onClick={()=>{setTxPage(1); loadReport('transactions');}} disabled={loading} className="w-full px-3 py-2 rounded-md bg-gray-700 text-white text-sm font-medium hover:bg-gray-800 disabled:opacity-50">{loading ? 'Loading...' : 'Generate Report'}</button>
                       <div className="flex gap-2">
-                        <button onClick={()=>{const d=new Date();const sd=new Date();sd.setFullYear(sd.getFullYear()-1);setTransactionStartDate(sd.toISOString().slice(0,10));setTransactionsEndDate(d.toISOString().slice(0,10));setTxEventTypes(['requested','approved','rejected','returned']);setTxStatuses(['Pending','Approved & Active','Rejected','Returned']);setTxStaff('');setTxSearch('');loadReport('transactions');}} disabled={loading} className="flex-1 px-3 py-2 rounded-md bg-gray-200 text-gray-800 text-sm font-medium hover:bg-gray-300 disabled:opacity-50">Reset</button>
-                        <button onClick={()=>{setTransactionStartDate('');setTransactionsEndDate('');setTxEventTypes(['requested','approved','rejected','returned']);setTxStatuses(['Pending','Approved & Active','Rejected','Returned']);setTxStaff('');setTxSearch('');loadReport('transactions');}} disabled={loading} className="flex-1 px-3 py-2 rounded-md bg-white border text-sm font-medium hover:bg-gray-50 disabled:opacity-50">Clear</button>
+                        <button onClick={()=>{const d=new Date();const sd=new Date();sd.setFullYear(sd.getFullYear()-1);setTransactionStartDate(sd.toISOString().slice(0,10));setTransactionsEndDate(d.toISOString().slice(0,10));setTxEventTypes(['requested','approved','rejected','returned']);setTxStatuses(['Pending','Approved & Active','Rejected','Returned']);setTxStaff('');setTxSearch('');setTxPage(1);loadReport('transactions');}} disabled={loading} className="flex-1 px-3 py-2 rounded-md bg-gray-200 text-gray-800 text-sm font-medium hover:bg-gray-300 disabled:opacity-50">Reset</button>
+                        <button onClick={()=>{setTransactionStartDate('');setTransactionsEndDate('');setTxEventTypes(['requested','approved','rejected','returned']);setTxStatuses(['Pending','Approved & Active','Rejected','Returned']);setTxStaff('');setTxSearch('');setTxPage(1);loadReport('transactions');}} disabled={loading} className="flex-1 px-3 py-2 rounded-md bg-white border text-sm font-medium hover:bg-gray-50 disabled:opacity-50">Clear</button>
                       </div>
                     </div>
                   </div>
@@ -1537,6 +1560,20 @@ export default function ReportsPanel({ api }) {
                     </div>
                   ) : null}
                   <TransactionReportTable data={transactionsFilteredRows} loading={loading} />
+                  <div className="p-4 flex items-center justify-between">
+                    <div className="text-sm text-gray-600">Showing {reportData.length} of {txTotal} events</div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => { setTxPage(p => { const np = Math.max(1, p - 1); setTimeout(()=>loadReport('transactions'), 0); return np; }); }} disabled={txPage <= 1} className="px-2 py-1 bg-gray-100 rounded disabled:opacity-50">Previous</button>
+                      <span className="text-sm text-gray-700">Page {txPage} of {Math.max(1, Math.ceil((txTotal || 0) / txPageSize))}</span>
+                      <button onClick={() => { setTxPage(p => { const np = p + 1; setTimeout(()=>loadReport('transactions'), 0); return np; }); }} disabled={txPage >= Math.ceil((txTotal || 0) / txPageSize)} className="px-2 py-1 bg-gray-100 rounded disabled:opacity-50">Next</button>
+                      <label className="text-sm text-gray-600">Per page:</label>
+                      <select value={txPageSize} onChange={(e) => { setTxPageSize(Number(e.target.value)); setTxPage(1); setTimeout(()=>loadReport('transactions'), 0); }} className="rounded-md border-2 px-2 py-1 text-sm">
+                        <option value={25}>25</option>
+                        <option value={50}>50</option>
+                        <option value={100}>100</option>
+                      </select>
+                    </div>
+                  </div>
                 </>
               )}
             </div>
