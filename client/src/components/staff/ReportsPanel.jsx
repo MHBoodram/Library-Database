@@ -671,6 +671,7 @@ export default function ReportsPanel({ api }) {
   const [overdueMediaType, setOverdueMediaType] = useState("all");
   const [overdueGraceMode, setOverdueGraceMode] = useState('all'); // beyond | within | all
   const [overdueSortMode, setOverdueSortMode] = useState('most'); // most | least
+  const [overdueHasGenerated, setOverdueHasGenerated] = useState(false);
 
   // Fines report state
   const [finesStartDate, setFinesStartDate] = useState(() => {
@@ -726,6 +727,7 @@ export default function ReportsPanel({ api }) {
   const [txPage, setTxPage] = useState(1);
   const [txPageSize, setTxPageSize] = useState(50);
   const [txTotal, setTxTotal] = useState(0);
+  const [txHasGenerated, setTxHasGenerated] = useState(false);
   // Transactions filters
   const [txEventTypes, setTxEventTypes] = useState(['requested','approved','rejected','returned']);
   const [txStatuses, setTxStatuses] = useState(['Pending','Approved & Active','Rejected','Returned']);
@@ -739,7 +741,18 @@ export default function ReportsPanel({ api }) {
     )
   );
 
-  const loadReport = useCallback(async (reportType) => {
+  const overdueFilterKey = [
+    overdueStartDate,
+    overdueEndDate,
+    overdueBorrower,
+    overduePatronId,
+    overdueMinDays,
+    overdueMediaType,
+    overdueGraceMode,
+    overdueSortMode,
+  ].join("|");
+
+  const loadReport = useCallback(async (reportType, overrides = {}) => {
     if (!api) return;
     const targetReport = reportType || activeReport;
     setLoading(true);
@@ -748,6 +761,9 @@ export default function ReportsPanel({ api }) {
     if (targetReport === "newPatrons") {
       setNewPatronsReport(null);
     }
+
+    let requestedTxPage = txPage;
+    let requestedTxPageSize = txPageSize;
 
     try {
       let endpoint = "";
@@ -791,17 +807,23 @@ export default function ReportsPanel({ api }) {
           }
           break;
         case "transactions":
+          {
           endpoint = "reports/transactions";
           params.set("start_date", transactionsStartDate);
           params.set("end_date", transactionsEndDate);
           // include pagination params
-          params.set('page', String(txPage));
-          params.set('pageSize', String(txPageSize));
+          const overridePage = Number(overrides.txPage);
+          const overridePageSize = Number(overrides.txPageSize);
+          requestedTxPage = Number.isFinite(overridePage) && overridePage > 0 ? overridePage : txPage;
+          requestedTxPageSize = Number.isFinite(overridePageSize) && overridePageSize > 0 ? overridePageSize : txPageSize;
+          params.set('page', String(requestedTxPage));
+          params.set('pageSize', String(requestedTxPageSize));
           if (Array.isArray(txEventTypes) && txEventTypes.length) params.set('types', txEventTypes.join(','));
           if (Array.isArray(txStatuses) && txStatuses.length) params.set('statuses', txStatuses.join(','));
           if (txStaff) params.set('staff', String(txStaff));
           if ((txSearch||'').trim()) params.set('q', (txSearch||'').trim());
           break;
+          }
         default:
           throw new Error("Unknown report type");
       }
@@ -817,14 +839,26 @@ export default function ReportsPanel({ api }) {
         const rows = Array.isArray(data?.rows) ? data.rows : (Array.isArray(data) ? data : []);
           // Save pagination info for transactions
           if (targetReport === 'transactions') {
+            const incomingPage = Number(data?.page);
+            const incomingPageSize = Number(data?.pageSize);
+            const safePage = Number.isFinite(incomingPage) && incomingPage > 0 ? incomingPage : requestedTxPage;
+            const safePageSize = Number.isFinite(incomingPageSize) && incomingPageSize > 0 ? incomingPageSize : requestedTxPageSize;
             setTxTotal(Number(data?.total || 0));
-            setTxPage(Number(data?.page || txPage));
-            setTxPageSize(Number(data?.pageSize || txPageSize));
+            setTxPage(safePage);
+            setTxPageSize(safePageSize);
+            setTxHasGenerated(true);
+          } else if (targetReport === 'overdue') {
+            setOverdueHasGenerated(true);
           }
         setReportData(rows);
       }
     } catch (err) {
       setError(err.message || "Failed to load report");
+      if (targetReport === 'transactions') {
+        setTxHasGenerated(false);
+      } else if (targetReport === 'overdue') {
+        setOverdueHasGenerated(false);
+      }
     } finally {
       setLoading(false);
     }
@@ -849,6 +883,7 @@ export default function ReportsPanel({ api }) {
   // Client-side filtering for min days, media type and partial patron id
   const overdueFilteredRows = useMemo(() => {
     if (activeReport !== 'overdue') return reportData || [];
+    if (!overdueHasGenerated) return [];
     const pidFilter = overduePatronId.trim();
     const pidActive = pidFilter.length > 0;
     const pidLower = pidFilter.toLowerCase();
@@ -860,11 +895,11 @@ export default function ReportsPanel({ api }) {
       const pidOk = !pidActive || String(r.patron_id ?? r.user_id ?? '').toLowerCase().includes(pidLower);
       return daysOk && mtOk && pidOk;
     });
-  }, [activeReport, reportData, overdueMinDays, overdueMediaType, overduePatronId]);
+  }, [activeReport, reportData, overdueMinDays, overdueMediaType, overduePatronId, overdueHasGenerated]);
 
   // KPI calculations for overdue
   const overdueKPIs = useMemo(() => {
-    if (activeReport !== 'overdue') return null;
+    if (activeReport !== 'overdue' || !overdueHasGenerated) return null;
     const rows = overdueFilteredRows;
     const total = rows.length;
     const uniqueBorrowers = new Set(rows.map(r => String(r.patron_id ?? r.user_id))).size;
@@ -873,12 +908,12 @@ export default function ReportsPanel({ api }) {
     const med = total ? (days[Math.floor((total-1)/2)] + days[Math.ceil((total-1)/2)]) / 2 : 0;
     const max = total ? days[total-1] : 0;
     return { total, uniqueBorrowers, avg: Number(avg.toFixed(1)), med, max };
-  }, [activeReport, overdueFilteredRows]);
+  }, [activeReport, overdueFilteredRows, overdueHasGenerated]);
 
   // Transactions filtering and KPIs
   const transactionsFilteredRows = useMemo(() => {
     const sourceRows = Array.isArray(reportData) ? reportData : [];
-    if (activeReport !== 'transactions') return sourceRows;
+    if (activeReport !== 'transactions' || !txHasGenerated) return sourceRows;
     const types = new Set(txEventTypes);
     const statuses = new Set(txStatuses);
     const staffId = txStaff ? String(txStaff) : '';
@@ -896,10 +931,10 @@ export default function ReportsPanel({ api }) {
       const hit = patron.includes(q) || email.includes(q) || title.includes(q) || loan.includes(q) || copy.includes(q);
       return typeOk && statusOk && staffOk && hit;
     });
-  }, [activeReport, reportData, txEventTypes, txStatuses, txStaff, txSearch]);
+  }, [activeReport, reportData, txEventTypes, txStatuses, txStaff, txSearch, txHasGenerated]);
 
   const transactionsKPIs = useMemo(() => {
-    if (activeReport !== 'transactions') return null;
+    if (activeReport !== 'transactions' || !txHasGenerated) return null;
     const rows = transactionsFilteredRows;
     const requests = rows.filter(r => r.event_type === 'requested');
     const byLoan = new Map();
@@ -951,7 +986,7 @@ export default function ReportsPanel({ api }) {
       avgTimeToReturnH: msToHours(avg(ttr)),
       pendingQueue,
     };
-  }, [activeReport, transactionsFilteredRows]);
+  }, [activeReport, transactionsFilteredRows, txHasGenerated]);
 
   // Fines filtering and KPIs
   // Legacy fines filtering/KPIs removed until the fines report is re-enabled
@@ -997,7 +1032,8 @@ export default function ReportsPanel({ api }) {
     setOverdueMinDays(1);
     setOverdueMediaType('all');
   // no-op: borrowers view removed
-    loadReport('overdue');
+    setOverdueHasGenerated(false);
+    setReportData([]);
   }
 
   function onClear() {
@@ -1008,7 +1044,8 @@ export default function ReportsPanel({ api }) {
     setOverdueMinDays(0);
     setOverdueMediaType('all');
   // no-op: borrowers view removed
-    loadReport('overdue');
+    setOverdueHasGenerated(false);
+    setReportData([]);
   }
 
   const handleUserTypeToggle = (type) => {
@@ -1028,8 +1065,39 @@ export default function ReportsPanel({ api }) {
   }
 
   useEffect(() => {
+    if (activeReport === "transactions" || activeReport === "overdue") return;
     loadReport(activeReport);
   }, [activeReport, loadReport]);
+
+  useEffect(() => {
+    if (activeReport !== "transactions") return;
+    setReportData([]);
+    setTxTotal(0);
+    setTxHasGenerated(false);
+    setTxPage(1);
+  }, [activeReport]);
+
+  useEffect(() => {
+    if (activeReport !== "transactions") return;
+    if (!txHasGenerated) return;
+    setTxHasGenerated(false);
+    setReportData([]);
+    setTxTotal(0);
+    setTxPage(1);
+  }, [activeReport, transactionsStartDate, transactionsEndDate, txEventTypes, txStatuses, txStaff, txSearch]);
+
+  useEffect(() => {
+    if (activeReport !== "overdue") return;
+    setReportData([]);
+    setOverdueHasGenerated(false);
+  }, [activeReport]);
+
+  useEffect(() => {
+    if (activeReport !== "overdue") return;
+    if (!overdueHasGenerated) return;
+    setOverdueHasGenerated(false);
+    setReportData([]);
+  }, [activeReport, overdueFilterKey]);
 
   // handleRefresh removed (unused)
 
@@ -1305,10 +1373,59 @@ export default function ReportsPanel({ api }) {
                       <input type="text" placeholder="Patron, item, Loan/Copy ID" value={txSearch} onChange={e=>setTxSearch(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm" />
                     </div>
                     <div className="pt-1 space-y-2">
-                      <button onClick={()=>{setTxPage(1); loadReport('transactions');}} disabled={loading} className="w-full px-3 py-2 rounded-md bg-gray-700 text-white text-sm font-medium hover:bg-gray-800 disabled:opacity-50">{loading ? 'Loading...' : 'Generate Report'}</button>
+                      <button
+                        onClick={() => {
+                          const targetPage = 1;
+                          if (txPage !== targetPage) {
+                            setTxPage(targetPage);
+                          }
+                          loadReport("transactions", { txPage: targetPage, txPageSize });
+                        }}
+                        disabled={loading}
+                        className="w-full px-3 py-2 rounded-md bg-gray-700 text-white text-sm font-medium hover:bg-gray-800 disabled:opacity-50"
+                      >
+                        {loading ? "Loading..." : "Generate Report"}
+                      </button>
                       <div className="flex gap-2">
-                        <button onClick={()=>{const d=new Date();const sd=new Date();sd.setFullYear(sd.getFullYear()-1);setTransactionStartDate(sd.toISOString().slice(0,10));setTransactionsEndDate(d.toISOString().slice(0,10));setTxEventTypes(['requested','approved','rejected','returned']);setTxStatuses(['Pending','Approved & Active','Rejected','Returned']);setTxStaff('');setTxSearch('');setTxPage(1);loadReport('transactions');}} disabled={loading} className="flex-1 px-3 py-2 rounded-md bg-gray-200 text-gray-800 text-sm font-medium hover:bg-gray-300 disabled:opacity-50">Reset</button>
-                        <button onClick={()=>{setTransactionStartDate('');setTransactionsEndDate('');setTxEventTypes(['requested','approved','rejected','returned']);setTxStatuses(['Pending','Approved & Active','Rejected','Returned']);setTxStaff('');setTxSearch('');setTxPage(1);loadReport('transactions');}} disabled={loading} className="flex-1 px-3 py-2 rounded-md bg-white border text-sm font-medium hover:bg-gray-50 disabled:opacity-50">Clear</button>
+                        <button
+                          onClick={() => {
+                            const d = new Date();
+                            const sd = new Date();
+                            sd.setFullYear(sd.getFullYear() - 1);
+                            setTransactionStartDate(sd.toISOString().slice(0, 10));
+                            setTransactionsEndDate(d.toISOString().slice(0, 10));
+                            setTxEventTypes(["requested", "approved", "rejected", "returned"]);
+                            setTxStatuses(["Pending", "Approved & Active", "Rejected", "Returned"]);
+                            setTxStaff("");
+                            setTxSearch("");
+                            setTxPage(1);
+                            setTxHasGenerated(false);
+                            setReportData([]);
+                            setTxTotal(0);
+                          }}
+                          disabled={loading}
+                          className="flex-1 px-3 py-2 rounded-md bg-gray-200 text-gray-800 text-sm font-medium hover:bg-gray-300 disabled:opacity-50"
+                        >
+                          Reset
+                        </button>
+                        <button
+                          onClick={() => {
+                            setTransactionStartDate("");
+                            setTransactionsEndDate("");
+                            setTxEventTypes(["requested", "approved", "rejected", "returned"]);
+                            setTxStatuses(["Pending", "Approved & Active", "Rejected", "Returned"]);
+                            setTxStaff("");
+                            setTxSearch("");
+                            setTxPage(1);
+                            setTxHasGenerated(false);
+                            setReportData([]);
+                            setTxTotal(0);
+                          }}
+                          disabled={loading}
+                          className="flex-1 px-3 py-2 rounded-md bg-white border text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          Clear
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -1486,7 +1603,7 @@ export default function ReportsPanel({ api }) {
             </div>
           )}
 
-          {activeReport === 'overdue' && (
+          {activeReport === 'overdue' && overdueHasGenerated && (
             <div className="space-y-3">
               <div className="flex justify-between gap-3">
                 <div className="rounded-md border bg-white p-3 text-sm flex-1"><div className="text-gray-500 whitespace-nowrap">Total Overdue</div><div className="text-xl font-semibold">{overdueKPIs?.total || 0}</div></div>
@@ -1522,11 +1639,25 @@ export default function ReportsPanel({ api }) {
             </div>
           ) : (
             <div className="rounded-lg border overflow-hidden">
-              {activeReport === "overdue" && <OverdueReportTable data={overdueFilteredRows} loading={loading} />}
+              {activeReport === "overdue" && (
+                overdueHasGenerated ? (
+                  <OverdueReportTable data={overdueFilteredRows} loading={loading} />
+                ) : (
+                  <div className="p-6 text-sm text-gray-500">
+                    Choose your parameters above and press <span className="font-semibold">Generate Report</span> to view overdue loans.
+                  </div>
+                )
+              )}
 {/* User Balances table removed */}
               {activeReport === "topItems" && <TopItemsReportTable data={reportData} loading={loading} />}
               {activeReport === "transactions" && (
                 <>
+                  {!txHasGenerated ? (
+                    <div className="p-6 text-sm text-gray-500">
+                      Select your filters and click <span className="font-semibold">Generate Report</span> to view transaction history.
+                    </div>
+                  ) : (
+                    <>
                   {transactionsFilteredRows.length > 0 ? (
                     <div className="flex justify-between gap-3 p-4 border-b bg-gray-50 overflow-x-auto">
                       <div className="rounded-md border bg-white p-3 text-center flex-1 min-w-0">
@@ -1561,19 +1692,56 @@ export default function ReportsPanel({ api }) {
                   ) : null}
                   <TransactionReportTable data={transactionsFilteredRows} loading={loading} />
                   <div className="p-4 flex items-center justify-between">
-                    <div className="text-sm text-gray-600">Showing {reportData.length} of {txTotal} events</div>
+                    <div className="text-sm text-gray-600">Showing {txHasGenerated ? reportData.length : 0} of {txHasGenerated ? txTotal : 0} events</div>
                     <div className="flex items-center gap-2">
-                      <button onClick={() => { setTxPage(p => { const np = Math.max(1, p - 1); setTimeout(()=>loadReport('transactions'), 0); return np; }); }} disabled={txPage <= 1} className="px-2 py-1 bg-gray-100 rounded disabled:opacity-50">Previous</button>
+                      <button
+                        onClick={() => {
+                          if (!txHasGenerated || txPage <= 1) return;
+                          const prev = Math.max(1, txPage - 1);
+                          setTxPage(prev);
+                          loadReport("transactions", { txPage: prev, txPageSize });
+                        }}
+                        disabled={txPage <= 1 || !txHasGenerated || loading}
+                        className="px-2 py-1 bg-gray-100 rounded disabled:opacity-50"
+                      >
+                        Previous
+                      </button>
                       <span className="text-sm text-gray-700">Page {txPage} of {Math.max(1, Math.ceil((txTotal || 0) / txPageSize))}</span>
-                      <button onClick={() => { setTxPage(p => { const np = p + 1; setTimeout(()=>loadReport('transactions'), 0); return np; }); }} disabled={txPage >= Math.ceil((txTotal || 0) / txPageSize)} className="px-2 py-1 bg-gray-100 rounded disabled:opacity-50">Next</button>
+                      <button
+                        onClick={() => {
+                          if (!txHasGenerated) return;
+                          const maxPage = Math.max(1, Math.ceil((txTotal || 0) / txPageSize));
+                          if (txPage >= maxPage) return;
+                          const next = Math.min(maxPage, txPage + 1);
+                          setTxPage(next);
+                          loadReport("transactions", { txPage: next, txPageSize });
+                        }}
+                        disabled={!txHasGenerated || txPage >= Math.ceil((txTotal || 0) / txPageSize) || loading}
+                        className="px-2 py-1 bg-gray-100 rounded disabled:opacity-50"
+                      >
+                        Next
+                      </button>
                       <label className="text-sm text-gray-600">Per page:</label>
-                      <select value={txPageSize} onChange={(e) => { setTxPageSize(Number(e.target.value)); setTxPage(1); setTimeout(()=>loadReport('transactions'), 0); }} className="rounded-md border-2 px-2 py-1 text-sm">
+                      <select
+                        value={txPageSize}
+                        onChange={(e) => {
+                          const newSize = Number(e.target.value);
+                          setTxPageSize(newSize);
+                          setTxPage(1);
+                          if (txHasGenerated) {
+                            loadReport("transactions", { txPage: 1, txPageSize: newSize });
+                          }
+                        }}
+                        className="rounded-md border-2 px-2 py-1 text-sm"
+                      >
                         <option value={25}>25</option>
                         <option value={50}>50</option>
                         <option value={100}>100</option>
                       </select>
                     </div>
                   </div>
+                    </>
+                  )}
                 </>
               )}
             </div>
