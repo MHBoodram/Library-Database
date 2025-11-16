@@ -106,5 +106,9 @@ export const getMyLoans = (token) => api("/loans/my", { token });
 export const getMyHistory = (token) => api("/loans/myhist", { token });
 export const getAccounts = (token) => api("/manage/accounts", { token })
 
+export const getMyFines = (token) => api("/fines/my", { token });
+export const payFine = (token, fine_id) =>
+  api("/fines/pay", { method: "POST", token, body: { fine_id } });
+
 export default api;
 export { api, API_BASE };

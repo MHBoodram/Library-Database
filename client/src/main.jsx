@@ -11,6 +11,7 @@ import EmployeeHome from "./pages/EmployeeHome.jsx";
 import Books from "./pages/Books.jsx";
 import Reports from "./pages/Reports.jsx";
 import Loans from "./pages/Loans.jsx";
+import PayFines from "./pages/PayFines.jsx";
 import Rooms from "./pages/Rooms.jsx";
 import BookPage from "./pages/BookPage.jsx";
 import { getCustomCoverForTitle, DEFAULT_BOOK_PLACEHOLDER } from "./coverImages";
@@ -103,6 +104,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           <Route path="/books" element={<Books />} />
           <Route path="/books/:id" element={<Protected><BookRoute /></Protected>} />
           <Route path="/loans" element={<Loans />} />
+          <Route path="/fines" element={<Protected><PayFines /></Protected>} />
           {/** Pending Loans merged into Manage Loans; route removed **/}
           <Route path="/rooms" element={<Rooms />} />
           <Route path="/reports" element={<Reports />} />
