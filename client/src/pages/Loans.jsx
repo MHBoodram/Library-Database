@@ -4,7 +4,7 @@ import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
 import { formatDate, formatDateTime, formatCurrency } from "../utils";
 import "./Loans.css";
-import { listMyHolds, cancelMyHold, cancelMyRequest } from "../api";
+import { listMyHolds, cancelMyHold } from "../api";
 
 export default function Loans() {
   const { token, useApi: callApi } = useAuth();
@@ -16,13 +16,9 @@ export default function Loans() {
   const [holdsLoading, setHoldsLoading] = useState(true);
   const [holdsError, setHoldsError] = useState("");
   const [cancelingHoldId, setCancelingHoldId] = useState(null);
-  const [requests, setRequests] = useState([]);
-  const [reqLoading, setReqLoading] = useState(true);
-  const [reqError,setReqError] = useState("");
   const [history, setHistory] = useState([]);
   const [histLoading, setHistLoading] = useState(true);
   const [histError, setHistError] = useState("");
-  const [cancelingRequestId, setCancelingRequestId] = useState(null);
 
   useEffect(() => {
     if (!token) {
@@ -33,39 +29,31 @@ export default function Loans() {
     (async () => {
       setLoading(true);
       setHoldsLoading(true);
-      setReqLoading(true);
       setError("");
       setHoldsError("");
-      setReqError("");
       setHistError("");
       try {
-        const [loansData, requestData, historyData, holdsData] = await Promise.all([
+        const [loansData, historyData, holdsData] = await Promise.all([
           callApi("loans/my"),
-          callApi("loans/pending/my"),
           callApi("loans/myhist"),
           listMyHolds(token)
         ]);
         if (!active) return;
         const loans = Array.isArray(loansData?.rows) ? loansData.rows : Array.isArray(loansData) ? loansData : [];
-        const reqRows = Array.isArray(requestData?.rows) ? requestData.rows : Array.isArray(requestData) ? requestData : [];
         const histRows = Array.isArray(historyData?.rows) ? historyData.rows : Array.isArray(historyData) ? historyData : [];
         const holdRows = Array.isArray(holdsData?.rows) ? holdsData.rows : Array.isArray(holdsData) ? holdsData : [];
         setRows(loans);
-        setRequests(reqRows);
         setHistory(histRows);
         setHolds(holdRows);
-        console.log("ROWS: ", reqRows);
       } catch (err) {
         if (!active) return;
         setError(err?.message || "Failed to load your loans.");
         setHoldsError(err?.message || "Failed to load your holds.");
-        setReqError(err?.message || "Failed to load your checkout requests");
         setHistError(err?.message || "Failed to load your past loans.");
       } finally {
         if (active) {
           setLoading(false);
           setHoldsLoading(false);
-          setReqLoading(false);
           setHistLoading(false);
         }
       }
@@ -97,33 +85,6 @@ export default function Loans() {
       setHoldsError(err?.message || err?.data?.error || "Failed to cancel hold");
     } finally {
       setCancelingHoldId(null);
-    }
-  };
-
-  const refreshRequests = async () => {
-    setReqLoading(true);
-    setReqError("");
-    try {
-      const data = await callApi("loans/pending/my");
-      const list = Array.isArray(data?.rows) ? data.rows : Array.isArray(data) ? data : [];
-      setRequests(list);
-    } catch (err) {
-      setReqError(err?.message || "Failed to refresh requests.");
-    } finally {
-      setReqLoading(false);
-    }
-  };
-
-  const handleCancelRequest = async (loanId) => {
-    if (!window.confirm("Cancel this request?")) return;
-    setCancelingRequestId(loanId);
-    try {
-      await cancelMyRequest(token, loanId);
-      await refreshRequests();
-    } catch (err) {
-      setReqError(err?.message || err?.data?.error || "Failed to cancel request");
-    } finally {
-      setCancelingRequestId(null);
     }
   };
 
@@ -209,55 +170,6 @@ export default function Loans() {
         </div>
       </section>
 
-      <section style={{marginTop:10}}>
-        <h1>Checkout Requests</h1>
-        <p>View your current checkout requests.</p>
-        <div className="loans-container">
-          <div className="loans-header">
-            <span>Requests: {requests.length}</span>
-            {reqLoading && <span className="loading">Loading…</span>}
-            {reqError && <span className="error">{reqError}</span>}
-          </div>
-          <div style={{ overflowX: "auto" }}>
-            <table className="loans-table">
-              <thead>
-                <tr>
-                  <Th>Title</Th>
-                  <Th>Requested</Th>
-                  <Th>Status</Th>
-                  <Th>Actions</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {requests.length === 0 ? (
-                  <tr><td colSpan={4} className="loans-empty-state">{reqLoading ? "" : "No requests found."}</td></tr>
-                ) : (
-                  requests.map((r) => (
-                    <tr key={r.loan_id}>
-                      <Td title={r.item_title}>{r.item_title}</Td>
-                      <Td>{formatDateTime(r.request_date)}</Td>
-                      <Td>
-                        <span className={`loans-status-badge ${r.status || 'pending'}`}>
-                          {(r.status || 'pending') === 'rejected' ? 'denied' : (r.status || 'pending')}
-                        </span>
-                      </Td>
-                      <Td>
-                        <button
-                          className="hold-cancel-btn"
-                          onClick={() => handleCancelRequest(r.loan_id)}
-                          disabled={cancelingRequestId === r.loan_id}
-                        >
-                          {cancelingRequestId === r.loan_id ? "Cancelling…" : "Cancel Request"}
-                        </button>
-                      </Td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
       
       <section className="holds-section">
         <div className="holds-header">

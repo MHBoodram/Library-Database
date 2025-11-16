@@ -267,12 +267,30 @@ export default function Home() {
         identifier_type: 'copy_id'
       };
       
-      await api('loans/request', {
+      await api('loans/checkout', {
         method: 'POST',
         body: checkoutData
       });
 
-      alert(`Successfully checked out "${selectedBook.title}"! View it in My Loans.`);
+      const bookId = selectedBook?.id;
+      if (bookId) {
+        setDynamicFeatured((prev) =>
+          prev.map((book) =>
+            book.id === bookId
+              ? { ...book, available: Math.max(0, Number(book.available || 0) - 1) }
+              : book
+          )
+        );
+      }
+      setSelectedBook((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          available: Math.max(0, Number(prev.available || 0) - 1),
+        };
+      });
+
+      alert(`"${selectedBook.title}" is now checked out to you. View it in My Loans.`);
       closeModal();
     } catch (err) {
       const msg = err?.data?.details || err?.data?.message || err?.message || 'Checkout failed';

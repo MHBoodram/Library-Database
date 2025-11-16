@@ -61,22 +61,24 @@ function BookRoute() {
   const onCheckout = async (id, qty = 1) => {
     if (!token) {
       alert("Please log in to checkout.");
-      return;
+      return false;
     }
     try {
       const copies = await useApi(`items/${id}/copies`);
       const available = (copies || []).filter((c) => c.status === "available");
       if (!available.length) {
         alert("No available copies");
-        return;
+        return false;
       }
       const first = available[0];
-  await useApi('loans/request', { method: 'POST', body: { copy_id: first.copy_id } });
-  alert('Checkout request submitted. You can track it under Manage Loans.');
+      await useApi('loans/checkout', { method: 'POST', body: { copy_id: first.copy_id } });
+      alert('Item checked out! You can view it under Manage Loans.');
+      return true;
     } catch (err) {
       const code = err?.data?.error || err?.message || "checkout_failed";
       const details = err?.data?.message || err?.data?.details || "";
       alert(details || code);
+      return false;
     }
   };
 

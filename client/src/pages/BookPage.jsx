@@ -7,6 +7,7 @@ export default function BookPage({ fetchBookById, fetchRecommendations, onChecko
   const [book, setBook] = useState(null);
   const [recs, setRecs] = useState([]);
   const [qty, setQty] = useState(1);
+  const [checkingOut, setCheckingOut] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -19,6 +20,21 @@ export default function BookPage({ fetchBookById, fetchRecommendations, onChecko
     })();
     return () => { alive = false; };
   }, [id, fetchBookById, fetchRecommendations]);
+
+  const handleCheckout = async () => {
+    if (!onCheckout || checkingOut || !book || book.availableCount <= 0) return;
+    setCheckingOut(true);
+    try {
+      const success = await onCheckout(book.id, qty);
+      if (success) {
+        setBook((prev) =>
+          prev ? { ...prev, availableCount: Math.max(0, prev.availableCount - 1) } : prev
+        );
+      }
+    } finally {
+      setCheckingOut(false);
+    }
+  };
 
   if (!book) {
     return <div className="book-page">
@@ -69,11 +85,11 @@ export default function BookPage({ fetchBookById, fetchRecommendations, onChecko
             </div>
             <button
               className="btn btn-primary"
-              onClick={() => onCheckout?.(book.id, qty)}
-              disabled={book.availableCount <= 0}
+              onClick={handleCheckout}
+              disabled={book.availableCount <= 0 || checkingOut}
               title={book.availableCount <= 0 ? "Not available" : "Checkout"}
             >
-              {book.availableCount <= 0 ? "Unavailable" : "Checkout"}
+              {book.availableCount <= 0 ? "Unavailable" : checkingOut ? "Processing..." : "Checkout"}
             </button>
           </div>
         </div>

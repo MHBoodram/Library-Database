@@ -142,11 +142,36 @@ export default function Books() {
   async function checkoutCopy(copy_id) {
     setCheckoutLoading(true);
     try {
-      await apiWithAuth("loans/request", {
+      await apiWithAuth("loans/checkout", {
         method: "POST",
         body: { copy_id, user_id: user?.user_id, identifier_type: "copy_id" },
       });
-      alert(`Successfully requested "${selectedItem.title}"! View it in My Loans.`);
+      const targetItemId = selectedItem?.item_id;
+      setCopies((prev) =>
+        prev.map((copy) =>
+          copy.copy_id === copy_id ? { ...copy, status: "on_loan" } : copy
+        )
+      );
+      if (targetItemId) {
+        setItems((prev) =>
+          prev.map((item) =>
+            item.item_id === targetItemId
+              ? {
+                  ...item,
+                  available_copies: Math.max(0, (item.available_copies || 0) - 1),
+                }
+              : item
+          )
+        );
+      }
+      setSelectedItem((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          available_copies: Math.max(0, (prev.available_copies || 0) - 1),
+        };
+      });
+      alert(`"${selectedItem.title}" is now checked out to you. View it in My Loans.`);
       closeModal();
     } catch (err) {
       const code = err?.data?.error;

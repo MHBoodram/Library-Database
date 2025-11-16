@@ -166,12 +166,6 @@ export default function EmployeeDashboard() {
             >
               Reports
             </button>
-            <button
-              className={`tab-btn ${tab === "pendingCheckouts" ? "active" : ""}`}
-              onClick={() => setTab("pendingCheckouts")}
-            >
-              Pending Checkouts
-            </button>
             
             {/* Manage Items Dropdown */}
             <div className="dropdown-container">
@@ -225,120 +219,11 @@ export default function EmployeeDashboard() {
   {tab === "holds" && <HoldsPanel api={api} onChanged={loadCounts} />}
   {tab === "reservations" && <ReservationsPanel api={api} staffUser={user} onChanged={loadCounts} />}
   {tab === "reports" && <ReportsPanel api={api} />}
-  {tab === "pendingCheckouts" && <PendingCheckoutsPanel api={api} onChanged={loadCounts} />}
   {tab === "addItem" && <AddItemPanel api={api} />}
   {tab === "editItem" && <EditItemPanel api={api} />}
   {tab === "removeItem" && <RemoveItemPanel api={api} />}
   {tab === "admin" && isAdmin && <AdminPanel api={api} />}
       </main>
     </div>
-  );
-}
-
-function PendingCheckoutsPanel({ api, onChanged }) {
-  const [rows, setRows] = React.useState([]);
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState('');
-
-  const load = React.useCallback(async () => {
-    setLoading(true); setError('');
-    try {
-      const res = await api('staff/loans/pending');
-      const list = Array.isArray(res?.rows) ? res.rows : Array.isArray(res) ? res : [];
-      setRows(list);
-    } catch (e) {
-      setError(e?.message || 'Failed to load pending');
-    } finally { setLoading(false); }
-  }, [api]);
-
-  React.useEffect(() => { load(); }, [load]);
-
-  const approve = async (loan_id) => {
-    if (!loan_id) return;
-    try {
-      await api('staff/loans/approve', { method: 'POST', body: { loan_id } });
-      await load();
-      if (typeof onChanged === 'function') {
-        try { onChanged(); } catch { /* no-op */ }
-      }
-      alert('Approved');
-    } catch (e) {
-      alert(e?.data?.message || e?.message || 'Approval failed');
-    }
-  };
-
-  const deny = async (loan_id) => {
-    if (!loan_id) return;
-    if (!window.confirm("Deny this checkout request?")) return;
-    try {
-      await api('staff/loans/deny', { method: 'POST', body: { loan_id } });
-      await load();
-      if (typeof onChanged === 'function') {
-        try { onChanged(); } catch { /* no-op */ }
-      }
-      alert('Denied request');
-    } catch (e) {
-      alert(e?.data?.message || e?.message || 'Deny failed');
-    }
-  };
-
-  return (
-    <section className="space-y-4">
-      <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
-        <div className="border-b bg-gray-50 px-5 py-3"><h2 className="text-lg font-semibold">Pending Checkouts</h2></div>
-        <div className="p-4">
-          {loading && <div>Loading…</div>}
-          {error && <div className="text-red-700">{error}</div>}
-          {!loading && rows.length === 0 && <div className="text-gray-600">No pending requests.</div>}
-          {rows.length > 0 && (
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead className="bg-gray-100 text-left">
-                  <tr>
-                    <Th>Patron</Th>
-                    <Th>Patron ID</Th>
-                    <Th>Copy ID</Th>
-                    <Th>Loan ID</Th>
-                    <Th>Requested</Th>
-                    <Th>Item</Th>
-                    <Th>Type</Th>
-                    <Th></Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map(r => (
-                    <tr key={r.loan_id} className="border-t">
-                      <Td>{r.first_name} {r.last_name}</Td>
-                      <Td>{r.user_id}</Td>
-                      <Td>{r.copy_id}</Td>
-                      <Td>{r.loan_id || '—'}</Td>
-                      <Td>{new Date(r.request_date).toLocaleString()}</Td>
-                      <Td className="max-w-[30ch] truncate" title={r.item_title}>{r.item_title}</Td>
-                      <Td>{(r.media_type || 'book').toUpperCase()}</Td>
-                      <Td>
-                        <div className="flex gap-2">
-                          <button
-                            className="inline-flex items-center rounded-md bg-green-600 px-3 py-1 text-xs font-semibold text-white shadow-sm hover:bg-green-500"
-                            onClick={() => approve(r.loan_id)}
-                          >
-                            Approve
-                          </button>
-                          <button
-                            className="inline-flex items-center rounded-md bg-red-600 px-3 py-1 text-xs font-semibold text-white shadow-sm hover:bg-red-500"
-                            onClick={() => deny(r.loan_id)}
-                          >
-                            Deny
-                          </button>
-                        </div>
-                      </Td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
-    </section>
   );
 }
