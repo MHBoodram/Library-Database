@@ -6,6 +6,8 @@ const MIN_PASSWORD_LENGTH = 8;
 export default function AccountSettingsModal({ open, onClose, onSubmit, user, submitting, error, success }) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -15,6 +17,8 @@ export default function AccountSettingsModal({ open, onClose, onSubmit, user, su
     if (!open) return;
     setFirstName(user?.first_name || "");
     setLastName(user?.last_name || "");
+    setPhone(user?.phone || "");
+    setAddress(user?.address || "");
     setCurrentPassword("");
     setNewPassword("");
     setConfirmPassword("");
@@ -50,6 +54,14 @@ export default function AccountSettingsModal({ open, onClose, onSubmit, user, su
     if (!isPatron) {
       payload.first_name = firstName.trim();
       payload.last_name = lastName.trim();
+    }
+    const trimmedPhone = phone.trim();
+    const trimmedAddress = address.trim();
+    if (trimmedPhone !== (user?.phone || "")) {
+      payload.phone = trimmedPhone;
+    }
+    if (trimmedAddress !== (user?.address || "")) {
+      payload.address = trimmedAddress;
     }
     if (newPassword) payload.new_password = newPassword;
     if (newPassword) payload.current_password = currentPassword;
@@ -90,6 +102,28 @@ export default function AccountSettingsModal({ open, onClose, onSubmit, user, su
               Students and faculty cannot change their name. Please contact library staff if your name needs to be updated.
             </p>
           )}
+
+          <div className="account-modal__contact">
+            <p className="hint">Contact information</p>
+            <label>
+              <span>Phone number</span>
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="(555) 123-4567"
+              />
+            </label>
+            <label>
+              <span>Address</span>
+              <textarea
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder="Street, City, State, ZIP"
+                rows={3}
+              />
+            </label>
+          </div>
 
           <div className="account-modal__password">
             <p className="hint">Change password</p>

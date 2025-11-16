@@ -18,6 +18,8 @@ export const getProfile = (JWT_SECRET) => async (req, res) => {
          a.role,
          u.first_name,
          u.last_name,
+         u.phone,
+         u.address,
          e.role AS employee_role
        FROM account a
        JOIN user u ON u.user_id = a.user_id
@@ -40,6 +42,8 @@ export const getProfile = (JWT_SECRET) => async (req, res) => {
         role: row.employee_id ? "staff" : row.role,
         employee_id: row.employee_id,
         employee_role: row.employee_role,
+        phone: row.phone,
+        address: row.address,
         name: [row.first_name, row.last_name].filter(Boolean).join(" "),
       },
     });
@@ -56,10 +60,18 @@ export const updateProfile = (JWT_SECRET) => async (req, res) => {
   const body = await readJSONBody(req);
   const first = typeof body.first_name === "string" ? body.first_name.trim() : null;
   const last = typeof body.last_name === "string" ? body.last_name.trim() : null;
+  const phoneRaw = Object.prototype.hasOwnProperty.call(body, "phone")
+    ? typeof body.phone === "string" ? body.phone.trim() : ""
+    : undefined;
+  const phone = typeof phoneRaw === "undefined" ? undefined : (phoneRaw || null);
+  const addressRaw = Object.prototype.hasOwnProperty.call(body, "address")
+    ? typeof body.address === "string" ? body.address.trim() : ""
+    : undefined;
+  const address = typeof addressRaw === "undefined" ? undefined : (addressRaw || null);
   const currentPassword = body.current_password || "";
   const newPassword = body.new_password || "";
 
-  if (!first && !last && !newPassword) {
+  if (!first && !last && !newPassword && typeof phone === "undefined" && typeof address === "undefined") {
     return sendJSON(res, 400, { error: "no_changes" });
   }
 
@@ -95,13 +107,17 @@ export const updateProfile = (JWT_SECRET) => async (req, res) => {
       await conn.execute("UPDATE account SET password_hash=? WHERE account_id=?", [nextHash, account.account_id]);
     }
 
-    if (first || last) {
+    if (first || last || typeof phone !== "undefined" || typeof address !== "undefined") {
       const updateFields = [];
       const params = [];
       if (first) { updateFields.push("first_name = ?"); params.push(first); }
       if (last) { updateFields.push("last_name = ?"); params.push(last); }
-      params.push(account.user_id);
-      await conn.execute(`UPDATE user SET ${updateFields.join(", ")} WHERE user_id = ?`, params);
+      if (typeof phone !== "undefined") { updateFields.push("phone = ?"); params.push(phone); }
+      if (typeof address !== "undefined") { updateFields.push("address = ?"); params.push(address); }
+      if (updateFields.length) {
+        params.push(account.user_id);
+        await conn.execute(`UPDATE user SET ${updateFields.join(", ")} WHERE user_id = ?`, params);
+      }
     }
 
     await conn.commit();
@@ -115,6 +131,8 @@ export const updateProfile = (JWT_SECRET) => async (req, res) => {
          a.role,
          u.first_name,
          u.last_name,
+         u.phone,
+         u.address,
          e.role AS employee_role
        FROM account a
        JOIN user u ON u.user_id = a.user_id
@@ -135,6 +153,8 @@ export const updateProfile = (JWT_SECRET) => async (req, res) => {
         role: row.employee_id ? "staff" : row.role,
         employee_id: row.employee_id,
         employee_role: row.employee_role,
+        phone: row.phone,
+        address: row.address,
         name: [row.first_name, row.last_name].filter(Boolean).join(" "),
       },
     });

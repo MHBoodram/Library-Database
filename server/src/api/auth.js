@@ -23,6 +23,8 @@ export function login(JWT_SECRET) {
           u.first_name,
           u.last_name,
           u.email AS user_email,
+          u.phone,
+          u.address,
           e.role AS employee_role
         FROM account a
         JOIN user u ON u.user_id = a.user_id
@@ -70,6 +72,8 @@ export function login(JWT_SECRET) {
           employee_id: acc.employee_id,
           employee_role: employeeRole,
           is_admin: employeeRole === "admin",
+          phone: acc.phone,
+          address: acc.address,
           name: name || acc.email,
         },
       });

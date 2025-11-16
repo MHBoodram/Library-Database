@@ -61,6 +61,20 @@
   font-size: 1rem;
 }
 
+.account-modal__body textarea {
+  margin-top: 0.35rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  font-size: 1rem;
+  resize: vertical;
+}
+
+.account-modal__contact {
+  border-top: 1px solid #f1f5f9;
+  padding-top: 0.5rem;
+}
+
 .account-modal__password {
   margin-top: 0.5rem;
   border-top: 1px solid #f1f5f9;
@@ -69,6 +83,12 @@
 
 .account-modal__password .hint {
   margin: 0 0 0.25rem;
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.account-modal__contact .hint {
+  margin: 0 0 0.35rem;
   font-size: 0.85rem;
   color: #6b7280;
 }
