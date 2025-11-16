@@ -171,6 +171,9 @@ export const createAccount = (JWT_SECRET) => async (req, res) => {
   const accountRole = ACCOUNT_ROLES.includes(accountRoleRaw) ? accountRoleRaw : "student";
   const employeeRoleRaw = (body.employee_role || "").toString().toLowerCase();
   const employeeRole = accountType === "employee" ? employeeRoleRaw : null;
+  const dateOfBirth = (body.date_of_birth || "").trim();
+  const address = (body.address || "").trim();
+  const phoneNumber = (body.phone_number || "").trim();
 
   if (!firstName || !lastName || !email || !password) {
     return sendJSON(res, 400, { error: "missing_fields" });
@@ -194,8 +197,8 @@ export const createAccount = (JWT_SECRET) => async (req, res) => {
     }
 
     const [userRow] = await conn.execute(
-      "INSERT INTO user(first_name,last_name,email,joined_at) VALUES(?,?,?,CURDATE())",
-      [firstName, lastName, email]
+      "INSERT INTO user(first_name,last_name,email,phone,date_of_birth,address,joined_at) VALUES(?,?,?,?,?,?,CURDATE())",
+      [firstName, lastName, email, phoneNumber || null, dateOfBirth || null, address || null]
     );
     const userId = userRow.insertId;
 
