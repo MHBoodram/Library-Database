@@ -12,6 +12,7 @@ export default function Loans() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [actionError, setActionError] = useState("");
   const [holds, setHolds] = useState([]);
   const [holdsLoading, setHoldsLoading] = useState(true);
   const [holdsError, setHoldsError] = useState("");
@@ -19,6 +20,7 @@ export default function Loans() {
   const [history, setHistory] = useState([]);
   const [histLoading, setHistLoading] = useState(true);
   const [histError, setHistError] = useState("");
+  const [returningLoanId, setReturningLoanId] = useState(null);
 
   useEffect(() => {
     if (!token) {
@@ -32,6 +34,7 @@ export default function Loans() {
       setError("");
       setHoldsError("");
       setHistError("");
+      setActionError("");
       try {
         const [loansData, historyData, holdsData] = await Promise.all([
           callApi("loans/my"),
@@ -88,6 +91,34 @@ export default function Loans() {
     }
   };
 
+  const handleReturnLoan = async (loanId) => {
+    const loan = rows.find((r) => r.loan_id === loanId);
+    if (!loan) return;
+    if (!window.confirm(`Return "${loan.item_title}"?`)) return;
+
+    setReturningLoanId(loanId);
+    setActionError("");
+    try {
+      await callApi("loans/return", {
+        method: "POST",
+        body: { loan_id: loanId },
+      });
+
+      const returnedLoan = {
+        ...loan,
+        status: "returned",
+        return_date: new Date().toISOString(),
+      };
+
+      setRows((prev) => prev.filter((item) => item.loan_id !== loanId));
+      setHistory((prev) => [returnedLoan, ...prev]);
+    } catch (err) {
+      setActionError(err?.message || err?.data?.error || "Failed to return loan.");
+    } finally {
+      setReturningLoanId(null);
+    }
+  };
+
   return (
     <div className="loans-page">
       <NavBar />
@@ -97,8 +128,12 @@ export default function Loans() {
       <div className="loans-container">
         <div className="loans-header">
           <span>Loans: {rows.length}</span>
-          {loading && <span className="loading">Loading…</span>}
-          {error && <span className="error">{error}</span>}
+          <div>
+            {loading && <span className="loading">Loading...</span>}
+            {(error || actionError) && (
+              <span className="error">{error || actionError}</span>
+            )}
+          </div>
         </div>
         <div style={{ overflowX: "auto" }}>
           <table className="loans-table">
@@ -109,11 +144,12 @@ export default function Loans() {
                 <Th>Return Date</Th>
                 <Th>Status</Th>
                 <Th>Fine Amount</Th>
+                <Th>Actions</Th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
-                <tr><td colSpan={5} className="loans-empty-state">{loading ? "" : "No loans found."}</td></tr>
+                <tr><td colSpan={6} className="loans-empty-state">{loading ? "" : "No loans found."}</td></tr>
               ) : (
                 rows.map((r) => (
                   <tr key={r.loan_id}>
@@ -126,6 +162,15 @@ export default function Loans() {
                       </span>
                     </Td>
                     <Td>{formatCurrency(r.outstanding_fine ?? 0)}</Td>
+                    <Td>
+                      <button
+                        className="loan-return-btn"
+                        onClick={() => handleReturnLoan(r.loan_id)}
+                        disabled={returningLoanId === r.loan_id}
+                      >
+                        {returningLoanId === r.loan_id ? "Returning..." : "Return"}
+                      </button>
+                    </Td>
                   </tr>
                 ))
               )}
@@ -140,7 +185,7 @@ export default function Loans() {
         <div className="loans-container">
           <div className="loans-header">
             <span>Loans: {history.length}</span>
-            {histLoading && <span className="loading">Loading…</span>}
+            {histLoading && <span className="loading">Loading...</span>}
             {histError && <span className="error">{histError}</span>}
           </div>
           <div style={{ overflowX: "auto" }}>
@@ -178,7 +223,7 @@ export default function Loans() {
             <p>Track queued and ready-for-pickup requests.</p>
           </div>
           <div>
-            {holdsLoading && <span className="loading">Loading…</span>}
+            {holdsLoading && <span className="loading">Loading...</span>}
             {holdsError && <span className="error">{holdsError}</span>}
           </div>
         </div>

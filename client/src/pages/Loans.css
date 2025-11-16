@@ -105,6 +105,26 @@
   color: var(--gray-800);
 }
 
+.loan-return-btn {
+  border: 1px solid var(--primary-main);
+  background: var(--primary-main);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.2s ease, opacity 0.2s ease;
+}
+
+.loan-return-btn:hover:not(:disabled) {
+  background: var(--primary-dark);
+}
+
+.loan-return-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* Status Badge */
 .loans-status-badge {
   display: inline-block;
