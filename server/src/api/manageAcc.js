@@ -6,6 +6,7 @@ const ACCOUNT_ROLES = ["student", "faculty", "staff", "admin"];
 const EMPLOYEE_ROLES = ["librarian", "clerk", "assistant", "admin"];
 
 const toIso = (value) => (value ? new Date(value).toISOString() : null);
+const toIsoDate = (value) => (value ? new Date(value).toISOString().slice(0, 10) : null);
 
 function normalizeRow(row) {
   return {
@@ -15,6 +16,9 @@ function normalizeRow(row) {
     first_name: row.first_name,
     last_name: row.last_name,
     email: row.email,
+    phone: row.phone,
+    address: row.address,
+    date_of_birth: toIsoDate(row.date_of_birth),
     role: row.role,
     employee_role: row.employee_role,
     is_active: Boolean(row.is_active),
@@ -41,6 +45,9 @@ async function fetchAccountById(conn, accountId) {
       a.flagged_by_account_id,
       u.first_name,
       u.last_name,
+      u.phone,
+      u.address,
+      u.date_of_birth,
       e.role AS employee_role
     FROM account a
     JOIN user u ON u.user_id = a.user_id
@@ -115,6 +122,9 @@ export const listAccounts = (JWT_SECRET) => async (req, res) => {
         a.flagged_by_account_id,
         u.first_name,
         u.last_name,
+        u.phone,
+        u.address,
+        u.date_of_birth,
         e.role AS employee_role
       FROM user u
       JOIN account a ON u.user_id = a.user_id
@@ -150,13 +160,31 @@ export const updateAccount = (JWT_SECRET) => async (req, res, params) => {
   const isActiveRaw = body.is_active;
   const hasIsActive = typeof isActiveRaw !== "undefined";
   const isActive = hasIsActive ? (isActiveRaw === true || isActiveRaw === 1 || isActiveRaw === "1" || isActiveRaw === "true") : undefined;
+  const hasPhone = Object.prototype.hasOwnProperty.call(body, "phone");
+  const phoneValue = hasPhone && typeof body.phone === "string" ? body.phone.trim() : hasPhone ? "" : undefined;
+  const phone = typeof phoneValue === "undefined" ? undefined : (phoneValue || null);
+  const hasAddress = Object.prototype.hasOwnProperty.call(body, "address");
+  const addressValue = hasAddress && typeof body.address === "string" ? body.address.trim() : hasAddress ? "" : undefined;
+  const address = typeof addressValue === "undefined" ? undefined : (addressValue || null);
+  const hasDob = Object.prototype.hasOwnProperty.call(body, "date_of_birth");
+  let dateOfBirth;
+  if (hasDob) {
+    const dobRaw = typeof body.date_of_birth === "string" ? body.date_of_birth.trim() : "";
+    if (dobRaw && !/^\d{4}-\d{2}-\d{2}$/.test(dobRaw)) {
+      return sendJSON(res, 400, { error: "invalid_date_of_birth" });
+    }
+    dateOfBirth = dobRaw || null;
+  }
 
   if (
     !firstName &&
     !lastName &&
     typeof role === "undefined" &&
     !hasIsActive &&
-    typeof employeeRole === "undefined"
+    typeof employeeRole === "undefined" &&
+    !hasPhone &&
+    !hasAddress &&
+    !hasDob
   ) {
     return sendJSON(res, 400, { error: "no_changes" });
   }
@@ -178,35 +206,47 @@ export const updateAccount = (JWT_SECRET) => async (req, res, params) => {
       return sendJSON(res, 404, { error: "account_not_found" });
     }
 
-    if (firstName || lastName) {
-      const userUpdates = [];
-      const userParams = [];
-      if (firstName) {
-        userUpdates.push("first_name = ?");
-        userParams.push(firstName);
-      }
-      if (lastName) {
-        userUpdates.push("last_name = ?");
-        userParams.push(lastName);
-      }
+    const userUpdates = [];
+    const userParams = [];
+    if (firstName) {
+      userUpdates.push("first_name = ?");
+      userParams.push(firstName);
+    }
+    if (lastName) {
+      userUpdates.push("last_name = ?");
+      userParams.push(lastName);
+    }
+    if (typeof phone !== "undefined") {
+      userUpdates.push("phone = ?");
+      userParams.push(phone);
+    }
+    if (typeof address !== "undefined") {
+      userUpdates.push("address = ?");
+      userParams.push(address);
+    }
+    if (typeof dateOfBirth !== "undefined") {
+      userUpdates.push("date_of_birth = ?");
+      userParams.push(dateOfBirth);
+    }
+    if (userUpdates.length) {
       userParams.push(account.user_id);
       await conn.execute(`UPDATE user SET ${userUpdates.join(", ")} WHERE user_id = ?`, userParams);
+    }
 
-      if (account.employee_id) {
-        const empUpdates = [];
-        const empParams = [];
-        if (firstName) {
-          empUpdates.push("first_name = ?");
-          empParams.push(firstName);
-        }
-        if (lastName) {
-          empUpdates.push("last_name = ?");
-          empParams.push(lastName);
-        }
-        if (empUpdates.length) {
-          empParams.push(account.employee_id);
-          await conn.execute(`UPDATE employee SET ${empUpdates.join(", ")} WHERE employee_id = ?`, empParams);
-        }
+    if ((firstName || lastName) && account.employee_id) {
+      const empUpdates = [];
+      const empParams = [];
+      if (firstName) {
+        empUpdates.push("first_name = ?");
+        empParams.push(firstName);
+      }
+      if (lastName) {
+        empUpdates.push("last_name = ?");
+        empParams.push(lastName);
+      }
+      if (empUpdates.length) {
+        empParams.push(account.employee_id);
+        await conn.execute(`UPDATE employee SET ${empUpdates.join(", ")} WHERE employee_id = ?`, empParams);
       }
     }
 

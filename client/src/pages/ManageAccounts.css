@@ -169,3 +169,43 @@
   padding: 0.35rem 0.5rem;
   font-size: 0.85rem;
 }
+
+.contact-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.contact-edit label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  color: #475569;
+}
+
+.contact-edit input,
+.contact-edit textarea {
+  border: 1px solid #cbd5f5;
+  border-radius: 6px;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.85rem;
+}
+
+.contact-edit textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.contact-display {
+  font-size: 0.85rem;
+  color: #0f172a;
+}
+
+.contact-display div {
+  margin-bottom: 0.15rem;
+}
+
+.contact-display .contact-address {
+  white-space: pre-line;
+}

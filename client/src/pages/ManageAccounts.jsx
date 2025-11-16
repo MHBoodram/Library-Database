@@ -18,6 +18,7 @@ const PLACEHOLDERS = {
 
 export default function ManageAccounts() {
   const { useApi } = useAuth();
+  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const [debounced, setDebounced] = useState("");
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -73,6 +74,9 @@ export default function ManageAccounts() {
       role: row.role,
       is_active: row.is_active ? "1" : "0",
       employee_role: row.employee_role || "assistant",
+      phone: row.phone || "",
+      date_of_birth: row.date_of_birth ? row.date_of_birth.slice(0, 10) : "",
+      address: row.address || "",
     });
     setMessage({ type: "", text: "" });
   };
@@ -99,6 +103,18 @@ export default function ManageAccounts() {
     }
     if (row.employee_id && editForm.employee_role && editForm.employee_role !== row.employee_role) {
       payload.employee_role = editForm.employee_role;
+    }
+    const nextPhone = (editForm.phone || "").trim();
+    if (nextPhone !== (row.phone || "")) {
+      payload.phone = nextPhone;
+    }
+    const nextDob = editForm.date_of_birth || "";
+    if (nextDob !== (row.date_of_birth || "")) {
+      payload.date_of_birth = nextDob;
+    }
+    const nextAddress = (editForm.address || "").trim();
+    if (nextAddress !== (row.address || "")) {
+      payload.address = nextAddress;
     }
 
     if (!Object.keys(payload).length) {
@@ -184,6 +200,7 @@ export default function ManageAccounts() {
                   <Th>ID</Th>
                   <Th>Name</Th>
                   <Th>Email</Th>
+                  <Th>Contact</Th>
                   <Th>Role</Th>
                   <Th>Status</Th>
                   <Th>Created</Th>
@@ -194,7 +211,7 @@ export default function ManageAccounts() {
               <tbody>
                 {!rows.length && !loading ? (
                   <tr>
-                    <td colSpan={8} style={{ padding: 12 }}>No accounts found.</td>
+                    <td colSpan={9} style={{ padding: 12 }}>No accounts found.</td>
                   </tr>
                 ) : (
                   rows.map((row) => {
@@ -226,6 +243,49 @@ export default function ManageAccounts() {
                           )}
                         </Td>
                         <Td>{row.email}</Td>
+                        <Td>
+                          {isEditing ? (
+                            <div className="contact-edit">
+                              <label>
+                                Phone
+                                <input
+                                  type="tel"
+                                  value={editForm.phone || ""}
+                                  onChange={(e) => handleEditChange("phone", e.target.value)}
+                                  placeholder="(555) 123-4567"
+                                />
+                              </label>
+                              <label>
+                                Date of birth
+                                <input
+                                  type="date"
+                                  value={editForm.date_of_birth || ""}
+                                  max={today}
+                                  onChange={(e) => handleEditChange("date_of_birth", e.target.value)}
+                                />
+                              </label>
+                              <label>
+                                Address
+                                <textarea
+                                  value={editForm.address || ""}
+                                  onChange={(e) => handleEditChange("address", e.target.value)}
+                                  placeholder="Street, City, State, ZIP"
+                                />
+                              </label>
+                            </div>
+                          ) : (
+                            <div className="contact-display">
+                              <div><strong>Phone:</strong> {row.phone || "—"}</div>
+                              <div><strong>DOB:</strong> {formatDate(row.date_of_birth)}</div>
+                              <div>
+                                <strong>Address:</strong>{" "}
+                                <span className="contact-address">
+                                  {row.address || "—"}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </Td>
                         <Td>
                           {isEditing ? (
                             <select value={editForm.role} onChange={(e) => handleEditChange("role", e.target.value)}>
