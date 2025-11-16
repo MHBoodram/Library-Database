@@ -1,0 +1,159 @@
+.pay-fines-page {
+  min-height: 100vh;
+  background: #f8fafc;
+}
+
+.pay-fines-content {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: calc(var(--nav-height, 72px) + 1.5rem) 1.5rem 3rem;
+}
+
+.pay-fines-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.pay-fines-header h1 {
+  margin: 0;
+  font-size: 1.75rem;
+}
+
+.pay-fines-header p {
+  margin: 0.25rem 0 0;
+  color: #475569;
+}
+
+.pay-fines-summary {
+  background: #fff;
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  min-width: 220px;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.pay-fines-summary span {
+  font-size: 0.9rem;
+  color: #64748b;
+}
+
+.pay-fines-summary strong {
+  font-size: 1.5rem;
+  color: #0f172a;
+}
+
+.pay-fines-card {
+  width: 100%;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.12);
+  overflow: hidden;
+}
+
+.pay-fines-table-wrapper {
+  overflow-x: auto;
+}
+
+.pay-fines-card table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.pay-fines-card th,
+.pay-fines-card td {
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: left;
+  vertical-align: top;
+}
+
+.pay-fines-card th {
+  background: #f8fafc;
+  font-weight: 600;
+  color: #475569;
+}
+
+.pay-fines-empty {
+  text-align: center;
+  padding: 1.5rem;
+  color: #64748b;
+}
+
+.notice {
+  padding: 0.65rem 0.9rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.notice-success {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.notice-error {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.pay-fines-btn {
+  border: none;
+  border-radius: 999px;
+  padding: 0.45rem 1rem;
+  background: #0ea5e9;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pay-fines-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.fine-item-title {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.fine-loan-meta {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  text-transform: capitalize;
+}
+
+.status-chip.status-open {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.status-chip.status-paid {
+  background: #ecfdf5;
+  color: #15803d;
+}
+
+.status-chip.status-waived,
+.status-chip.status-written_off {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.status-chip.status-overdue {
+  background: #fee2e2;
+  color: #b91c1c;
+}

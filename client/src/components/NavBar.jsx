@@ -65,6 +65,11 @@ function NavBar() {
                                 Manage Loans
                             </NavLink>
                         )}
+                        {user && (
+                            <NavLink to="/fines" className = {({ isActive }) => (isActive? 'sub-nav-link active' : 'sub-nav-link')}>
+                                Pay Fines
+                            </NavLink>
+                        )}
                         {/* Pending Loans merged into Manage Loans for patrons */}
                         <NavLink to="/rooms" className = {({ isActive }) => (isActive? 'sub-nav-link active' : 'sub-nav-link')}>
                             Rooms
