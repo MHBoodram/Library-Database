@@ -49,15 +49,31 @@ export const pool = mysql.createPool({
 const LIBRARY_TZ = process.env.LIBRARY_TZ || 'America/Chicago';
 try {
   // Set on the first acquired connection (may only affect that session)
-  pool.query("SET time_zone = ?", [LIBRARY_TZ]).catch(() => {});
+  pool
+    .query("SET time_zone = ?", [LIBRARY_TZ])
+    .then(() => console.log("[db] Initial pool session time_zone set to", LIBRARY_TZ))
+    .catch((err) => console.error("[db] Failed to set initial time_zone", err));
+
   // Also set on every new pooled connection
   if (typeof pool.on === 'function') {
     pool.on('connection', (conn) => {
-      // Underlying conn is callback-style; ignore errors
-      try { conn.query("SET time_zone = ?", [LIBRARY_TZ], () => {}); } catch {}
+      const wrapQuery = (sql, params = []) =>
+        new Promise((resolve, reject) => {
+          conn.query(sql, params, (err, rows) => (err ? reject(err) : resolve(rows)));
+        });
+      wrapQuery("SET time_zone = ?", [LIBRARY_TZ])
+        .then(() => wrapQuery("SELECT @@time_zone AS tz"))
+        .then((rows) => {
+          console.log("[db] New connection time_zone =", rows?.[0]?.tz);
+        })
+        .catch((err) => {
+          console.error("[db] Failed to configure time_zone for connection", err);
+        });
     });
   }
-} catch {}
+} catch (err) {
+  console.error("[db] Unexpected error while configuring time_zone", err);
+}
 
 
 
