@@ -3,12 +3,14 @@ import http from "node:http";
 import { URL } from "node:url";
 import { setCors, sendJSON, getAuthUser } from "./lib/http.js";
 import { router } from "./lib/router.js";
+import { pool } from "./lib/db.js";
+import { expireReadyHolds } from "./lib/holdQueue.js";
 
 import { login } from "./api/auth.js";
 import { createItem, updateItem, deleteItem, listItems, listItemCopies } from "./api/items.js";
 import { createCopy, updateCopy, deleteCopy } from "./api/copies.js";
 import { checkout, returnLoan, fetchUserLoans } from "./api/loans.js";
-import { placeHold, cancelHold, listHolds } from "./api/holds.js";
+import { placeHold, cancelHold, listHolds, acceptHold, declineHold } from "./api/holds.js";
 import { overdue, balances, topItems, topItemsPublic, newPatronsByMonth, listTransactionsEvents } from "./api/reports.js";
 import { listFines, listActiveLoans } from "./api/staff.js";
 import {
@@ -66,6 +68,8 @@ r.add("POST", "/api/holds/place", placeHold(JWT_SECRET));
 r.add("GET", "/api/holds/my", listHolds(JWT_SECRET));
 r.add("GET", "/api/staff/holds", listHolds(JWT_SECRET));
 r.add("DELETE", "/api/holds/:id", cancelHold(JWT_SECRET));
+r.add("POST", "/api/holds/:id/accept", acceptHold(JWT_SECRET));
+r.add("POST", "/api/holds/:id/decline", declineHold(JWT_SECRET));
 
 r.add("GET", "/api/reports/overdue", overdue(JWT_SECRET));
 r.add("GET", "/api/reports/balances", balances(JWT_SECRET));
@@ -122,6 +126,32 @@ const server = http.createServer(async (req, res) => {
     sendJSON(res, 500, { error: "server_error" });
   }
 });
+
+const HOLD_EXPIRY_SWEEP_MS = Number(process.env.HOLD_EXPIRY_SWEEP_MS || 5 * 60 * 1000);
+async function runHoldExpirySweep() {
+  if (runHoldExpirySweep.running) return;
+  runHoldExpirySweep.running = true;
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const expired = await expireReadyHolds(conn);
+    await conn.commit();
+    if (expired) {
+      console.log(`Expired ${expired} ready hold(s)`);
+    }
+  } catch (err) {
+    try { await conn.rollback(); } catch {}
+    console.error("Hold expiry sweep failed:", err);
+  } finally {
+    conn.release();
+    runHoldExpirySweep.running = false;
+  }
+}
+const expiryInterval = setInterval(runHoldExpirySweep, HOLD_EXPIRY_SWEEP_MS);
+if (typeof expiryInterval.unref === "function") {
+  expiryInterval.unref();
+}
+runHoldExpirySweep().catch((err) => console.error("Initial hold sweep failed:", err));
 
 server.listen(PORT, () => {
   console.log(`API running on http://localhost:${PORT}`);

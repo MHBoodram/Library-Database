@@ -1,10 +1,16 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
 import { formatDate, formatDateTime, formatCurrency } from "../utils";
 import "./Loans.css";
-import { listMyHolds, cancelMyHold } from "../api";
+import { listMyHolds, cancelMyHold, acceptReadyHold, declineReadyHold } from "../api";
+
+const normalizeRows = (payload) => {
+  if (Array.isArray(payload?.rows)) return payload.rows;
+  if (Array.isArray(payload)) return payload;
+  return [];
+};
 
 export default function Loans() {
   const { token, useApi: callApi } = useAuth();
@@ -17,6 +23,8 @@ export default function Loans() {
   const [holdsLoading, setHoldsLoading] = useState(true);
   const [holdsError, setHoldsError] = useState("");
   const [cancelingHoldId, setCancelingHoldId] = useState(null);
+  const [acceptingHoldId, setAcceptingHoldId] = useState(null);
+  const [decliningHoldId, setDecliningHoldId] = useState(null);
   const [history, setHistory] = useState([]);
   const [histLoading, setHistLoading] = useState(true);
   const [histError, setHistError] = useState("");
@@ -42,12 +50,9 @@ export default function Loans() {
           listMyHolds(token)
         ]);
         if (!active) return;
-        const loans = Array.isArray(loansData?.rows) ? loansData.rows : Array.isArray(loansData) ? loansData : [];
-        const histRows = Array.isArray(historyData?.rows) ? historyData.rows : Array.isArray(historyData) ? historyData : [];
-        const holdRows = Array.isArray(holdsData?.rows) ? holdsData.rows : Array.isArray(holdsData) ? holdsData : [];
-        setRows(loans);
-        setHistory(histRows);
-        setHolds(holdRows);
+        setRows(normalizeRows(loansData));
+        setHistory(normalizeRows(historyData));
+        setHolds(normalizeRows(holdsData));
       } catch (err) {
         if (!active) return;
         setError(err?.message || "Failed to load your loans.");
@@ -64,19 +69,41 @@ export default function Loans() {
     return () => { active = false; };
   }, [token, callApi, navigate]);
 
-  const refreshHolds = async () => {
+  const refreshLoansAndHistory = useCallback(async () => {
+    if (!token) return;
+    setLoading(true);
+    setHistLoading(true);
+    setError("");
+    setHistError("");
+    try {
+      const [loansData, historyData] = await Promise.all([
+        callApi("loans/my"),
+        callApi("loans/myhist"),
+      ]);
+      setRows(normalizeRows(loansData));
+      setHistory(normalizeRows(historyData));
+    } catch (err) {
+      setError(err?.message || "Failed to load your loans.");
+      setHistError(err?.message || "Failed to load your past loans.");
+    } finally {
+      setLoading(false);
+      setHistLoading(false);
+    }
+  }, [callApi, token]);
+
+  const refreshHolds = useCallback(async () => {
+    if (!token) return;
     setHoldsLoading(true);
     setHoldsError("");
     try {
       const data = await listMyHolds(token);
-      const list = Array.isArray(data?.rows) ? data.rows : Array.isArray(data) ? data : [];
-      setHolds(list);
+      setHolds(normalizeRows(data));
     } catch (err) {
       setHoldsError(err?.message || "Failed to refresh holds.");
     } finally {
       setHoldsLoading(false);
     }
-  };
+  }, [token]);
 
   const handleCancelHold = async (holdId) => {
     if (!window.confirm("Cancel this hold?")) return;
@@ -116,6 +143,36 @@ export default function Loans() {
       setActionError(err?.message || err?.data?.error || "Failed to return loan.");
     } finally {
       setReturningLoanId(null);
+    }
+  };
+
+  const handleAcceptHold = async (hold) => {
+    if (!hold?.hold_id) return;
+    setAcceptingHoldId(hold.hold_id);
+    setHoldsError("");
+    try {
+      await acceptReadyHold(token, hold.hold_id);
+      await Promise.all([refreshHolds(), refreshLoansAndHistory()]);
+    } catch (err) {
+      const msg = err?.data?.message || err?.message || "Failed to check out this hold.";
+      setHoldsError(msg);
+    } finally {
+      setAcceptingHoldId(null);
+    }
+  };
+
+  const handleDeclineHold = async (hold) => {
+    if (!hold?.hold_id) return;
+    setDecliningHoldId(hold.hold_id);
+    setHoldsError("");
+    try {
+      await declineReadyHold(token, hold.hold_id);
+      await refreshHolds();
+    } catch (err) {
+      const msg = err?.data?.message || err?.message || "Failed to decline this hold.";
+      setHoldsError(msg);
+    } finally {
+      setDecliningHoldId(null);
     }
   };
 
@@ -266,7 +323,30 @@ export default function Loans() {
                           : "—"}
                       </Td>
                       <Td>
-                        {(hold.status === "queued" || hold.status === "ready") ? (
+                        {hold.status === "ready" ? (
+                          <div className="hold-action-group">
+                            <button
+                              className="hold-action-btn hold-action-btn--primary"
+                              onClick={() => handleAcceptHold(hold)}
+                              disabled={
+                                acceptingHoldId === hold.hold_id ||
+                                decliningHoldId === hold.hold_id
+                              }
+                            >
+                              {acceptingHoldId === hold.hold_id ? "Checking out…" : "Check out"}
+                            </button>
+                            <button
+                              className="hold-action-btn"
+                              onClick={() => handleDeclineHold(hold)}
+                              disabled={
+                                decliningHoldId === hold.hold_id ||
+                                acceptingHoldId === hold.hold_id
+                              }
+                            >
+                              {decliningHoldId === hold.hold_id ? "Declining…" : "No thanks"}
+                            </button>
+                          </div>
+                        ) : hold.status === "queued" ? (
                           <button
                             className="hold-cancel-btn"
                             onClick={() => handleCancelHold(hold.hold_id)}

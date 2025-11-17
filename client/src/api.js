@@ -68,6 +68,12 @@ export const listMyHolds = (token) => api("/holds/my", { token });
 export const cancelMyHold = (token, holdId) =>
   api(`/holds/${holdId}`, { method: "DELETE", token });
 
+export const acceptReadyHold = (token, holdId) =>
+  api(`/holds/${holdId}/accept`, { method: "POST", token });
+
+export const declineReadyHold = (token, holdId) =>
+  api(`/holds/${holdId}/decline`, { method: "POST", token });
+
 export const createReservation = (token, payload) =>
   api("/staff/reservations", { method: "POST", token, body: payload });
 

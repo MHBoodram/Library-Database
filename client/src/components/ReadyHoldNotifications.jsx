@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../AuthContext";
-import { listMyHolds } from "../api";
+import { listMyHolds, acceptReadyHold, declineReadyHold } from "../api";
 import { formatDateTime } from "../utils";
 import "./ReadyHoldNotifications.css";
 
 const POLL_INTERVAL_MS = 60_000; // 1 minute
-const TOAST_LIFESPAN_MS = 12_000;
+const TOAST_LIFESPAN_MS = 0; // keep notifications visible until the user acts
 const STORAGE_KEY = "ready-hold-notifications";
 
 function normalizeRows(payload) {
@@ -41,11 +41,19 @@ function persistSeenKeys(set) {
 export default function ReadyHoldNotifications() {
   const { token } = useAuth();
   const [toasts, setToasts] = useState([]);
+  const [pendingToastId, setPendingToastId] = useState(null);
+  const [toastErrors, setToastErrors] = useState({});
   const timersRef = useRef(new Map());
   const seenRef = useRef(loadSeenKeys());
 
   const dismissToast = useCallback((toastId) => {
     setToasts((prev) => prev.filter((toast) => toast.id !== toastId));
+    setToastErrors((prev) => {
+      if (!prev[toastId]) return prev;
+      const next = { ...prev };
+      delete next[toastId];
+      return next;
+    });
     const timer = timersRef.current.get(toastId);
     if (timer) {
       clearTimeout(timer);
@@ -58,18 +66,19 @@ export default function ReadyHoldNotifications() {
       const key = holdKey(hold);
       const toast = {
         id: key,
+        holdId: hold?.hold_id,
         title: hold?.item_title || "Hold ready for pickup",
-        window:
-          hold?.available_since && hold?.expires_at
-            ? `${formatDateTime(hold.available_since)} - ${formatDateTime(hold.expires_at)}`
-            : null,
+        availableSince: hold?.available_since,
+        expiresAt: hold?.expires_at,
       };
       setToasts((prev) => [...prev, toast]);
-      if (timersRef.current.has(key)) {
-        clearTimeout(timersRef.current.get(key));
+      if (TOAST_LIFESPAN_MS > 0) {
+        if (timersRef.current.has(key)) {
+          clearTimeout(timersRef.current.get(key));
+        }
+        const timeout = setTimeout(() => dismissToast(key), TOAST_LIFESPAN_MS);
+        timersRef.current.set(key, timeout);
       }
-      const timeout = setTimeout(() => dismissToast(key), TOAST_LIFESPAN_MS);
-      timersRef.current.set(key, timeout);
     },
     [dismissToast]
   );
@@ -123,6 +132,28 @@ export default function ReadyHoldNotifications() {
     };
   }, []);
 
+  const performAction = useCallback(
+    async (toast, action) => {
+      if (!token || !toast?.holdId) return;
+      setPendingToastId(toast.id);
+      setToastErrors((prev) => ({ ...prev, [toast.id]: "" }));
+      try {
+        if (action === "accept") {
+          await acceptReadyHold(token, toast.holdId);
+        } else {
+          await declineReadyHold(token, toast.holdId);
+        }
+        dismissToast(toast.id);
+      } catch (err) {
+        const msg = err?.data?.message || err?.message || "Unable to update hold.";
+        setToastErrors((prev) => ({ ...prev, [toast.id]: msg }));
+      } finally {
+        setPendingToastId(null);
+      }
+    },
+    [dismissToast, token]
+  );
+
   if (!toasts.length) {
     return null;
   }
@@ -134,7 +165,32 @@ export default function ReadyHoldNotifications() {
           <div className="ready-hold-toast__badge">Hold Ready</div>
           <div className="ready-hold-toast__content">
             <p className="ready-hold-toast__title">{toast.title}</p>
-            {toast.window && <p className="ready-hold-toast__window">Pickup window: {toast.window}</p>}
+            {toast.availableSince && toast.expiresAt && (
+              <p className="ready-hold-toast__window">
+                Pickup window: {formatDateTime(toast.availableSince)} – {formatDateTime(toast.expiresAt)}
+              </p>
+            )}
+            <div className="ready-hold-toast__actions">
+              <button
+                type="button"
+                className="ready-hold-action ready-hold-action--primary"
+                onClick={() => performAction(toast, "accept")}
+                disabled={pendingToastId === toast.id}
+              >
+                {pendingToastId === toast.id ? "Processing…" : "Check out"}
+              </button>
+              <button
+                type="button"
+                className="ready-hold-action"
+                onClick={() => performAction(toast, "decline")}
+                disabled={pendingToastId === toast.id}
+              >
+                No thanks
+              </button>
+            </div>
+            {toastErrors[toast.id] && (
+              <p className="ready-hold-toast__error">{toastErrors[toast.id]}</p>
+            )}
           </div>
           <button
             type="button"
