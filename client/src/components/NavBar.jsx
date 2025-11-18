@@ -1,17 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom'
-import './NavBar.css'
-import { useAuth } from '../AuthContext'
+import { NavLink, useNavigate } from 'react-router-dom';
+import './NavBar.css';
+import { useAuth } from '../AuthContext';
 import AccountSettingsModal from './AccountSettingsModal';
+import { listNotifications } from '../api';
 
 function NavBar() {
-    const { user, logout, updateProfile } = useAuth();
+    const { user, token, logout, updateProfile } = useAuth();
     const navigate = useNavigate();
     const [menuOpen, setMenuOpen] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [settingsError, setSettingsError] = useState("");
     const [settingsSuccess, setSettingsSuccess] = useState("");
     const [settingsSaving, setSettingsSaving] = useState(false);
+    const [hasUnread, setHasUnread] = useState(false);
     const menuRef = useRef(null);
 
     function handleLogout() {
@@ -29,6 +31,45 @@ function NavBar() {
         document.addEventListener('mousedown', handleClick);
         return () => document.removeEventListener('mousedown', handleClick);
     }, [menuOpen]);
+
+    useEffect(() => {
+        if (!token) {
+            setHasUnread(false);
+            return;
+        }
+        let cancelled = false;
+        let timer;
+        const POLL_MS = 60_000;
+
+        const normalizeRows = (payload) => {
+            if (Array.isArray(payload?.rows)) return payload.rows;
+            if (Array.isArray(payload)) return payload;
+            return [];
+        };
+
+        async function pollUnread() {
+            try {
+                const data = await listNotifications(token, { status: "unread", limit: 1 });
+                if (cancelled) return;
+                const rows = normalizeRows(data);
+                setHasUnread(rows.length > 0);
+            } catch (err) {
+                if (!cancelled && err?.status !== 401) {
+                    console.warn("Failed to poll notifications", err);
+                }
+            } finally {
+                if (!cancelled) {
+                    timer = setTimeout(pollUnread, POLL_MS);
+                }
+            }
+        }
+
+        pollUnread();
+        return () => {
+            cancelled = true;
+            if (timer) clearTimeout(timer);
+        };
+    }, [token]);
 
     const initials = (user?.name || user?.email || '')
         .split(' ')
@@ -93,6 +134,7 @@ function NavBar() {
                                     onClick={() => navigate('/notifications')}
                                 >
                                     <span aria-hidden="true" className="notification-bell__icon">🔔</span>
+                                    {hasUnread && <span className="notification-bell__badge" aria-label="Unread notifications" />}
                                 </button>
                                 <div style={{ position: 'relative' }} ref={menuRef}>
                                     <button 
