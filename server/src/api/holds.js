@@ -2,6 +2,7 @@ import { sendJSON, readJSONBody, requireAuth } from "../lib/http.js";
 import { pool } from "../lib/db.js";
 import { assignCopyToNextHold, isStaffAuth } from "../lib/holdQueue.js";
 import { determineLoanLimit, defaultLoanDays, resolvePolicy, getDueDateISO, insertLoanRecord } from "../lib/loanRules.js";
+import { resolveHoldNotifications } from "../lib/notifications.js";
 
 function resolveUserId(auth, override) {
   return Number(
@@ -201,6 +202,7 @@ export const acceptHold = (JWT_SECRET) => async (req, res, params) => {
 
     await conn.execute("UPDATE hold SET status='fulfilled', expires_at=NULL WHERE hold_id=?", [hold.hold_id]);
     await conn.execute("UPDATE copy SET status='on_loan' WHERE copy_id=?", [hold.copy_id]);
+    await resolveHoldNotifications(conn, hold.hold_id);
 
     await conn.commit();
 
@@ -308,6 +310,7 @@ async function cancelHoldRecord(conn, hold, newStatus = "cancelled") {
   } else {
     await conn.execute("UPDATE hold SET status=? WHERE hold_id=?", [newStatus, hold.hold_id]);
   }
+  await resolveHoldNotifications(conn, hold.hold_id);
 }
 
 async function fetchBorrowerContext(conn, userId) {

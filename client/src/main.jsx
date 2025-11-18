@@ -16,6 +16,7 @@ import Rooms from "./pages/Rooms.jsx";
 import BookPage from "./pages/BookPage.jsx";
 import { getCustomCoverForTitle, DEFAULT_BOOK_PLACEHOLDER } from "./coverImages";
 import ManageAccounts from "./pages/ManageAccounts.jsx";
+import Notifications from "./pages/Notifications.jsx";
 
 import "./index.css";
 import ReadyHoldNotifications from "./components/ReadyHoldNotifications.jsx";
@@ -104,6 +105,14 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           <Route path="/books" element={<Books />} />
           <Route path="/books/:id" element={<Protected><BookRoute /></Protected>} />
           <Route path="/loans" element={<Loans />} />
+          <Route
+            path="/notifications"
+            element={
+              <Protected>
+                <Notifications />
+              </Protected>
+            }
+          />
           <Route path="/fines" element={<Protected><PayFines /></Protected>} />
           {/** Pending Loans merged into Manage Loans; route removed **/}
           <Route path="/rooms" element={<Rooms />} />

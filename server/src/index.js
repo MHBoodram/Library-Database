@@ -31,6 +31,7 @@ import { listAccounts, updateAccount as updateManagedAccount, flagAccount } from
 import { searchPatrons } from "./api/patrons.js";
 import { updateRoom, deleteRoom } from "./api/rooms.js";
 import { listMyFines, payFine } from "./api/fines.js";
+import { listNotifications, markNotificationRead, dismissNotification } from "./api/notifications.js";
 
 const PORT = Number(process.env.PORT) || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || "devsecret";
@@ -70,6 +71,9 @@ r.add("GET", "/api/staff/holds", listHolds(JWT_SECRET));
 r.add("DELETE", "/api/holds/:id", cancelHold(JWT_SECRET));
 r.add("POST", "/api/holds/:id/accept", acceptHold(JWT_SECRET));
 r.add("POST", "/api/holds/:id/decline", declineHold(JWT_SECRET));
+r.add("GET", "/api/notifications", listNotifications(JWT_SECRET));
+r.add("POST", "/api/notifications/:id/read", markNotificationRead(JWT_SECRET));
+r.add("POST", "/api/notifications/:id/dismiss", dismissNotification(JWT_SECRET));
 
 r.add("GET", "/api/reports/overdue", overdue(JWT_SECRET));
 r.add("GET", "/api/reports/balances", balances(JWT_SECRET));

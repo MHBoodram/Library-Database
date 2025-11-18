@@ -77,6 +77,20 @@ export const declineReadyHold = (token, holdId) =>
 export const createReservation = (token, payload) =>
   api("/staff/reservations", { method: "POST", token, body: payload });
 
+export const listNotifications = (token, params = {}) => {
+  const search = new URLSearchParams();
+  if (params.status) search.set("status", params.status);
+  if (params.limit) search.set("limit", params.limit);
+  const suffix = search.toString() ? `?${search.toString()}` : "";
+  return api(`/notifications${suffix}`, { token });
+};
+
+export const markNotificationRead = (token, id) =>
+  api(`/notifications/${id}/read`, { method: "POST", token });
+
+export const dismissNotification = (token, id) =>
+  api(`/notifications/${id}/dismiss`, { method: "POST", token });
+
 export const listReservations = (token, params = {}) => {
   const qs = new URLSearchParams(params);
   const path = qs.toString() ? `/staff/reservations?${qs.toString()}` : "/staff/reservations";

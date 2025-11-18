@@ -85,7 +85,15 @@ function NavBar() {
                 <nav className='util-bar-container'>
                     <div className='bar-links'>
                         {user ? (
-                            <>
+                            <div className="account-controls">
+                                <button
+                                    type="button"
+                                    className="notification-bell"
+                                    aria-label="Notifications"
+                                    onClick={() => navigate('/notifications')}
+                                >
+                                    <span aria-hidden="true" className="notification-bell__icon">🔔</span>
+                                </button>
                                 <div style={{ position: 'relative' }} ref={menuRef}>
                                     <button 
                                         className='account-chip'
@@ -104,7 +112,7 @@ function NavBar() {
                                         </div>
                                     )}
                                 </div>
-                            </>
+                            </div>
                         ) : (
                             <>
                                 <NavLink to="/login" className = {({ isActive }) => (isActive? 'bar-link active' : 'bar-link')}>
