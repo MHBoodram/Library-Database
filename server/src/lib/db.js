@@ -43,6 +43,8 @@ export const pool = mysql.createPool({
   database: process.env.DB_NAME,
   // ⬇️ use the prepared ssl object
   ssl,
+  timezone: "local",
+  dateStrings: true,
 });
 
 // Ensure each new connection uses the library timezone for server-side NOW() and comparisons
