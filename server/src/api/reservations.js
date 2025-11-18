@@ -152,6 +152,7 @@ export const listReservations = (JWT_SECRET) => async (req, res) => {
 
   try {
     const [rows] = await pool.query(sql.join(" "), params);
+    console.log("[reservations] listReservations rows:", rows);
     return sendJSON(res, 200, rows);
   } catch (err) {
     console.error("List reservations failed:", err);
@@ -338,6 +339,7 @@ export const listMyReservations = (JWT_SECRET) => async (req, res) => {
        LIMIT 200`,
       [userId]
     );
+    console.log("[reservations] listMyReservations rows:", rows);
     return sendJSON(res, 200, rows);
   } catch (err) {
     console.error("List my reservations failed:", err);
@@ -459,6 +461,7 @@ export const getRoomAvailability = (JWT_SECRET) => async (req, res) => {
        ORDER BY start_time`,
       [dateParam]
     );
+    console.log("[reservations] staff availability rows:", reservations);
 
     // Group reservations by room_id
     const reservationsByRoom = {};
@@ -519,6 +522,7 @@ export const getRoomAvailabilityPatron = (JWT_SECRET) => async (req, res) => {
        ORDER BY start_time`,
       [dateParam]
     );
+    console.log("[reservations] patron availability rows:", reservations);
 
     const userId = Number(auth.uid || auth.user_id);
 
