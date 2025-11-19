@@ -1,3 +1,5 @@
+import { createHoldReadyNotification, resolveHoldNotifications } from "./notifications.js";
+
 export const HOLD_PICKUP_WINDOW_HOURS = Number(process.env.HOLD_PICKUP_WINDOW_HOURS || 48);
 export const HOLD_LIMITS = {
   student: Number(process.env.HOLD_LIMIT_STUDENT || 5),
@@ -41,6 +43,7 @@ export async function expireReadyHolds(conn) {
       "UPDATE hold SET status='expired', copy_id=NULL, available_since=NULL, expires_at=NULL WHERE hold_id=?",
       [row.hold_id]
     );
+    await resolveHoldNotifications(conn, row.hold_id);
     if (row.copy_id) {
       await conn.execute("UPDATE copy SET status='available' WHERE copy_id=?", [row.copy_id]);
       await assignCopyToNextHold(conn, row.copy_id, row.item_id);
@@ -59,7 +62,7 @@ export async function assignCopyToNextHold(conn, copyId, explicitItemId = null) 
 
   const [holdRows] = await conn.query(
     `
-      SELECT hold_id
+      SELECT hold_id, user_id, queue_position
       FROM hold
       WHERE item_id = ?
         AND status = 'queued'
@@ -75,6 +78,8 @@ export async function assignCopyToNextHold(conn, copyId, explicitItemId = null) 
   }
 
   const holdId = holdRows[0].hold_id;
+  const holdUserId = holdRows[0].user_id;
+  const queuePosition = holdRows[0].queue_position;
   const availableSince = new Date();
   const expiresAt = new Date(availableSince.getTime() + HOLD_PICKUP_WINDOW_HOURS * 60 * 60 * 1000);
 
@@ -90,6 +95,27 @@ export async function assignCopyToNextHold(conn, copyId, explicitItemId = null) 
     [copyId, availableSince, expiresAt, holdId]
   );
   await conn.execute("UPDATE copy SET status='on_hold' WHERE copy_id=?", [copyId]);
+
+  let itemTitle = null;
+  try {
+    const [itemRows] = await conn.query("SELECT title FROM item WHERE item_id = ? LIMIT 1", [itemId]);
+    itemTitle = itemRows[0]?.title || null;
+  } catch {}
+  try {
+    await createHoldReadyNotification(conn, {
+      holdId,
+      userId: holdUserId,
+      itemId,
+      copyId,
+      itemTitle,
+      availableSince,
+      expiresAt,
+      queuePosition,
+    });
+  } catch (err) {
+    console.error("Failed to create hold notification:", err);
+  }
+
   return holdId;
 }
 

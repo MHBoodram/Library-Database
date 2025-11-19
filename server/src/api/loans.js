@@ -1,5 +1,7 @@
 import { sendJSON, readJSONBody, requireAuth } from "../lib/http.js";
 import { pool } from "../lib/db.js";
+import { assignCopyToNextHold } from "../lib/holdQueue.js";
+import { createAppError, resolvePolicy, defaultLoanDays, determineLoanLimit, getDueDateISO, insertLoanRecord } from "../lib/loanRules.js";
 
 export const checkout = (JWT_SECRET) => async (req, res) => {
   const auth = requireAuth(req, res, JWT_SECRET); if (!auth) return;
@@ -92,6 +94,7 @@ export const returnLoan = (JWT_SECRET) => async (req, res) => {
       "UPDATE copy SET status = 'available' WHERE copy_id = ?",
       [loan.copy_id]
     );
+    await assignCopyToNextHold(conn, loan.copy_id);
 
     await conn.commit();
     // log returned event
@@ -255,65 +258,13 @@ async function performCheckout({ user_id, copy_id, barcode, employee_id }) {
     const loanDays = Number(policy?.loan_days) || defaultLoanDays(accountRole);
     const dueDate = getDueDateISO(loanDays);
 
-    let insertResult;
-    try {
-      // Preferred: insert with policy + snapshot columns
-      const [res] = await conn.execute(
-        `
-          INSERT INTO loan (
-            user_id,
-            copy_id,
-            employee_id,
-            policy_id,
-            checkout_date,
-            due_date,
-            status,
-            daily_fine_rate_snapshot,
-            grace_days_snapshot,
-            max_fine_snapshot,
-            replacement_fee_snapshot
-          )
-          VALUES (
-            ?, ?, ?, ?, NOW(), ?, 'active', ?, ?, ?, ?
-          )
-        `,
-        [
-          user_id,
-          resolvedCopyId,
-          employee_id,
-          policy?.policy_id ?? null,
-          dueDate,
-          policy?.daily_rate ?? null,
-          policy?.grace_days ?? null,
-          policy?.max_fine ?? null,
-          policy?.replacement_fee ?? null,
-        ]
-      );
-      insertResult = res;
-    } catch (e) {
-      // Fallback for legacy schemas without policy/snapshot columns
-      const msg = String(e?.message || "");
-      if (e?.code === 'ER_BAD_FIELD_ERROR' || /Unknown column/.test(msg)) {
-        const [res] = await conn.execute(
-          `
-            INSERT INTO loan (
-              user_id,
-              copy_id,
-              employee_id,
-              checkout_date,
-              due_date,
-              status
-            ) VALUES (
-              ?, ?, ?, NOW(), ?, 'active'
-            )
-          `,
-          [user_id, resolvedCopyId, employee_id, dueDate]
-        );
-        insertResult = res;
-      } else {
-        throw e;
-      }
-    }
+    const insertResult = await insertLoanRecord(conn, {
+      user_id,
+      copy_id: resolvedCopyId,
+      employee_id,
+      dueDate,
+      policy,
+    });
 
     await conn.execute(
       "UPDATE copy SET status='on_loan' WHERE copy_id=?",
@@ -344,102 +295,6 @@ async function performCheckout({ user_id, copy_id, barcode, employee_id }) {
   }
 }
 
-function createAppError(appCode, message, status = 400) {
-  const err = new Error(message);
-  err.appCode = appCode;
-  err.status = status;
-  return err;
-}
-
-async function resolvePolicy(conn, item_id, userCategory) {
-  const [itemTypeRows] = await conn.query(
-    `
-      SELECT
-        CASE
-          WHEN d.item_id IS NOT NULL THEN 'device'
-          WHEN md.item_id IS NOT NULL THEN LOWER(md.media_type)
-          ELSE 'book'
-        END AS raw_media_type
-      FROM item i
-      LEFT JOIN device d ON d.item_id = i.item_id
-      LEFT JOIN media md ON md.item_id = i.item_id
-      WHERE i.item_id = ?
-      LIMIT 1
-    `,
-    [item_id]
-  );
-  const rawMediaType = itemTypeRows[0]?.raw_media_type || "book";
-  const policyMediaType = normalizePolicyMediaType(rawMediaType);
-
-  if (!policyMediaType) return null;
-  try {
-    const [policyRows] = await conn.query(
-      `
-        SELECT policy_id, media_type, loan_days, daily_rate, grace_days, max_fine, replacement_fee
-        FROM fine_policy
-        WHERE media_type = ? AND user_category = ?
-        LIMIT 1
-      `,
-      [policyMediaType, userCategory]
-    );
-    if (policyRows.length) return policyRows[0];
-
-    if (policyMediaType !== "other") {
-      const [fallbackRows] = await conn.query(
-        `
-          SELECT policy_id, media_type, loan_days, daily_rate, grace_days, max_fine, replacement_fee
-          FROM fine_policy
-          WHERE media_type = 'other' AND user_category = ?
-          LIMIT 1
-        `,
-        [userCategory]
-      );
-      if (fallbackRows.length) return fallbackRows[0];
-    }
-  } catch (err) {
-    // Make fine_policy optional: if the table is missing, proceed without a policy
-    if (err && (err.code === 'ER_NO_SUCH_TABLE' || /fine_policy/.test(String(err.message)))) {
-      return { media_type: policyMediaType };
-    }
-    throw err;
-  }
-
-  return { media_type: policyMediaType };
-}
-
-function normalizePolicyMediaType(raw) {
-  const value = (raw || "").toLowerCase();
-  if (!value) return "book";
-  if (value === "device") return "device";
-  if (value === "dvd") return "dvd";
-  if (value === "blu-ray" || value === "bluray") return "dvd";
-  if (value === "cd") return "other";
-  if (value === "book") return "book";
-  if (value === "other") return "other";
-  return "book";
-}
-
-function getDueDateISO(days) {
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  now.setDate(now.getDate() + (Number.isFinite(days) ? days : 14));
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function determineLoanLimit(role) {
-  const normalized = (role || "").toLowerCase();
-  if (normalized === "faculty") return 7;
-  return 5;
-}
-
-function defaultLoanDays(role) {
-  const normalized = (role || "").toLowerCase();
-  if (normalized === "faculty") return 21;
-  return 14;
-}
 
 export const fetchUserLoans = (JWT_SECRET, mode) => async (req, res) => {
   const auth = requireAuth(req, res, JWT_SECRET); if (!auth) return;

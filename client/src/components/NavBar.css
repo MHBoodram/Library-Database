@@ -112,6 +112,54 @@
   white-space: nowrap;
 }
 
+.notification-bell {
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  background: #ffffff;
+  border-radius: 999px;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #0f172a;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+  position: relative;
+}
+
+.notification-bell__icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.notification-bell__badge {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 0 0 2px #fff;
+}
+
+.notification-bell:hover {
+  background: #f8fafc;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.15);
+}
+
+.notification-bell:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.account-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .account-menu {
   position: absolute;
   right: 0;

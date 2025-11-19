@@ -16,6 +16,7 @@ FRONTEND_ORIGIN=http://localhost:5173
 Load schema to MySQL:
 
 - Open `library_db.sql` and run it against your MySQL instance.
+- Apply `sql/add_notifications_table.sql` to add the notification feed used by hold-ready alerts.
 
 ## Run
 

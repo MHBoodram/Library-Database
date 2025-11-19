@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS `notification` (
+  `notification_id` INT NOT NULL AUTO_INCREMENT,
+  `user_id` INT NOT NULL,
+  `hold_id` INT DEFAULT NULL,
+  `item_id` INT DEFAULT NULL,
+  `copy_id` INT DEFAULT NULL,
+  `type` ENUM('hold_ready','system') NOT NULL DEFAULT 'hold_ready',
+  `status` ENUM('unread','read','resolved') NOT NULL DEFAULT 'unread',
+  `title` VARCHAR(255) NOT NULL,
+  `message` TEXT,
+  `action_required` TINYINT(1) NOT NULL DEFAULT 0,
+  `metadata` JSON DEFAULT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `read_at` DATETIME DEFAULT NULL,
+  `resolved_at` DATETIME DEFAULT NULL,
+  PRIMARY KEY (`notification_id`),
+  KEY `idx_notification_user_status` (`user_id`,`status`,`created_at`),
+  CONSTRAINT `fk_notification_user` FOREIGN KEY (`user_id`) REFERENCES `user` (`user_id`),
+  CONSTRAINT `fk_notification_hold` FOREIGN KEY (`hold_id`) REFERENCES `hold` (`hold_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

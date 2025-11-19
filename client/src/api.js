@@ -68,8 +68,28 @@ export const listMyHolds = (token) => api("/holds/my", { token });
 export const cancelMyHold = (token, holdId) =>
   api(`/holds/${holdId}`, { method: "DELETE", token });
 
+export const acceptReadyHold = (token, holdId) =>
+  api(`/holds/${holdId}/accept`, { method: "POST", token });
+
+export const declineReadyHold = (token, holdId) =>
+  api(`/holds/${holdId}/decline`, { method: "POST", token });
+
 export const createReservation = (token, payload) =>
   api("/staff/reservations", { method: "POST", token, body: payload });
+
+export const listNotifications = (token, params = {}) => {
+  const search = new URLSearchParams();
+  if (params.status) search.set("status", params.status);
+  if (params.limit) search.set("limit", params.limit);
+  const suffix = search.toString() ? `?${search.toString()}` : "";
+  return api(`/notifications${suffix}`, { token });
+};
+
+export const markNotificationRead = (token, id) =>
+  api(`/notifications/${id}/read`, { method: "POST", token });
+
+export const dismissNotification = (token, id) =>
+  api(`/notifications/${id}/dismiss`, { method: "POST", token });
 
 export const listReservations = (token, params = {}) => {
   const qs = new URLSearchParams(params);
