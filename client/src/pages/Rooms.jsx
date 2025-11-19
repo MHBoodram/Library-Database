@@ -5,7 +5,7 @@ import NavBar from "../components/NavBar";
 import { formatLibraryDateTime, libraryDateTimeToUTCISOString, toLibraryTimeParts } from "../utils";
 import "./Rooms.css";
 
-function RoomCalendarViewPatron({ api, onReservationCreated }) {
+function RoomCalendarViewPatron({ api, refreshFlag, onReservationCreated }) {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -28,7 +28,7 @@ function RoomCalendarViewPatron({ api, onReservationCreated }) {
       }
     };
     fetchAvailability();
-  }, [api, selectedDate]);
+  }, [api, selectedDate, refreshFlag]);
 
   // Navigation helpers
   const changeDate = (days) => {
@@ -395,7 +395,7 @@ export default function Rooms() {
       </div>
 
       {/* Room Calendar Grid */}
-  <RoomCalendarViewPatron api={api} onReservationCreated={() => setRefreshFlag((f) => f + 1)} />
+  <RoomCalendarViewPatron api={api} refreshFlag = {refreshFlag} onReservationCreated={() => setRefreshFlag((f) => f + 1)} />
 
       {/* My Reservations Section */}
       <div className="rooms-reservations-section">
