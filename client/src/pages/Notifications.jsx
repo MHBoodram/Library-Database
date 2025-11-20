@@ -19,7 +19,6 @@ const normalizeRows = (payload) => {
 };
 
 const FILTER_OPTIONS = [
-  { label: "Open", value: "open" },
   { label: "Unread", value: "unread" },
   { label: "Resolved", value: "resolved" },
   { label: "All", value: "all" },
@@ -55,7 +54,7 @@ export default function Notifications() {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [filter, setFilter] = useState("open");
+  const [filter, setFilter] = useState("unread");
   const [pending, setPending] = useState({});
 
   const loadNotifications = useCallback(
@@ -64,7 +63,7 @@ export default function Notifications() {
         navigate("/login");
         return;
       }
-      const status = statusOverride || "open";
+      const status = statusOverride || filter || "unread";
       setLoading(true);
       setError("");
       try {
@@ -76,7 +75,7 @@ export default function Notifications() {
         setLoading(false);
       }
     },
-    [navigate, token]
+    [navigate, token, filter]
   );
 
   useEffect(() => {
