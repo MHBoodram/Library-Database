@@ -3,6 +3,7 @@ import NavBar from "../components/NavBar";
 import { useAuth } from "../AuthContext";
 import { formatCurrency, formatDate } from "../utils";
 import { getMyFines, payFine } from "../api";
+import { ConfirmDialog, ToastBanner } from "../components/staff/shared/Feedback";
 import "./PayFines.css";
 
 export default function PayFines() {
@@ -12,6 +13,15 @@ export default function PayFines() {
   const [error, setError] = useState("");
   const [payingId, setPayingId] = useState(null);
   const [message, setMessage] = useState("");
+  const [toast, setToast] = useState(null);
+  const [confirmState, setConfirmState] = useState(null);
+
+  const showToast = useCallback((payload) => {
+    if (!payload) return;
+    setToast({ id: Date.now(), ...payload });
+  }, []);
+
+  const closeToast = useCallback(() => setToast(null), []);
 
   const fetchFines = useCallback(async () => {
     if (!token) return;
@@ -38,27 +48,38 @@ export default function PayFines() {
     [fines]
   );
 
-  const handlePay = async (fine) => {
+  const handlePay = (fine) => {
     if (!fine?.fine_id || fine.outstanding <= 0) return;
-    const confirmMsg = `Pay $${Number(fine.outstanding).toFixed(2)} for fine #${fine.fine_id}?`;
-    if (!window.confirm(confirmMsg)) return;
-    setPayingId(fine.fine_id);
-    setMessage("");
-    try {
-      await payFine(token, fine.fine_id);
-      setMessage(`Fine #${fine.fine_id} paid successfully.`);
-      await fetchFines();
-    } catch (err) {
-      setError(err?.data?.error || err?.message || "Payment failed.");
-    } finally {
-      setPayingId(null);
-    }
+    const amount = Number(fine.outstanding).toFixed(2);
+    setConfirmState({
+      title: "Confirm payment",
+      message: `Pay $${amount} for fine #${fine.fine_id}?`,
+      confirmLabel: "Pay now",
+      cancelLabel: "Cancel",
+      onConfirm: async () => {
+        setPayingId(fine.fine_id);
+        setMessage("");
+        try {
+          await payFine(token, fine.fine_id);
+          setMessage(`Fine #${fine.fine_id} paid successfully.`);
+          showToast({ type: "success", text: `Paid $${amount} for fine #${fine.fine_id}.` });
+          await fetchFines();
+        } catch (err) {
+          const msg = err?.data?.error || err?.message || "Payment failed.";
+          setError(msg);
+          showToast({ type: "error", text: msg });
+        } finally {
+          setPayingId(null);
+        }
+      },
+    });
   };
 
   return (
     <div className="pay-fines-page">
       <NavBar />
       <main className="pay-fines-content">
+        <ToastBanner toast={toast} onDismiss={closeToast} />
         <header className="pay-fines-header">
           <div>
             <h1>Pay Fines</h1>
@@ -129,6 +150,21 @@ export default function PayFines() {
           </div>
         </div>
       </main>
+      <ConfirmDialog
+        open={Boolean(confirmState)}
+        title={confirmState?.title}
+        message={confirmState?.message}
+        confirmLabel={confirmState?.confirmLabel || "Confirm"}
+        cancelLabel={confirmState?.cancelLabel || "Cancel"}
+        tone="primary"
+        onConfirm={async () => {
+          if (confirmState?.onConfirm) {
+            await confirmState.onConfirm();
+          }
+          setConfirmState(null);
+        }}
+        onCancel={() => setConfirmState(null)}
+      />
     </div>
   );
 }

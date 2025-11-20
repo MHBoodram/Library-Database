@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
 import { formatDate, formatDateTime, formatCurrency } from "../utils";
+import { ConfirmDialog, ToastBanner } from "../components/staff/shared/Feedback";
 import "./Loans.css";
 import { listMyHolds, cancelMyHold, acceptReadyHold, declineReadyHold } from "../api";
 
@@ -29,6 +30,15 @@ export default function Loans() {
   const [histLoading, setHistLoading] = useState(true);
   const [histError, setHistError] = useState("");
   const [returningLoanId, setReturningLoanId] = useState(null);
+  const [toast, setToast] = useState(null);
+  const [confirmState, setConfirmState] = useState(null);
+
+  const showToast = useCallback((payload) => {
+    if (!payload) return;
+    setToast({ id: Date.now(), ...payload });
+  }, []);
+
+  const closeToast = useCallback(() => setToast(null), []);
 
   useEffect(() => {
     if (!token) {
@@ -105,45 +115,66 @@ export default function Loans() {
     }
   }, [token]);
 
-  const handleCancelHold = async (holdId) => {
-    if (!window.confirm("Cancel this hold?")) return;
-    setCancelingHoldId(holdId);
-    try {
-      await cancelMyHold(token, holdId);
-      await refreshHolds();
-    } catch (err) {
-      setHoldsError(err?.message || err?.data?.error || "Failed to cancel hold");
-    } finally {
-      setCancelingHoldId(null);
-    }
+  const handleCancelHold = (holdId) => {
+    setConfirmState({
+      title: "Cancel hold?",
+      message: "This will remove your place in the queue.",
+      confirmLabel: "Cancel hold",
+      cancelLabel: "Keep hold",
+      tone: "danger",
+      onConfirm: async () => {
+        setCancelingHoldId(holdId);
+        try {
+          await cancelMyHold(token, holdId);
+          await refreshHolds();
+          showToast({ type: "success", text: "Hold cancelled." });
+        } catch (err) {
+          const msg = err?.message || err?.data?.error || "Failed to cancel hold";
+          setHoldsError(msg);
+          showToast({ type: "error", text: msg });
+        } finally {
+          setCancelingHoldId(null);
+        }
+      },
+    });
   };
 
-  const handleReturnLoan = async (loanId) => {
+  const handleReturnLoan = (loanId) => {
     const loan = rows.find((r) => r.loan_id === loanId);
     if (!loan) return;
-    if (!window.confirm(`Return "${loan.item_title}"?`)) return;
+    setConfirmState({
+      title: "Return item?",
+      message: `Return "${loan.item_title}" now?`,
+      confirmLabel: "Return",
+      cancelLabel: "Keep checkout",
+      tone: "danger",
+      onConfirm: async () => {
+        setReturningLoanId(loanId);
+        setActionError("");
+        try {
+          await callApi("loans/return", {
+            method: "POST",
+            body: { loan_id: loanId },
+          });
 
-    setReturningLoanId(loanId);
-    setActionError("");
-    try {
-      await callApi("loans/return", {
-        method: "POST",
-        body: { loan_id: loanId },
-      });
+          const returnedLoan = {
+            ...loan,
+            status: "returned",
+            return_date: new Date().toISOString(),
+          };
 
-      const returnedLoan = {
-        ...loan,
-        status: "returned",
-        return_date: new Date().toISOString(),
-      };
-
-      setRows((prev) => prev.filter((item) => item.loan_id !== loanId));
-      setHistory((prev) => [returnedLoan, ...prev]);
-    } catch (err) {
-      setActionError(err?.message || err?.data?.error || "Failed to return loan.");
-    } finally {
-      setReturningLoanId(null);
-    }
+          setRows((prev) => prev.filter((item) => item.loan_id !== loanId));
+          setHistory((prev) => [returnedLoan, ...prev]);
+          showToast({ type: "success", text: `Returned "${loan.item_title}".` });
+        } catch (err) {
+          const msg = err?.message || err?.data?.error || "Failed to return loan.";
+          setActionError(msg);
+          showToast({ type: "error", text: msg });
+        } finally {
+          setReturningLoanId(null);
+        }
+      },
+    });
   };
 
   const handleAcceptHold = async (hold) => {
@@ -179,6 +210,7 @@ export default function Loans() {
   return (
     <div className="loans-page">
       <NavBar />
+      <ToastBanner toast={toast} onDismiss={closeToast} />
       <h1>Your Loans</h1>
       <p>View your current and past loans.</p>
 
@@ -366,6 +398,22 @@ export default function Loans() {
           </div>
         </div>
       </section>
+
+      <ConfirmDialog
+        open={Boolean(confirmState)}
+        title={confirmState?.title}
+        message={confirmState?.message}
+        confirmLabel={confirmState?.confirmLabel || "Confirm"}
+        cancelLabel={confirmState?.cancelLabel || "Cancel"}
+        tone={confirmState?.tone || "primary"}
+        onConfirm={async () => {
+          if (confirmState?.onConfirm) {
+            await confirmState.onConfirm();
+          }
+          setConfirmState(null);
+        }}
+        onCancel={() => setConfirmState(null)}
+      />
     </div>
   );
 }

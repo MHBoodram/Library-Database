@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
 import { formatDateTime, formatDate } from "../utils";
+import { ConfirmDialog, ToastBanner } from "../components/staff/shared/Feedback";
 import "./ManageAccounts.css";
 
 const ACCOUNT_ROLE_OPTIONS = ["student", "faculty", "staff", "admin"];
@@ -31,6 +32,13 @@ export default function ManageAccounts() {
   const [savingId, setSavingId] = useState(null);
   const [flaggingId, setFlaggingId] = useState(null);
   const [message, setMessage] = useState({ type: "", text: "" });
+  const [toast, setToast] = useState(null);
+  const [confirmState, setConfirmState] = useState(null);
+
+  const showToast = (payload) => {
+    if (!payload) return;
+    setToast({ id: Date.now(), ...payload });
+  };
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(query.trim()), 250);
@@ -138,22 +146,34 @@ export default function ManageAccounts() {
 
   const handleFlag = async (row) => {
     if (row.flagged_for_deletion) return;
-    if (!window.confirm(`Flag ${row.email} for deletion?`)) return;
-    setFlaggingId(row.account_id);
-    try {
-      await useApi(`manage/accounts/${row.account_id}/flag`, { method: "POST" });
-      setMessage({ type: "success", text: "Account flagged for deletion." });
-      refresh();
-    } catch (err) {
-      setMessage({ type: "error", text: err?.data?.error || err?.message || "Failed to flag account." });
-    } finally {
-      setFlaggingId(null);
-    }
+    setConfirmState({
+      title: "Flag account for deletion?",
+      message: `Flag ${row.email} for deletion?`,
+      confirmLabel: "Flag account",
+      cancelLabel: "Cancel",
+      tone: "danger",
+      onConfirm: async () => {
+        setFlaggingId(row.account_id);
+        try {
+          await useApi(`manage/accounts/${row.account_id}/flag`, { method: "POST" });
+          setMessage({ type: "success", text: "Account flagged for deletion." });
+          showToast({ type: "success", text: "Account flagged for deletion." });
+          refresh();
+        } catch (err) {
+          const msg = err?.data?.error || err?.message || "Failed to flag account.";
+          setMessage({ type: "error", text: msg });
+          showToast({ type: "error", text: msg });
+        } finally {
+          setFlaggingId(null);
+        }
+      },
+    });
   };
 
   return (
     <div className="manage-accounts-page">
       <NavBar />
+      <ToastBanner toast={toast} onDismiss={() => setToast(null)} />
       <div className="manage-accounts-content">
         <header>
           <h1>Account Manager</h1>
@@ -380,6 +400,21 @@ export default function ManageAccounts() {
           </div>
         </div>
       </div>
+      <ConfirmDialog
+        open={Boolean(confirmState)}
+        title={confirmState?.title}
+        message={confirmState?.message}
+        confirmLabel={confirmState?.confirmLabel || "Confirm"}
+        cancelLabel={confirmState?.cancelLabel || "Cancel"}
+        tone={confirmState?.tone || "primary"}
+        onConfirm={async () => {
+          if (confirmState?.onConfirm) {
+            await confirmState.onConfirm();
+          }
+          setConfirmState(null);
+        }}
+        onCancel={() => setConfirmState(null)}
+      />
     </div>
   );
 }
