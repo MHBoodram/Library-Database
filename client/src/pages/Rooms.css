@@ -549,3 +549,123 @@
     font-size: 0.625rem;
   }
 }
+
+/* Inline toast message for room actions */
+.rooms-toast {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 12px 0 16px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--gray-200);
+  background: #f8fafc;
+  color: var(--gray-800);
+  box-shadow: var(--shadow-sm);
+}
+
+.rooms-toast--success {
+  border-color: #c5e3d5;
+  background: #edf7f1;
+  color: #0f5132;
+}
+
+.rooms-toast--error {
+  border-color: #fbcfe8;
+  background: #fff1f2;
+  color: #9f1239;
+}
+
+.rooms-toast__dismiss {
+  border: none;
+  background: transparent;
+  font-size: 1rem;
+  color: inherit;
+  cursor: pointer;
+  padding: 4px 6px;
+  line-height: 1;
+}
+
+.rooms-toast__dismiss:hover {
+  opacity: 0.75;
+}
+
+/* Portal-style overlay for confirmations */
+.rooms-portal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.rooms-portal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.45);
+  backdrop-filter: blur(1px);
+  pointer-events: auto;
+}
+
+.rooms-portal__card {
+  position: relative;
+  pointer-events: auto;
+  max-width: 420px;
+  width: 92%;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--gray-200);
+}
+
+.rooms-portal__card h3 {
+  margin: 0 0 8px;
+  font-size: 1.05rem;
+  color: var(--gray-900);
+}
+
+.rooms-portal__card p {
+  margin: 0 0 14px;
+  color: var(--gray-700);
+  line-height: 1.4;
+}
+
+.rooms-portal__actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.rooms-portal__button {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--gray-300);
+  background: #f3f4f6;
+  color: var(--gray-800);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.rooms-portal__button:hover:not(:disabled) {
+  background: #e5e7eb;
+}
+
+.rooms-portal__button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.rooms-portal__button--primary {
+  border-color: var(--primary-main);
+  background: var(--primary-main);
+  color: #ffffff;
+}
+
+.rooms-portal__button--primary:hover:not(:disabled) {
+  background: var(--primary-dark);
+}

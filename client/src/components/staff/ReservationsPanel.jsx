@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Field, Th, Td } from "./shared/CommonComponents";
+import { ConfirmDialog, ToastBanner } from "./shared/Feedback";
 import { formatLibraryDateTime, libraryDateTimeToUTCISOString } from "../../utils";
 
 export default function ReservationsPanel({ api, staffUser, onChanged }) {
@@ -17,6 +18,18 @@ export default function ReservationsPanel({ api, staffUser, onChanged }) {
   const [roomsError, setRoomsError] = useState("");
   const [editingRoomId, setEditingRoomId] = useState(null);
   const [editRoomForm, setEditRoomForm] = useState({ room_number: "", capacity: "", features: "" });
+  const [toast, setToast] = useState(null);
+  const [confirmState, setConfirmState] = useState(null);
+
+  const showToast = useCallback((payload) => {
+    if (!payload) return;
+    setToast({ id: Date.now(), ...payload });
+  }, []);
+
+  const closeToast = useCallback(() => setToast(null), []);
+
+  const openConfirm = useCallback((config) => setConfirmState(config), []);
+  const closeConfirm = useCallback(() => setConfirmState(null), []);
 
   const fetchReservations = useCallback(async () => {
     setLoading(true);
@@ -89,6 +102,7 @@ export default function ReservationsPanel({ api, staffUser, onChanged }) {
 
   return (
     <section className="space-y-4">
+      <ToastBanner toast={toast} onDismiss={closeToast} />
       <div className="rounded-xl border bg-white p-4 shadow-sm">
         <h2 className="text-lg font-semibold">Create Room Reservation</h2>
         <div className="mb-4 p-3 bg-blue-50 rounded-md text-sm">
@@ -241,8 +255,11 @@ export default function ReservationsPanel({ api, staffUser, onChanged }) {
                                 } catch (err) {
                                   const code = err?.data?.error;
                                   const msg = err?.data?.message || err.message;
-                                  if (code === 'room_exists') alert(msg || 'That room number already exists.');
-                                  else alert(msg || 'Failed to update room');
+                                  if (code === 'room_exists') {
+                                    showToast({ type: "error", text: msg || 'That room number already exists.' });
+                                  } else {
+                                    showToast({ type: "error", text: msg || 'Failed to update room' });
+                                  }
                                 }
                               }}
                             >
@@ -272,18 +289,29 @@ export default function ReservationsPanel({ api, staffUser, onChanged }) {
                             </button>
                             <button
                               className="text-xs px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700"
-                              onClick={async () => {
-                                if (!window.confirm(`Permanently delete room ${r.room_number || r.room_id}?`)) return;
-                                try {
-                                  await api(`staff/rooms/${r.room_id}`, { method: 'DELETE' });
-                                  setRefreshFlag((f) => f + 1);
-                                } catch (err) {
-                                  const code = err?.data?.error;
-                                  const msg = err?.data?.message || err.message;
-                                  if (code === 'room_in_use') alert(msg || 'Room has reservations and cannot be deleted.');
-                                  else alert(msg || 'Failed to delete room');
-                                }
-                              }}
+                              onClick={() =>
+                                openConfirm({
+                                  title: `Delete room ${r.room_number || r.room_id}?`,
+                                  message: "This will remove the room. Existing reservations will block deletion.",
+                                  confirmLabel: "Delete room",
+                                  cancelLabel: "Keep room",
+                                  tone: "danger",
+                                  onConfirm: async () => {
+                                    try {
+                                      await api(`staff/rooms/${r.room_id}`, { method: 'DELETE' });
+                                      setRefreshFlag((f) => f + 1);
+                                    } catch (err) {
+                                      const code = err?.data?.error;
+                                      const msg = err?.data?.message || err.message;
+                                      if (code === 'room_in_use') {
+                                        showToast({ type: "error", text: msg || 'Room has reservations and cannot be deleted.' });
+                                      } else {
+                                        showToast({ type: "error", text: msg || 'Failed to delete room' });
+                                      }
+                                    }
+                                  },
+                                })
+                              }
                             >
                               Delete
                             </button>
@@ -301,7 +329,7 @@ export default function ReservationsPanel({ api, staffUser, onChanged }) {
 
       <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
         <div className="flex items-center justify-between border-b bg-gray-50 px-5 py-3 text-sm">
-          <span className="font-medium text-gray-700">Upcoming Reservations</span>
+          <span className="font-medium text-gray-700">Reservations History</span>
           <button
             onClick={() => setRefreshFlag((f) => f + 1)}
             className="text-xs font-medium text-gray-700 hover:underline"
@@ -361,19 +389,26 @@ export default function ReservationsPanel({ api, staffUser, onChanged }) {
                       <Td>
                         {displayStatus === 'active' && (
                           <button
-                            onClick={async () => {
-                              if (!window.confirm(`Cancel reservation #${r.reservation_id}?`)) return;
-                              try {
-                                await api(`reservations/${r.reservation_id}/cancel`, { method: 'PATCH' });
-                                setRefreshFlag((f) => f + 1);
-                                try { if (typeof onChanged === 'function') onChanged(); } catch { /* no-op */ }
-                              } catch (err) {
-                                console.error("Cancel error:", err);
-                                const errCode = err.data?.error || err.error;
-                                const errMsg = err.data?.message || err.message || 'Unknown error';
-                                alert(`Failed to cancel (${errCode}): ${errMsg}`);
-                              }
-                            }}
+                            onClick={() =>
+                              openConfirm({
+                                title: `Cancel reservation #${r.reservation_id}?`,
+                                confirmLabel: "Cancel reservation",
+                                cancelLabel: "Keep active",
+                                tone: "danger",
+                                onConfirm: async () => {
+                                  try {
+                                    await api(`reservations/${r.reservation_id}/cancel`, { method: 'PATCH' });
+                                    setRefreshFlag((f) => f + 1);
+                                    try { if (typeof onChanged === 'function') onChanged(); } catch { /* no-op */ }
+                                  } catch (err) {
+                                    console.error("Cancel error:", err);
+                                    const errCode = err.data?.error || err.error;
+                                    const errMsg = err.data?.message || err.message || 'Unknown error';
+                                    showToast({ type: "error", text: `Failed to cancel (${errCode}): ${errMsg}` });
+                                  }
+                                },
+                              })
+                            }
                             className="text-xs px-2 py-1 rounded bg-yellow-600 text-white hover:bg-yellow-700"
                           >
                             Cancel
@@ -381,19 +416,26 @@ export default function ReservationsPanel({ api, staffUser, onChanged }) {
                         )}
                         {' '}
                         <button
-                          onClick={async () => {
-                            if (!window.confirm(`Permanently delete reservation #${r.reservation_id}?`)) return;
-                            try {
-                              await api(`staff/reservations/${r.reservation_id}`, { method: 'DELETE' });
-                              setRefreshFlag((f) => f + 1);
-                              try { if (typeof onChanged === 'function') onChanged(); } catch { /* no-op */ }
-                            } catch (err) {
-                              console.error("Delete error:", err);
-                              const errCode = err.data?.error || err.error;
-                              const errMsg = err.data?.message || err.message || 'Unknown error';
-                              alert(`Failed to delete (${errCode}): ${errMsg}`);
-                            }
-                          }}
+                          onClick={() =>
+                            openConfirm({
+                              title: `Delete reservation #${r.reservation_id}?`,
+                              confirmLabel: "Delete reservation",
+                              cancelLabel: "Keep record",
+                              tone: "danger",
+                              onConfirm: async () => {
+                                try {
+                                  await api(`staff/reservations/${r.reservation_id}`, { method: 'DELETE' });
+                                  setRefreshFlag((f) => f + 1);
+                                  try { if (typeof onChanged === 'function') onChanged(); } catch { /* no-op */ }
+                                } catch (err) {
+                                  console.error("Delete error:", err);
+                                  const errCode = err.data?.error || err.error;
+                                  const errMsg = err.data?.message || err.message || 'Unknown error';
+                                  showToast({ type: "error", text: `Failed to delete (${errCode}): ${errMsg}` });
+                                }
+                              },
+                            })
+                          }
                           className="text-xs px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700"
                         >
                           Delete
@@ -407,6 +449,21 @@ export default function ReservationsPanel({ api, staffUser, onChanged }) {
           </table>
         </div>
       </div>
+      <ConfirmDialog
+        open={Boolean(confirmState)}
+        title={confirmState?.title}
+        message={confirmState?.message}
+        confirmLabel={confirmState?.confirmLabel || "Confirm"}
+        cancelLabel={confirmState?.cancelLabel || "Cancel"}
+        tone={confirmState?.tone || "primary"}
+        onConfirm={async () => {
+          if (confirmState?.onConfirm) {
+            await confirmState.onConfirm();
+          }
+          closeConfirm();
+        }}
+        onCancel={closeConfirm}
+      />
     </section>
   );
 }

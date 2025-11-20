@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../../AuthContext";
 import { Field, Th, Td } from "./shared/CommonComponents";
+import { ConfirmDialog, ToastBanner } from "./shared/Feedback";
 
-// ============================================================================
+
 // AddItemPanel
-// ============================================================================
+
 
 export function AddItemPanel() {
   const { useApi } = useAuth();
@@ -32,6 +33,21 @@ export function AddItemPanel() {
   const [copies, setCopies] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
+  const [toast, setToast] = useState(null);
+  const [confirmState, setConfirmState] = useState(null);
+
+  const showToast = useCallback((payload) => {
+    if (!payload) return;
+    setToast({ id: Date.now(), ...payload });
+  }, []);
+
+  const closeToast = useCallback(() => setToast(null), []);
+
+  const openConfirm = useCallback((config) => {
+    setConfirmState(config);
+  }, []);
+
+  const closeConfirm = useCallback(() => setConfirmState(null), []);
 
   function update(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -186,6 +202,7 @@ export function AddItemPanel() {
 
   return (
     <section className="space-y-4">
+      <ToastBanner toast={toast} onDismiss={closeToast} />
       <div className="rounded-xl border bg-white p-4 shadow-sm">
         <h2 className="text-lg font-semibold mb-4">Add New Item</h2>
         <form onSubmit={onSubmit} className="space-y-4">
@@ -479,9 +496,8 @@ export function AddItemPanel() {
   );
 }
 
-// ============================================================================
+
 // EditItemPanel
-// ============================================================================
 
 export function EditItemPanel({ api }) {
   const [searchQuery, setSearchQuery] = useState("");
@@ -999,38 +1015,38 @@ export function EditItemPanel({ api }) {
                           copy={copy}
                           api={api}
                           onUpdate={() => selectItem(selectedItem)}
-                          onDelete={async () => {
-                            const confirmed = window.confirm(
-                              `Are you sure you want to delete copy ${copy.barcode}?\n\n` +
-                                `This will permanently remove the copy if it has no loan history, ` +
-                                `or mark it as "lost" if it has been loaned before.`
-                            );
-                            if (!confirmed) return;
-
-                            try {
-                              const result = await api(`copies/${copy.copy_id}`, {
-                                method: "DELETE",
-                              });
-                              await selectItem(selectedItem);
-                              if (result?.marked_lost) {
-                                setMessage(
-                                  `✓ Copy ${copy.barcode} marked as lost (has loan history).`
-                                );
-                              } else {
-                                setMessage(`✓ Copy ${copy.barcode} deleted successfully.`);
-                              }
-                            } catch (err) {
-                              setMessage(
-                                `Failed to delete copy: ${err?.data?.error || err?.message || "Unknown error"}`
-                              );
-                            }
-                          }}
+                          onNotify={showToast}
+                          onDelete={() =>
+                            openConfirm({
+                              title: `Delete copy ${copy.barcode}?`,
+                              message:
+                                "This will remove the copy if it has no loan history, or mark it as lost if it has been loaned before.",
+                              confirmLabel: "Delete copy",
+                              tone: "danger",
+                              onConfirm: async () => {
+                                try {
+                                  const result = await api(`copies/${copy.copy_id}`, {
+                                    method: "DELETE",
+                                  });
+                                  await selectItem(selectedItem);
+                                  if (result?.marked_lost) {
+                                    setMessage(`Copy ${copy.barcode} marked as lost (has loan history).`);
+                                  } else {
+                                    setMessage(`Copy ${copy.barcode} deleted successfully.`);
+                                  }
+                                } catch (err) {
+                                  setMessage(
+                                    `Failed to delete copy: ${err?.data?.error || err?.message || "Unknown error"}`
+                                  );
+                                }
+                              },
+                            })
+                          }
                         />
                       ))}
-                  </div>
-                )}
+                    </div>
+                  )}
 
-                {/* Lost Copies Section */}
                 {existingCopies.filter((c) => c.status === "lost").length > 0 && (
                   <div className="mt-4 pt-4 border-t">
                     <h3 className="text-sm font-semibold text-gray-800 mb-2">
@@ -1064,26 +1080,28 @@ export function EditItemPanel({ api }) {
                             </div>
                             <button
                               type="button"
-                              onClick={async () => {
-                                const confirmed = window.confirm(
-                                  `Permanently delete lost copy ${copy.barcode}?\n\n` +
-                                    `This action cannot be undone. The copy will be removed from the database ` +
-                                    `but loan history will be preserved.`
-                                );
-                                if (!confirmed) return;
-
-                                try {
-                                  await api(`copies/${copy.copy_id}?permanent=true`, {
-                                    method: "DELETE",
-                                  });
-                                  await selectItem(selectedItem);
-                                  setMessage(`✓ Lost copy ${copy.barcode} permanently deleted.`);
-                                } catch (err) {
-                                  setMessage(
-                                    `Failed to delete copy: ${err?.data?.message || err?.message || "Unknown error"}`
-                                  );
-                                }
-                              }}
+                              onClick={() =>
+                                openConfirm({
+                                  title: `Permanently delete lost copy ${copy.barcode}?`,
+                                  message:
+                                    "This action cannot be undone. The copy will be removed from the database but loan history will be preserved.",
+                                  confirmLabel: "Delete",
+                                  tone: "danger",
+                                  onConfirm: async () => {
+                                    try {
+                                      await api(`copies/${copy.copy_id}?permanent=true`, {
+                                        method: "DELETE",
+                                      });
+                                      await selectItem(selectedItem);
+                                      setMessage(`Lost copy ${copy.barcode} permanently deleted.`);
+                                    } catch (err) {
+                                      setMessage(
+                                        `Failed to delete copy: ${err?.data?.message || err?.message || "Unknown error"}`
+                                      );
+                                    }
+                                  },
+                                })
+                              }
                               className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 whitespace-nowrap"
                             >
                               Permanently Delete
@@ -1182,11 +1200,26 @@ export function EditItemPanel({ api }) {
           </form>
         </div>
       )}
+      <ConfirmDialog
+        open={Boolean(confirmState)}
+        title={confirmState?.title}
+        message={confirmState?.message}
+        confirmLabel={confirmState?.confirmLabel || "Confirm"}
+        cancelLabel={confirmState?.cancelLabel || "Cancel"}
+        tone={confirmState?.tone || "primary"}
+        onConfirm={async () => {
+          if (confirmState?.onConfirm) {
+            await confirmState.onConfirm();
+          }
+          closeConfirm();
+        }}
+        onCancel={closeConfirm}
+      />
     </section>
   );
 }
 
-function CopyRow({ copy, api, onUpdate, onDelete }) {
+function CopyRow({ copy, api, onUpdate, onDelete, onNotify }) {
   const [editing, setEditing] = useState(false);
   const [location, setLocation] = useState(copy.shelf_location || "");
   const [saving, setSaving] = useState(false);
@@ -1201,7 +1234,10 @@ function CopyRow({ copy, api, onUpdate, onDelete }) {
       setEditing(false);
       if (onUpdate) onUpdate();
     } catch (err) {
-      alert(`Failed to update location: ${err?.data?.error || err?.message || "Unknown error"}`);
+      onNotify?.({
+        type: "error",
+        text: `Failed to update location: ${err?.data?.error || err?.message || "Unknown error"}`,
+      });
     } finally {
       setSaving(false);
     }
@@ -1278,9 +1314,9 @@ function CopyRow({ copy, api, onUpdate, onDelete }) {
   );
 }
 
-// ============================================================================
+
 // RemoveItemPanel
-// ============================================================================
+
 
 export function RemoveItemPanel({ api }) {
   const [query, setQuery] = useState("");
@@ -1289,6 +1325,18 @@ export function RemoveItemPanel({ api }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [deleteStatus, setDeleteStatus] = useState({});
+  const [toast, setToast] = useState(null);
+  const [confirmState, setConfirmState] = useState(null);
+
+  const showToast = useCallback((payload) => {
+    if (!payload) return;
+    setToast({ id: Date.now(), ...payload });
+  }, []);
+
+  const closeToast = useCallback(() => setToast(null), []);
+
+  const openConfirm = useCallback((config) => setConfirmState(config), []);
+  const closeConfirm = useCallback(() => setConfirmState(null), []);
 
   useEffect(() => {
     const handle = setTimeout(() => setDebouncedQuery(query.trim()), 300);
@@ -1325,59 +1373,57 @@ export function RemoveItemPanel({ api }) {
   }, [searchItems]);
 
   async function handleDelete(itemId, title) {
-    const confirmed = window.confirm(
-      `Are you sure you want to delete:\n\n"${title}" (ID: ${itemId})?\n\nThis action cannot be undone and will also delete all copies and related data.`
-    );
-    if (!confirmed) return;
-
-    setDeleteStatus((prev) => ({ ...prev, [itemId]: "deleting" }));
-    try {
-      const result = await api(`items/${itemId}`, { method: "DELETE" });
-      setDeleteStatus((prev) => ({ ...prev, [itemId]: "success" }));
-      setItems((prev) => prev.filter((item) => item.item_id !== itemId));
-
-      // Show success message
-      const successMsg = result?.message || "Item deleted successfully";
-      alert(`✓ ${successMsg}`);
-
-      setTimeout(() => {
-        setDeleteStatus((prev) => {
-          const next = { ...prev };
-          delete next[itemId];
-          return next;
-        });
-      }, 2000);
-    } catch (err) {
-      setDeleteStatus((prev) => ({ ...prev, [itemId]: "error" }));
-
-      // Extract detailed error message
-      const errorCode = err?.data?.error || err?.error;
-      const errorMessage = err?.data?.message || err?.message;
-
-      let userMessage = "Failed to delete item";
-      if (errorCode === "has_active_loans") {
-        userMessage = `❌ Cannot delete: ${errorMessage}`;
-      } else if (errorCode === "not_found") {
-        userMessage = "❌ Item not found. It may have already been deleted.";
-      } else if (errorMessage) {
-        userMessage = `❌ ${errorMessage}`;
-      } else {
-        userMessage = `❌ Failed to delete item: ${errorCode || "Unknown error"}`;
-      }
-
-      alert(userMessage);
-      setTimeout(() => {
-        setDeleteStatus((prev) => {
-          const next = { ...prev };
-          delete next[itemId];
-          return next;
-        });
-      }, 3000);
-    }
+    openConfirm({
+      title: `Delete "${title}"?`,
+      message: "This cannot be undone and will also delete all copies and related data.",
+      confirmLabel: "Delete item",
+      cancelLabel: "Keep item",
+      tone: "danger",
+      onConfirm: async () => {
+        setDeleteStatus((prev) => ({ ...prev, [itemId]: "deleting" }));
+        try {
+          const result = await api(`items/${itemId}`, { method: "DELETE" });
+          setDeleteStatus((prev) => ({ ...prev, [itemId]: "success" }));
+          setItems((prev) => prev.filter((item) => item.item_id !== itemId));
+          const successMsg = result?.message || "Item deleted successfully.";
+          showToast({ type: "success", text: successMsg });
+          setTimeout(() => {
+            setDeleteStatus((prev) => {
+              const next = { ...prev };
+              delete next[itemId];
+              return next;
+            });
+          }, 2000);
+        } catch (err) {
+          setDeleteStatus((prev) => ({ ...prev, [itemId]: "error" }));
+          const errorCode = err?.data?.error || err?.error;
+          const errorMessage = err?.data?.message || err?.message;
+          let userMessage = "Failed to delete item";
+          if (errorCode === "has_active_loans") {
+            userMessage = errorMessage || "Item has active loans.";
+          } else if (errorCode === "not_found") {
+            userMessage = "Item not found. It may have already been deleted.";
+          } else if (errorMessage) {
+            userMessage = errorMessage;
+          } else {
+            userMessage = `Failed to delete item: ${errorCode || "Unknown error"}`;
+          }
+          showToast({ type: "error", text: userMessage });
+          setTimeout(() => {
+            setDeleteStatus((prev) => {
+              const next = { ...prev };
+              delete next[itemId];
+              return next;
+            });
+          }, 3000);
+        }
+      },
+    });
   }
 
   return (
     <section className="space-y-4">
+      <ToastBanner toast={toast} onDismiss={closeToast} />
       <div className="rounded-xl border bg-white shadow-sm p-5">
         <h2 className="text-lg font-semibold mb-3">Remove Item</h2>
         <p className="text-sm text-gray-600 mb-4">Search for items by title, ISBN, or ID.</p>
@@ -1465,6 +1511,21 @@ export function RemoveItemPanel({ api }) {
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={Boolean(confirmState)}
+        title={confirmState?.title}
+        message={confirmState?.message}
+        confirmLabel={confirmState?.confirmLabel || "Confirm"}
+        cancelLabel={confirmState?.cancelLabel || "Cancel"}
+        tone={confirmState?.tone || "primary"}
+        onConfirm={async () => {
+          if (confirmState?.onConfirm) {
+            await confirmState.onConfirm();
+          }
+          closeConfirm();
+        }}
+        onCancel={closeConfirm}
+      />
     </section>
   );
 }

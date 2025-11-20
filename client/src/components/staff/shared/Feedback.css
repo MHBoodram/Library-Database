@@ -1,0 +1,128 @@
+.staff-toast {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 12px 0 16px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  background: #f8fafc;
+  color: #1f2937;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+.staff-toast--success {
+  border-color: #c5e3d5;
+  background: #edf7f1;
+  color: #0f5132;
+}
+
+.staff-toast--error {
+  border-color: #fbcfe8;
+  background: #fff1f2;
+  color: #9f1239;
+}
+
+.staff-toast--info {
+  border-color: #e0e7ff;
+  background: #eef2ff;
+  color: #1e3a8a;
+}
+
+.staff-toast__dismiss {
+  border: none;
+  background: transparent;
+  font-size: 1rem;
+  color: inherit;
+  cursor: pointer;
+  padding: 4px 6px;
+  line-height: 1;
+}
+
+.staff-toast__dismiss:hover {
+  opacity: 0.75;
+}
+
+.staff-confirm {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.staff-confirm__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.45);
+  backdrop-filter: blur(1px);
+  pointer-events: auto;
+}
+
+.staff-confirm__card {
+  position: relative;
+  pointer-events: auto;
+  max-width: 420px;
+  width: 92%;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+  border: 1px solid #e5e7eb;
+}
+
+.staff-confirm__card h3 {
+  margin: 0 0 8px;
+  font-size: 1.05rem;
+  color: #111827;
+}
+
+.staff-confirm__card p {
+  margin: 0 0 14px;
+  color: #374151;
+  line-height: 1.5;
+}
+
+.staff-confirm__actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.staff-confirm__button {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  background: #f3f4f6;
+  color: #111827;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.staff-confirm__button:hover {
+  background: #e5e7eb;
+}
+
+.staff-confirm__button--primary {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.staff-confirm__button--primary:hover {
+  background: #1d4ed8;
+}
+
+.staff-confirm__button--danger {
+  border-color: #ef4444;
+  background: #ef4444;
+  color: #ffffff;
+}
+
+.staff-confirm__button--danger:hover {
+  background: #dc2626;
+}

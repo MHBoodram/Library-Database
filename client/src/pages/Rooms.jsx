@@ -1,17 +1,20 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
 import { formatLibraryDateTime, libraryDateTimeToUTCISOString, toLibraryTimeParts } from "../utils";
 import "./Rooms.css";
 
-function RoomCalendarViewPatron({ api, refreshFlag, onReservationCreated }) {
+function RoomCalendarViewPatron({ api, refreshFlag, onReservationCreated, onNotify }) {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [filterCapacity, setFilterCapacity] = useState("");
   const [filterFeatures, setFilterFeatures] = useState("");
+  const [pendingReservation, setPendingReservation] = useState(null);
+  const [booking, setBooking] = useState(false);
+  const notify = onNotify || (() => {});
 
   // Fetch room availability for selected date
   useEffect(() => {
@@ -148,12 +151,36 @@ function RoomCalendarViewPatron({ api, refreshFlag, onReservationCreated }) {
   };
 
   // Handle slot click for booking
-  const handleSlotClick = async (room, hour) => {
+  const handleSlotClick = (room, hour) => {
     const endHour = hour + 1; // 1-hour booking
     const startTime = libraryDateTimeToUTCISOString(`${selectedDate}T${String(hour).padStart(2, "0")}:00:00`);
     const endTime = libraryDateTimeToUTCISOString(`${selectedDate}T${String(endHour).padStart(2, "0")}:00:00`);
 
-    if (!confirm(`Book ${room.room_number} from ${hour}:00 to ${endHour}:00?`)) return;
+    setPendingReservation({
+      room,
+      hour,
+      endHour,
+      startTime,
+      endTime,
+    });
+  };
+
+  const closeReservationPrompt = () => {
+    if (booking) return;
+    setPendingReservation(null);
+  };
+
+  const slotLabel = (hour) => {
+    if (hour === 0) return "12 AM";
+    if (hour === 12) return "12 PM";
+    if (hour > 12) return `${hour - 12} PM`;
+    return `${hour} AM`;
+  };
+
+  const confirmReservation = async () => {
+    if (!pendingReservation || booking) return;
+    const { room, hour, endHour, startTime, endTime } = pendingReservation;
+    setBooking(true);
 
     try {
       await api("reservations", {
@@ -164,7 +191,10 @@ function RoomCalendarViewPatron({ api, refreshFlag, onReservationCreated }) {
           end_time: endTime,
         },
       });
-      alert("Reservation created successfully!");
+
+      const successMessage = `Reserved ${room.room_number} from ${slotLabel(hour)} to ${slotLabel(endHour)}.`;
+      notify({ type: "success", text: successMessage });
+
       // Refresh availability
       const data = await api(`reservations/availability?date=${selectedDate}`);
       setRooms(data.rooms || []);
@@ -172,15 +202,18 @@ function RoomCalendarViewPatron({ api, refreshFlag, onReservationCreated }) {
     } catch (err) {
       const code = err?.data?.error;
       const msg = err?.data?.message || err.message;
+      let friendly = msg || "Failed to create reservation.";
       if (code === "reservation_conflict") {
-        alert(msg || "Room already booked for that time.");
+        friendly = msg || "Room already booked for that time.";
       } else if (code === "duration_exceeded") {
-        alert(msg || "Reservation exceeds 2-hour limit.");
+        friendly = msg || "Reservation exceeds 2-hour limit.";
       } else if (code === "outside_library_hours") {
-        alert(msg || "Outside library hours.");
-      } else {
-        alert(msg || "Failed to create reservation.");
+        friendly = msg || "Outside library hours.";
       }
+      notify({ type: "error", text: friendly });
+    } finally {
+      setBooking(false);
+      setPendingReservation(null);
     }
   };
 
@@ -309,6 +342,39 @@ function RoomCalendarViewPatron({ api, refreshFlag, onReservationCreated }) {
         )}
       </div>
 
+      {pendingReservation && (
+        <div className="rooms-portal" role="dialog" aria-modal="true">
+          <div className="rooms-portal__backdrop" onClick={closeReservationPrompt} />
+          <div className="rooms-portal__card">
+            <h3>Confirm reservation</h3>
+            <p>
+              Book room <strong>{pendingReservation.room.room_number}</strong>{" "}
+              from <strong>{slotLabel(pendingReservation.hour)}</strong> to{" "}
+              <strong>{slotLabel(pendingReservation.endHour)}</strong> on{" "}
+              <strong>{selectedDate}</strong>?
+            </p>
+            <div className="rooms-portal__actions">
+              <button
+                type="button"
+                className="rooms-portal__button rooms-portal__button--primary"
+                onClick={confirmReservation}
+                disabled={booking}
+              >
+                {booking ? "Booking..." : "Confirm"}
+              </button>
+              <button
+                type="button"
+                className="rooms-portal__button"
+                onClick={closeReservationPrompt}
+                disabled={booking}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="calendar-legend">
         <strong>Legend:</strong>{' '}
         <span className="legend-item legend-available">✓ Available</span>{' '}
@@ -324,12 +390,23 @@ function RoomCalendarViewPatron({ api, refreshFlag, onReservationCreated }) {
 export default function Rooms() {
   const { token, useApi: api } = useAuth();
   const navigate = useNavigate();
+  const [flash, setFlash] = useState(null);
 
   // My reservations state
   const [myReservations, setMyReservations] = useState([]);
   const [reservationsLoading, setReservationsLoading] = useState(false);
   const [reservationsError, setReservationsError] = useState("");
   const [refreshFlag, setRefreshFlag] = useState(0);
+  const [cancelPrompt, setCancelPrompt] = useState(null);
+  const [canceling, setCanceling] = useState(false);
+
+  const showFlash = useCallback((payload) => {
+    if (!payload) return;
+    setFlash({
+      id: Date.now(),
+      ...payload,
+    });
+  }, []);
 
   useEffect(() => {
     if (!token) {
@@ -356,19 +433,19 @@ export default function Rooms() {
     })();
   }, [token, api, refreshFlag]);
 
-  async function cancelReservation(reservationId) {
-    if (!confirm("Are you sure you want to cancel this reservation?")) {
-      return;
-    }
-
+  async function cancelReservation(reservation) {
+    if (!reservation || canceling) return;
+    setCanceling(true);
     try {
-  await api(`reservations/${reservationId}/cancel`, { method: "PATCH" });
-      alert("Reservation cancelled successfully.");
+  await api(`reservations/${reservation.reservation_id}/cancel`, { method: "PATCH" });
+      showFlash({ type: "success", text: "Reservation cancelled successfully." });
       setRefreshFlag((f) => f + 1); // Refresh reservations list
     } catch (err) {
       const msg = err?.data?.message || err?.message;
-      alert(msg || "Failed to cancel reservation.");
+      showFlash({ type: "error", text: msg || "Failed to cancel reservation." });
     }
+    setCanceling(false);
+    setCancelPrompt(null);
   }
 
   // Use shared util to format in the library's timezone for clarity
@@ -380,6 +457,20 @@ export default function Rooms() {
     <div className="rooms-page">
       <NavBar />
       <h1>Reserve a Study Room</h1>
+
+      {flash && (
+        <div className={`rooms-toast rooms-toast--${flash.type || "info"}`} role="status">
+          <span>{flash.text}</span>
+          <button
+            type="button"
+            className="rooms-toast__dismiss"
+            aria-label="Dismiss message"
+            onClick={() => setFlash(null)}
+          >
+            ×
+          </button>
+        </div>
+      )}
       
       {/* Library Hours Info */}
       <div className="rooms-info-banner">
@@ -395,7 +486,12 @@ export default function Rooms() {
       </div>
 
       {/* Room Calendar Grid */}
-  <RoomCalendarViewPatron api={api} refreshFlag = {refreshFlag} onReservationCreated={() => setRefreshFlag((f) => f + 1)} />
+  <RoomCalendarViewPatron
+    api={api}
+    refreshFlag={refreshFlag}
+    onReservationCreated={() => setRefreshFlag((f) => f + 1)}
+    onNotify={showFlash}
+  />
 
       {/* My Reservations Section */}
       <div className="rooms-reservations-section">
@@ -436,7 +532,7 @@ export default function Rooms() {
                     <td>
                       {(res.computed_status || res.status) === "active" && (
                         <button
-                          onClick={() => cancelReservation(res.reservation_id)}
+                          onClick={() => setCancelPrompt(res)}
                           className="rooms-cancel-btn"
                         >
                           Cancel
@@ -450,6 +546,38 @@ export default function Rooms() {
           </div>
         )}
       </div>
+
+      {cancelPrompt && (
+        <div className="rooms-portal" role="dialog" aria-modal="true">
+          <div className="rooms-portal__backdrop" onClick={() => !canceling && setCancelPrompt(null)} />
+          <div className="rooms-portal__card">
+            <h3>Cancel reservation</h3>
+            <p>
+              Cancel room <strong>{cancelPrompt.room_number || cancelPrompt.room_id}</strong>{" "}
+              from <strong>{formatDateTime(cancelPrompt.start_time)}</strong> to{" "}
+              <strong>{formatDateTime(cancelPrompt.end_time)}</strong>?
+            </p>
+            <div className="rooms-portal__actions">
+              <button
+                type="button"
+                className="rooms-portal__button rooms-portal__button--primary"
+                onClick={() => cancelReservation(cancelPrompt)}
+                disabled={canceling}
+              >
+                {canceling ? "Cancelling..." : "Yes, cancel"}
+              </button>
+              <button
+                type="button"
+                className="rooms-portal__button"
+                onClick={() => setCancelPrompt(null)}
+                disabled={canceling}
+              >
+                Keep reservation
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
