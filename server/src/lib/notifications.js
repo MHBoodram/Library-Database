@@ -1,5 +1,13 @@
 export const NOTIFICATION_TYPES = Object.freeze({
   HOLD_READY: "hold_ready",
+  HOLD_LIFTED: "hold_lifted",
+  ROOM_EXPIRING: "room_expiring",
+  ROOM_EXPIRED: "room_expired",
+  DUE_SOON: "due_soon",
+  OVERDUE: "overdue",
+  LOST_WARNING: "lost_warning",
+  LOST_MARKED: "lost_marked",
+  SUSPENDED: "suspended",
   SYSTEM: "system",
 });
 
@@ -88,6 +96,55 @@ export async function listUserNotifications(runner, userId, { status = "open", l
     [...params, safeLimit]
   );
   return rows.map(mapNotificationRow);
+}
+
+export async function notificationExists(runner, { userId, type, hint }) {
+  const conn = ensureRunner(runner);
+  if (!userId || !type) return false;
+  const likeHint = hint ? `%${hint}%` : null;
+  const [rows] = await conn.query(
+    `
+      SELECT notification_id
+      FROM notification
+      WHERE user_id = ?
+        AND type = ?
+        ${likeHint ? "AND metadata LIKE ?" : ""}
+        AND status IN ('unread','read')
+      LIMIT 1
+    `,
+    likeHint ? [userId, type, likeHint] : [userId, type]
+  );
+  return rows.length > 0;
+}
+
+export async function createNotification(conn, { userId, type, title, message, actionRequired = false, metadata = null, status = NOTIFICATION_STATUS.UNREAD }) {
+  if (!userId || !type) return;
+  await conn.execute(
+    `
+      INSERT INTO notification (
+        user_id,
+        hold_id,
+        item_id,
+        copy_id,
+        type,
+        status,
+        title,
+        message,
+        action_required,
+        metadata
+      )
+      VALUES (?, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?)
+    `,
+    [
+      userId,
+      type,
+      status,
+      title || "Notification",
+      message || "",
+      actionRequired ? 1 : 0,
+      serializeMetadata(metadata),
+    ]
+  );
 }
 
 export async function updateNotificationStatus(runner, { notificationId, userId, status }) {

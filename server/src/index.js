@@ -4,7 +4,7 @@ import { URL } from "node:url";
 import { setCors, sendJSON, getAuthUser } from "./lib/http.js";
 import { router } from "./lib/router.js";
 import { pool } from "./lib/db.js";
-import { expireReadyHolds } from "./lib/holdQueue.js";
+import { expireReadyHolds, assignAvailableCopies } from "./lib/holdQueue.js";
 
 import { login } from "./api/auth.js";
 import { createItem, updateItem, deleteItem, listItems, listItemCopies } from "./api/items.js";
@@ -32,6 +32,7 @@ import { searchPatrons } from "./api/patrons.js";
 import { updateRoom, deleteRoom } from "./api/rooms.js";
 import { listMyFines, payFine } from "./api/fines.js";
 import { listNotifications, markNotificationRead, dismissNotification } from "./api/notifications.js";
+import { sweepLoanNotifications, sweepRoomNotifications } from "./lib/notificationSweeps.js";
 
 const PORT = Number(process.env.PORT) || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || "devsecret";
@@ -132,6 +133,8 @@ const server = http.createServer(async (req, res) => {
 });
 
 const HOLD_EXPIRY_SWEEP_MS = Number(process.env.HOLD_EXPIRY_SWEEP_MS || 5 * 60 * 1000);
+const LOAN_SWEEP_MS = Number(process.env.LOAN_SWEEP_MS || 60 * 60 * 1000);
+const ROOM_SWEEP_MS = Number(process.env.ROOM_SWEEP_MS || 10 * 60 * 1000);
 async function runHoldExpirySweep() {
   if (runHoldExpirySweep.running) return;
   runHoldExpirySweep.running = true;
@@ -139,9 +142,13 @@ async function runHoldExpirySweep() {
   try {
     await conn.beginTransaction();
     const expired = await expireReadyHolds(conn);
+    const assigned = await assignAvailableCopies(conn);
     await conn.commit();
     if (expired) {
       console.log(`Expired ${expired} ready hold(s)`);
+    }
+    if (assigned) {
+      console.log(`Assigned ${assigned} available copy/copies to queued holds`);
     }
   } catch (err) {
     try { await conn.rollback(); } catch {}
@@ -156,6 +163,36 @@ if (typeof expiryInterval.unref === "function") {
   expiryInterval.unref();
 }
 runHoldExpirySweep().catch((err) => console.error("Initial hold sweep failed:", err));
+
+async function runLoanSweep() {
+  if (runLoanSweep.running) return;
+  runLoanSweep.running = true;
+  try {
+    await sweepLoanNotifications();
+  } catch (err) {
+    console.error("Loan sweep failed:", err);
+  } finally {
+    runLoanSweep.running = false;
+  }
+}
+const loanInterval = setInterval(runLoanSweep, LOAN_SWEEP_MS);
+if (typeof loanInterval.unref === "function") loanInterval.unref();
+runLoanSweep().catch((err) => console.error("Initial loan sweep failed:", err));
+
+async function runRoomSweep() {
+  if (runRoomSweep.running) return;
+  runRoomSweep.running = true;
+  try {
+    await sweepRoomNotifications();
+  } catch (err) {
+    console.error("Room sweep failed:", err);
+  } finally {
+    runRoomSweep.running = false;
+  }
+}
+const roomInterval = setInterval(runRoomSweep, ROOM_SWEEP_MS);
+if (typeof roomInterval.unref === "function") roomInterval.unref();
+runRoomSweep().catch((err) => console.error("Initial room sweep failed:", err));
 
 server.listen(PORT, () => {
   console.log(`API running on http://localhost:${PORT}`);

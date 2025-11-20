@@ -1,6 +1,6 @@
 import { sendJSON, readJSONBody, requireAuth } from "../lib/http.js";
 import { pool } from "../lib/db.js";
-import { assignCopyToNextHold, isStaffAuth } from "../lib/holdQueue.js";
+import { assignCopyToNextHold, assignAvailableCopiesForItem, isStaffAuth } from "../lib/holdQueue.js";
 import { determineLoanLimit, defaultLoanDays, resolvePolicy, getDueDateISO, insertLoanRecord } from "../lib/loanRules.js";
 import { resolveHoldNotifications } from "../lib/notifications.js";
 
@@ -44,6 +44,9 @@ export const placeHold = (JWT_SECRET) => async (req, res) => {
       "INSERT INTO hold(user_id,item_id,copy_id,status,queue_position,available_since,expires_at) VALUES(?,?,?,?,?,NULL,NULL)",
       [user_id, item_id, copy_id || null, "queued", queue_position]
     );
+
+    // If copies are already available for this item, immediately assign to the next queued hold
+    await assignAvailableCopiesForItem(conn, item_id);
 
     await conn.commit();
     return sendJSON(res, 201, { hold_id: r.insertId, queue_position });
@@ -249,6 +252,16 @@ export const listHolds = (JWT_SECRET) => async (req, res) => {
     }
   }
   const filterUserId = queryScope === "self" ? resolveUserId(auth) : null;
+  const whereClauses = [];
+  const params = [];
+  if (filterUserId) {
+    whereClauses.push("h.user_id = ?");
+    params.push(filterUserId);
+  }
+  if (queryScope === "self") {
+    whereClauses.push("h.status NOT IN ('cancelled','expired')");
+  }
+  const whereSQL = whereClauses.length ? `WHERE ${whereClauses.join(" AND ")}` : "";
 
   try {
     const [rows] = await pool.query(
@@ -272,12 +285,12 @@ export const listHolds = (JWT_SECRET) => async (req, res) => {
         JOIN item i ON i.item_id = h.item_id
         JOIN user u ON u.user_id = h.user_id
         LEFT JOIN copy c ON c.copy_id = h.copy_id
-        ${filterUserId ? "WHERE h.user_id = ?" : ""}
+        ${whereSQL}
         ORDER BY FIELD(h.status,'ready','queued','fulfilled','cancelled','expired'),
                  h.queue_position ASC,
                  h.created_at ASC
       `
-      , filterUserId ? [filterUserId] : []
+      , params
     );
     return sendJSON(res, 200, { rows });
   } catch (err) {

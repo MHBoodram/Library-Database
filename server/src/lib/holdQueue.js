@@ -52,6 +52,50 @@ export async function expireReadyHolds(conn) {
   return rows.length;
 }
 
+export async function assignAvailableCopiesForItem(conn, itemId) {
+  if (!itemId) return 0;
+  const [copies] = await conn.query(
+    `
+      SELECT copy_id, item_id
+      FROM copy
+      WHERE item_id = ?
+        AND status = 'available'
+      ORDER BY copy_id ASC
+      FOR UPDATE
+    `,
+    [itemId]
+  );
+  let assigned = 0;
+  for (const copy of copies) {
+    const holdId = await assignCopyToNextHold(conn, copy.copy_id, copy.item_id);
+    if (holdId) assigned += 1;
+  }
+  return assigned;
+}
+
+export async function assignAvailableCopies(conn) {
+  const [copies] = await conn.query(
+    `
+      SELECT c.copy_id, c.item_id
+      FROM copy c
+      WHERE c.status = 'available'
+        AND EXISTS (
+          SELECT 1 FROM hold h
+          WHERE h.item_id = c.item_id
+            AND h.status = 'queued'
+        )
+      ORDER BY c.item_id ASC, c.copy_id ASC
+      FOR UPDATE
+    `
+  );
+  let assigned = 0;
+  for (const copy of copies) {
+    const holdId = await assignCopyToNextHold(conn, copy.copy_id, copy.item_id);
+    if (holdId) assigned += 1;
+  }
+  return assigned;
+}
+
 export async function assignCopyToNextHold(conn, copyId, explicitItemId = null) {
   const [copyRows] = await conn.query(
     "SELECT copy_id, item_id FROM copy WHERE copy_id = ? FOR UPDATE",

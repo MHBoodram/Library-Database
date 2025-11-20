@@ -26,6 +26,14 @@ const FILTER_OPTIONS = [
 ];
 
 const HOLD_READY = "hold_ready";
+const HOLD_LIFTED = "hold_lifted";
+const ROOM_EXPIRING = "room_expiring";
+const ROOM_EXPIRED = "room_expired";
+const DUE_SOON = "due_soon";
+const OVERDUE = "overdue";
+const LOST_WARNING = "lost_warning";
+const LOST_MARKED = "lost_marked";
+const SUSPENDED = "suspended";
 
 function getFriendlyError(err, fallback = "Something went wrong.") {
   const code = err?.data?.error;
@@ -146,6 +154,108 @@ export default function Notifications() {
 
   const currentFilterLabel = FILTER_OPTIONS.find((f) => f.value === filter)?.label || "Open";
 
+  const typeLabel = (type) => {
+    switch (type) {
+      case HOLD_READY: return "Hold ready";
+      case HOLD_LIFTED: return "Hold lifted";
+      case ROOM_EXPIRING: return "Room ending soon";
+      case ROOM_EXPIRED: return "Room ended";
+      case DUE_SOON: return "Due soon";
+      case OVERDUE: return "Overdue";
+      case LOST_WARNING: return "Lost warning";
+      case LOST_MARKED: return "Lost marked";
+      case SUSPENDED: return "Suspended";
+      default: return type?.replace(/_/g, " ") || "";
+    }
+  };
+
+  const renderMeta = (notification) => {
+    const meta = notification.metadata || {};
+    switch (notification.type) {
+      case HOLD_READY:
+        return (
+          <dl className="notification-card__meta">
+            {meta.item_title && (
+              <div>
+                <dt>Item</dt>
+                <dd>{meta.item_title}</dd>
+              </div>
+            )}
+            {meta.available_since && meta.expires_at && (
+              <div>
+                <dt>Pickup window</dt>
+                <dd>{formatDateTime(meta.available_since)} - {formatDateTime(meta.expires_at)}</dd>
+              </div>
+            )}
+            {meta.queue_position !== undefined && meta.queue_position !== null && (
+              <div>
+                <dt>Queue position</dt>
+                <dd>#{meta.queue_position}</dd>
+              </div>
+            )}
+          </dl>
+        );
+      case HOLD_LIFTED:
+        return (
+          <dl className="notification-card__meta">
+            {meta.item_title && (
+              <div>
+                <dt>Item</dt>
+                <dd>{meta.item_title}</dd>
+              </div>
+            )}
+          </dl>
+        );
+      case ROOM_EXPIRING:
+      case ROOM_EXPIRED:
+        return (
+          <dl className="notification-card__meta">
+            {meta.room_number && (
+              <div>
+                <dt>Room</dt>
+                <dd>{meta.room_number}</dd>
+              </div>
+            )}
+            {meta.start_time && meta.end_time && (
+              <div>
+                <dt>Time</dt>
+                <dd>{formatDateTime(meta.start_time)} - {formatDateTime(meta.end_time)}</dd>
+              </div>
+            )}
+          </dl>
+        );
+      case DUE_SOON:
+      case OVERDUE:
+      case LOST_WARNING:
+      case LOST_MARKED:
+      case SUSPENDED:
+        return (
+          <dl className="notification-card__meta">
+            {meta.item_title && (
+              <div>
+                <dt>Item</dt>
+                <dd>{meta.item_title}</dd>
+              </div>
+            )}
+            {meta.due_date && (
+              <div>
+                <dt>Due</dt>
+                <dd>{formatDateTime(meta.due_date)}</dd>
+              </div>
+            )}
+            {meta.suspend_after && (notification.type === LOST_WARNING || notification.type === SUSPENDED) && (
+              <div>
+                <dt>Suspension after</dt>
+                <dd>{formatDateTime(meta.suspend_after)}</dd>
+              </div>
+            )}
+          </dl>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="notifications-page">
       <NavBar />
@@ -153,7 +263,7 @@ export default function Notifications() {
         <header className="notifications-header">
           <div>
             <p className="notifications-eyebrow">Notifications</p>
-            <h1>Stay on top of your holds</h1>
+            <h1>Stay on top of your account</h1>
           </div>
           <div className="notifications-filter">
             {FILTER_OPTIONS.map((option) => (
@@ -183,10 +293,6 @@ export default function Notifications() {
               const status = notification.status || "unread";
               const isHoldReady = notification.type === HOLD_READY;
               const meta = notification.metadata || {};
-              const pickupWindow =
-                meta.available_since && meta.expires_at
-                  ? `${formatDateTime(meta.available_since)} - ${formatDateTime(meta.expires_at)}`
-                  : null;
               const processing = pending[notification.notification_id];
 
               return (
@@ -197,33 +303,12 @@ export default function Notifications() {
                       <p className="notification-card__timestamp">{formatDateTime(notification.created_at)}</p>
                     </div>
                     <span className={`notification-card__status badge-${status}`}>
-                      {status === "resolved" ? "Resolved" : status === "read" ? "Read" : "Unread"}
+                      {typeLabel(notification.type) || (status === "resolved" ? "Resolved" : status === "read" ? "Read" : "Unread")}
                     </span>
                   </div>
                   <p className="notification-card__message">{notification.message}</p>
 
-                  {isHoldReady && (
-                    <dl className="notification-card__meta">
-                      {meta.item_title && (
-                        <div>
-                          <dt>Item</dt>
-                          <dd>{meta.item_title}</dd>
-                        </div>
-                      )}
-                      {pickupWindow && (
-                        <div>
-                          <dt>Pickup window</dt>
-                          <dd>{pickupWindow}</dd>
-                        </div>
-                      )}
-                      {meta.queue_position !== undefined && meta.queue_position !== null && (
-                        <div>
-                          <dt>Queue position</dt>
-                          <dd>#{meta.queue_position}</dd>
-                        </div>
-                      )}
-                    </dl>
-                  )}
+                  {renderMeta(notification)}
 
                   <div className="notification-card__actions">
                     {isHoldReady && status !== "resolved" && (

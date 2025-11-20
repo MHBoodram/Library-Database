@@ -1,6 +1,6 @@
 .ready-hold-notifier {
   position: fixed;
-  top: 1.5rem;
+  top: calc(var(--nav-height, 60px) + 12px);
   right: 1.5rem;
   display: flex;
   flex-direction: column;
@@ -150,5 +150,17 @@
 
   .ready-hold-action--primary:not(:disabled):hover {
     background: #0284c7;
+  }
+}
+
+@media (max-width: 640px) {
+  .ready-hold-notifier {
+    top: calc(var(--nav-height, 60px) + 8px);
+    right: 0.75rem;
+    left: 0.75rem;
+  }
+  .ready-hold-toast {
+    max-width: none;
+    width: 100%;
   }
 }

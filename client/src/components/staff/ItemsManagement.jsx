@@ -527,12 +527,24 @@ export function EditItemPanel({ api }) {
   const [message, setMessage] = useState("");
   const [existingCopies, setExistingCopies] = useState([]);
   const [loadingCopies, setLoadingCopies] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [confirmState, setConfirmState] = useState(null);
 
   // Debounce search
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(searchQuery), 500);
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  const showToast = useCallback((payload) => {
+    if (!payload) return;
+    setToast({ id: Date.now(), ...payload });
+  }, []);
+
+  const closeToast = useCallback(() => setToast(null), []);
+
+  const openConfirm = useCallback((config) => setConfirmState(config), []);
+  const closeConfirm = useCallback(() => setConfirmState(null), []);
 
   // Search items
   useEffect(() => {
@@ -729,6 +741,7 @@ export function EditItemPanel({ api }) {
 
   return (
     <section className="space-y-4">
+      <ToastBanner toast={toast} onDismiss={closeToast} />
       {!selectedItem ? (
         <div className="rounded-xl border bg-white p-4 shadow-sm">
           <h2 className="text-lg font-semibold mb-4">Edit Item</h2>
