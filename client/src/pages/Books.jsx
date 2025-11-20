@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import NavBar from "../components/NavBar";
+import { ToastBanner } from "../components/staff/shared/Feedback";
 import { getItemCopies, placeHold } from "../api";
 import "./Books.css";
 import { getCustomCoverForTitle, DEFAULT_BOOK_PLACEHOLDER } from "../coverImages";
@@ -51,6 +52,7 @@ export default function Books() {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [holdLoading, setHoldLoading] = useState(false);
   const [holdMessage, setHoldMessage] = useState("");
+  const [toast, setToast] = useState(null);
 
   // Get unique subjects for filter
   const subjects = [...new Set(items.map(i => i.subject).filter(Boolean))].sort();
@@ -132,6 +134,11 @@ export default function Books() {
     }
   }
 
+  const showToast = (payload) => {
+    if (!payload) return;
+    setToast({ id: Date.now(), ...payload });
+  };
+
   function closeModal() {
     setSelectedItem(null);
     setCopies([]);
@@ -171,17 +178,17 @@ export default function Books() {
           available_copies: Math.max(0, (prev.available_copies || 0) - 1),
         };
       });
-      alert(`"${selectedItem.title}" is now checked out to you. View it in My Loans.`);
+      showToast({ type: "success", text: `"${selectedItem.title}" is now checked out to you. View it in My Loans.` });
       closeModal();
     } catch (err) {
       const code = err?.data?.error;
       const msg = err?.data?.message || err?.message;
       if (code === "loan_limit_exceeded") {
-        alert(msg || "You've reached your loan limit.");
+        showToast({ type: "error", text: msg || "You've reached your loan limit." });
       } else if (code === "copy_not_available") {
-        alert(msg || "That copy is not available.");
+        showToast({ type: "error", text: msg || "That copy is not available." });
       } else {
-        alert(msg || "Checkout failed.");
+        showToast({ type: "error", text: msg || "Checkout failed." });
       }
     } finally {
       setCheckoutLoading(false);
@@ -206,6 +213,7 @@ export default function Books() {
   return (
     <div className="catalog-page">
       <NavBar />
+      <ToastBanner toast={toast} onDismiss={() => setToast(null)} />
       
       <div className="catalog-header">
         <div className="catalog-hero">

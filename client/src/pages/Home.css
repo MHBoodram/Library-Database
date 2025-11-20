@@ -662,6 +662,29 @@ body {
   border-top: 2px solid var(--border-color);
 }
 
+.modal-inline-message {
+  font-size: 0.9rem;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: #f8fafc;
+  color: var(--text-dark);
+  width: 100%;
+  margin-top: 12px;
+}
+
+.modal-inline-message.success {
+  border-color: #c5e3d5;
+  background: #edf7f1;
+  color: #0f5132;
+}
+
+.modal-inline-message.error {
+  border-color: #fbcfe8;
+  background: #fff1f2;
+  color: #9f1239;
+}
+
 .btn-checkout, .btn-browse {
   flex: 1;
   padding: 14px 24px;

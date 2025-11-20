@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { API_BASE } from '../api';
 import { useAuth } from '../AuthContext';
 import NavBar from '../components/NavBar';
+import { ToastBanner } from '../components/staff/shared/Feedback';
 import './Home.css';
 
 // Fallback books in case API is unavailable or returns no data
@@ -55,6 +56,13 @@ export default function Home() {
   const [dynamicFeatured, setDynamicFeatured] = useState([]);
   const [availabilityLoaded, setAvailabilityLoaded] = useState(false);
   const [preloadComplete, setPreloadComplete] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [checkoutMessage, setCheckoutMessage] = useState({ type: "", text: "" });
+
+  const showToast = (payload) => {
+    if (!payload) return;
+    setToast({ id: Date.now(), ...payload });
+  };
 
   // Fetch top books from the API
   useEffect(() => {
@@ -237,14 +245,15 @@ export default function Home() {
   }, [selectedBook, availabilityLoaded, api]);
 
   const handleCheckout = async () => {
+    setCheckoutMessage({ type: "", text: "" });
     if (!user) {
-      alert('Please sign in to checkout books.');
+      showToast({ type: "error", text: "Please sign in to checkout books." });
       navigate('/login');
       return;
     }
 
     if (!selectedBook || !selectedBook.item_id) {
-      alert('Book information not loaded. Please try again.');
+      showToast({ type: "error", text: "Book information not loaded. Please try again." });
       return;
     }
 
@@ -256,7 +265,7 @@ export default function Home() {
       const availableCopy = copyList.find(c => c.status === 'available');
 
       if (!availableCopy) {
-        alert('No copies available right now. Please try again later.');
+        showToast({ type: "error", text: "No copies available right now. Please try again later." });
         setCheckoutLoading(false);
         return;
       }
@@ -291,11 +300,15 @@ export default function Home() {
         };
       });
 
-      alert(`"${selectedBook.title}" is now checked out to you. View it in My Loans.`);
+      const successText = `"${selectedBook.title}" is now checked out to you. View it in My Loans.`;
+      showToast({ type: "success", text: successText });
+      setCheckoutMessage({ type: "success", text: successText });
       closeModal();
     } catch (err) {
       const msg = err?.data?.details || err?.data?.message || err?.message || 'Checkout failed';
-      alert(`Checkout failed: ${msg}`);
+      const errorText = `Checkout failed: ${msg}`;
+      showToast({ type: "error", text: errorText });
+      setCheckoutMessage({ type: "error", text: errorText });
     } finally {
       setCheckoutLoading(false);
     }
@@ -311,6 +324,7 @@ export default function Home() {
   return (
     <div className="home-page">
       <NavBar />
+      <ToastBanner toast={toast} onDismiss={() => setToast(null)} />
       
       {/* Hero Section */}
       <div className="hero-section">
@@ -546,6 +560,13 @@ export default function Home() {
                     Browse All Copies
                   </button>
                 </div>
+                {checkoutMessage.text && (
+                  <div
+                    className={`modal-inline-message ${checkoutMessage.type === "error" ? "error" : "success"}`}
+                  >
+                    {checkoutMessage.text}
+                  </div>
+                )}
               </div>
             </div>
           </div>

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
@@ -17,6 +17,7 @@ import BookPage from "./pages/BookPage.jsx";
 import { getCustomCoverForTitle, DEFAULT_BOOK_PLACEHOLDER } from "./coverImages";
 import ManageAccounts from "./pages/ManageAccounts.jsx";
 import Notifications from "./pages/Notifications.jsx";
+import { ToastBanner } from "./components/staff/shared/Feedback.jsx";
 
 import "./index.css";
 import ReadyHoldNotifications from "./components/ReadyHoldNotifications.jsx";
@@ -24,6 +25,12 @@ import ReadyHoldNotifications from "./components/ReadyHoldNotifications.jsx";
 // Lightweight wrapper to supply data fetchers for BookPage
 function BookRoute() {
   const { useApi, user, token } = useAuth();
+  const [toast, setToast] = useState(null);
+
+  const showToast = (payload) => {
+    if (!payload) return;
+    setToast({ id: Date.now(), ...payload });
+  };
   
   const fetchBookById = async (id) => {
     const rows = await useApi(`items?id=${encodeURIComponent(id)}`);
@@ -62,34 +69,37 @@ function BookRoute() {
 
   const onCheckout = async (id, qty = 1) => {
     if (!token) {
-      alert("Please log in to checkout.");
+      showToast({ type: "error", text: "Please log in to checkout." });
       return false;
     }
     try {
       const copies = await useApi(`items/${id}/copies`);
       const available = (copies || []).filter((c) => c.status === "available");
       if (!available.length) {
-        alert("No available copies");
+        showToast({ type: "error", text: "No available copies." });
         return false;
       }
       const first = available[0];
       await useApi('loans/checkout', { method: 'POST', body: { copy_id: first.copy_id } });
-      alert('Item checked out! You can view it under Manage Loans.');
+      showToast({ type: "success", text: "Item checked out! View it under Manage Loans." });
       return true;
     } catch (err) {
       const code = err?.data?.error || err?.message || "checkout_failed";
       const details = err?.data?.message || err?.data?.details || "";
-      alert(details || code);
+      showToast({ type: "error", text: details || code });
       return false;
     }
   };
 
   return (
-    <BookPage
-      fetchBookById={fetchBookById}
-      fetchRecommendations={fetchRecommendations}
-      onCheckout={onCheckout}
-    />
+    <>
+      <ToastBanner toast={toast} onDismiss={() => setToast(null)} />
+      <BookPage
+        fetchBookById={fetchBookById}
+        fetchRecommendations={fetchRecommendations}
+        onCheckout={onCheckout}
+      />
+    </>
   );
 }
 

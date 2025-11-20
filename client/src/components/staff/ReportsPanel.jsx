@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useMemo } from "react";
 import { Th, Td } from "./shared/CommonComponents";
+import { ToastBanner } from "./shared/Feedback";
 import { formatDate } from "../../utils";
 
 const numberFormatter = new Intl.NumberFormat();
@@ -657,6 +658,11 @@ export default function ReportsPanel({ api }) {
   const [error, setError] = useState("");
   const [activeReport, setActiveReport] = useState("overdue"); // "overdue" | "fines" | "balances" | "topItems" | "newPatrons" | "transactions"
   const [reportData, setReportData] = useState([]);
+  const [toast, setToast] = useState(null);
+  const showToast = useCallback((payload) => {
+    if (!payload) return;
+    setToast({ id: Date.now(), ...payload });
+  }, []);
   
   // Date ranges for all reports
   const [overdueStartDate, setOverdueStartDate] = useState(() => {
@@ -1103,7 +1109,10 @@ export default function ReportsPanel({ api }) {
 
   function handleExport() {
     const exportRows = activeReport === 'overdue' ? overdueFilteredRows : (activeReport === 'transactions' ? transactionsFilteredRows : reportData);
-    if (!exportRows || exportRows.length === 0) { alert("No data to export"); return; }
+    if (!exportRows || exportRows.length === 0) { 
+      showToast({ type: "error", text: "No data to export" });
+      return;
+    }
     const headers = Object.keys(exportRows[0]);
     const csvContent = [
       headers.join(","),
@@ -1129,6 +1138,7 @@ export default function ReportsPanel({ api }) {
 
   return (
     <section className="space-y-4">
+      <ToastBanner toast={toast} onDismiss={() => setToast(null)} />
       <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
         <div className="border-b bg-gray-50 px-5 py-4">
           <h2 className="text-lg font-semibold">Reports</h2>
