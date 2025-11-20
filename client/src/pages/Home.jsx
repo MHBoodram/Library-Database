@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE } from '../api';
 import { useAuth } from '../AuthContext';
 import NavBar from '../components/NavBar';
 import './Home.css';
@@ -73,7 +74,7 @@ export default function Home() {
         });
         
         // Use public endpoint that doesn't require authentication
-        const response = await fetch(`http://localhost:3000/api/public/top-items?${params}`);
+        const response = await fetch(`${API_BASE}/public/top-items?${params}`);
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
