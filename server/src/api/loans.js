@@ -307,6 +307,15 @@ export const fetchUserLoans = (JWT_SECRET, mode) => async (req, res) => {
   // Default to active if mode not found
   const status = filters[mode] || filters.active;
   const params = [userId, status];
+  const orderBy = mode === "active"
+        ? 
+        `CASE
+          WHEN l.return_date IS NULL AND l.due_date < NOW() THEN 1
+          WHEN l.return_date IS NULL AND l.due_date >= NOW() THEN 2
+          WHEN l.return_date IS NOT NULL THEN 3
+        END,
+        l.due_date ASC`
+        : `l.return_date DESC`;
   try {
     // Include outstanding fine totals per loan so the UI can surface what each borrower still owes.
     const sql = `
@@ -347,13 +356,7 @@ export const fetchUserLoans = (JWT_SECRET, mode) => async (req, res) => {
         GROUP BY f.loan_id
       ) fines ON fines.loan_id = l.loan_id
       WHERE u.user_id = ? AND l.status =?
-      ORDER BY
-        CASE
-          WHEN l.return_date IS NULL AND l.due_date < NOW() THEN 1
-          WHEN l.return_date IS NULL AND l.due_date >= NOW() THEN 2
-          WHEN l.return_date IS NOT NULL THEN 3
-        END,
-        l.due_date ASC
+      ORDER BY ${orderBy}
       LIMIT 50
     `;
     const [rows] = await pool.query(sql, params);
