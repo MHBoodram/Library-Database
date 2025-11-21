@@ -335,7 +335,12 @@ export const listMyReservations = (JWT_SECRET) => async (req, res) => {
        FROM reservation r
        JOIN room rm ON rm.room_id = r.room_id
        WHERE r.user_id = ?
-       ORDER BY r.start_time DESC
+       ORDER BY 
+        CASE
+          WHEN (r.end_time < NOW() AND r.status = 'active') THEN 2
+          WHEN r.status = 'active' THEN 1
+          WHEN r.status = 'cancelled' THEN 3
+        END
        LIMIT 200`,
       [userId]
     );
