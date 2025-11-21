@@ -146,7 +146,7 @@ export default function Loans() {
       title: "Return item?",
       message: `Return "${loan.item_title}" now?`,
       confirmLabel: "Return",
-      cancelLabel: "Keep checkout",
+      cancelLabel: "Keep",
       tone: "danger",
       onConfirm: async () => {
         setReturningLoanId(loanId);
@@ -212,11 +212,11 @@ export default function Loans() {
       <NavBar />
       <ToastBanner toast={toast} onDismiss={closeToast} />
       <h1>Your Loans</h1>
-      <p>View your current and past loans.</p>
+      <p>Items you currently have on loan.</p>
 
       <div className="loans-container">
         <div className="loans-header">
-          <span>Loans: {rows.length}</span>
+          <span>Active Loans: {rows.length}</span>
           <div>
             {loading && <span className="loading">Loading...</span>}
             {(error || actionError) && (
@@ -271,7 +271,7 @@ export default function Loans() {
       <section className="holds-section">
         <div className="holds-header">
           <div>
-            <h2>Your Holds</h2>
+            <h1>Your Holds</h1>
             <p>Track queued and ready-for-pickup requests.</p>
           </div>
           <div>
@@ -363,11 +363,11 @@ export default function Loans() {
       </section>
 
       <section style={{marginTop:10}}>
-        <h1>Your past loans</h1>
+        <h1>Your Past Loans</h1>
         <p>Items you have returned.</p>
         <div className="loans-container">
           <div className="loans-header">
-            <span>Loans: {history.length}</span>
+            <span>Past Loans: {history.length}</span>
             {histLoading && <span className="loading">Loading...</span>}
             {histError && <span className="error">{histError}</span>}
           </div>
