@@ -147,7 +147,7 @@ export default function Loans() {
       message: `Return "${loan.item_title}" now?`,
       confirmLabel: "Return",
       cancelLabel: "Keep",
-      tone: "danger",
+      tone: "primary",
       onConfirm: async () => {
         setReturningLoanId(loanId);
         setActionError("");
