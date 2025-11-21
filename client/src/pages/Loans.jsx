@@ -267,43 +267,6 @@ export default function Loans() {
           </table>
       </div>
     </div>
-
-      <section style={{marginTop:10}}>
-        <h1>Your past loans</h1>
-        <p>Items you have returned.</p>
-        <div className="loans-container">
-          <div className="loans-header">
-            <span>Loans: {history.length}</span>
-            {histLoading && <span className="loading">Loading...</span>}
-            {histError && <span className="error">{histError}</span>}
-          </div>
-          <div style={{ overflowX: "auto" }}>
-            <table className="loans-table">
-              <thead>
-                <tr>
-                  <Th>Item</Th>
-                  <Th>Return Date</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {history.length === 0 ? (
-                  <tr>
-                    <td colSpan={3} className="loans-empty-state">{histLoading ? "" : "No past loans found."}</td>
-                  </tr>
-                ) : (
-                  history.map((r) => (
-                    <tr key={r.loan_id}>
-                      <Td title={r.item_title}>{r.item_title}</Td>
-                      <Td>{formatDate(r.return_date)}</Td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
       
       <section className="holds-section">
         <div className="holds-header">
@@ -390,6 +353,42 @@ export default function Loans() {
                           <span className="hold-action-placeholder">—</span>
                         )}
                       </Td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section style={{marginTop:10}}>
+        <h1>Your past loans</h1>
+        <p>Items you have returned.</p>
+        <div className="loans-container">
+          <div className="loans-header">
+            <span>Loans: {history.length}</span>
+            {histLoading && <span className="loading">Loading...</span>}
+            {histError && <span className="error">{histError}</span>}
+          </div>
+          <div style={{ overflowX: "auto" }}>
+            <table className="loans-table">
+              <thead>
+                <tr>
+                  <Th>Item</Th>
+                  <Th>Return Date</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} className="loans-empty-state">{histLoading ? "" : "No past loans found."}</td>
+                  </tr>
+                ) : (
+                  history.map((r) => (
+                    <tr key={r.loan_id}>
+                      <Td title={r.item_title}>{r.item_title}</Td>
+                      <Td>{formatDate(r.return_date)}</Td>
                     </tr>
                   ))
                 )}
