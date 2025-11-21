@@ -665,19 +665,14 @@ export default function ReportsPanel({ api }) {
   }, []);
   
   // Date ranges for all reports
-  const [overdueStartDate, setOverdueStartDate] = useState(() => {
-    const d = new Date();
-    d.setMonth(d.getMonth() - 1);
-    return d.toISOString().slice(0, 10);
-  });
-  const [overdueEndDate, setOverdueEndDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [overdueStartDate, setOverdueStartDate] = useState("");
+  const [overdueEndDate, setOverdueEndDate] = useState("");
   const [overdueBorrower, setOverdueBorrower] = useState("");
   const [overduePatronId, setOverduePatronId] = useState("");
-  const [overdueMinDays, setOverdueMinDays] = useState(1);
+  const [overdueMinDays, setOverdueMinDays] = useState(0);
   const [overdueMediaType, setOverdueMediaType] = useState("all");
   const [overdueGraceMode, setOverdueGraceMode] = useState('all'); // beyond | within | all
   const [overdueSortMode, setOverdueSortMode] = useState('most'); // most | least
-  const [overdueHasGenerated, setOverdueHasGenerated] = useState(false);
 
   // Fines report state
   const [finesStartDate, setFinesStartDate] = useState(() => {
@@ -747,17 +742,6 @@ export default function ReportsPanel({ api }) {
     )
   );
 
-  const overdueFilterKey = [
-    overdueStartDate,
-    overdueEndDate,
-    overdueBorrower,
-    overduePatronId,
-    overdueMinDays,
-    overdueMediaType,
-    overdueGraceMode,
-    overdueSortMode,
-  ].join("|");
-
   const loadReport = useCallback(async (reportType, overrides = {}) => {
     if (!api) return;
     const targetReport = reportType || activeReport;
@@ -778,8 +762,8 @@ export default function ReportsPanel({ api }) {
       switch (targetReport) {
         case "overdue":
           endpoint = "reports/overdue";
-          params.set("start_date", overdueStartDate);
-          params.set("end_date", overdueEndDate);
+          if (overdueStartDate) params.set("start_date", overdueStartDate);
+          if (overdueEndDate) params.set("end_date", overdueEndDate);
           if (overdueBorrower && overdueBorrower.trim()) {
             params.set("borrower", overdueBorrower.trim());
           }
@@ -853,8 +837,6 @@ export default function ReportsPanel({ api }) {
             setTxPage(safePage);
             setTxPageSize(safePageSize);
             setTxHasGenerated(true);
-          } else if (targetReport === 'overdue') {
-            setOverdueHasGenerated(true);
           }
         setReportData(rows);
       }
@@ -862,8 +844,6 @@ export default function ReportsPanel({ api }) {
       setError(err.message || "Failed to load report");
       if (targetReport === 'transactions') {
         setTxHasGenerated(false);
-      } else if (targetReport === 'overdue') {
-        setOverdueHasGenerated(false);
       }
     } finally {
       setLoading(false);
@@ -889,7 +869,6 @@ export default function ReportsPanel({ api }) {
   // Client-side filtering for min days, media type and partial patron id
   const overdueFilteredRows = useMemo(() => {
     if (activeReport !== 'overdue') return reportData || [];
-    if (!overdueHasGenerated) return [];
     const pidFilter = overduePatronId.trim();
     const pidActive = pidFilter.length > 0;
     const pidLower = pidFilter.toLowerCase();
@@ -901,12 +880,15 @@ export default function ReportsPanel({ api }) {
       const pidOk = !pidActive || String(r.patron_id ?? r.user_id ?? '').toLowerCase().includes(pidLower);
       return daysOk && mtOk && pidOk;
     });
-  }, [activeReport, reportData, overdueMinDays, overdueMediaType, overduePatronId, overdueHasGenerated]);
+  }, [activeReport, reportData, overdueMinDays, overdueMediaType, overduePatronId]);
 
   // KPI calculations for overdue
   const overdueKPIs = useMemo(() => {
-    if (activeReport !== 'overdue' || !overdueHasGenerated) return null;
+    if (activeReport !== 'overdue') return null;
     const rows = overdueFilteredRows;
+    if (!rows.length) {
+      return { total: 0, uniqueBorrowers: 0, avg: 0, med: 0, max: 0 };
+    }
     const total = rows.length;
     const uniqueBorrowers = new Set(rows.map(r => String(r.patron_id ?? r.user_id))).size;
     const days = rows.map(r => Number(r.days_overdue || 0)).sort((a,b)=>a-b);
@@ -914,7 +896,7 @@ export default function ReportsPanel({ api }) {
     const med = total ? (days[Math.floor((total-1)/2)] + days[Math.ceil((total-1)/2)]) / 2 : 0;
     const max = total ? days[total-1] : 0;
     return { total, uniqueBorrowers, avg: Number(avg.toFixed(1)), med, max };
-  }, [activeReport, overdueFilteredRows, overdueHasGenerated]);
+  }, [activeReport, overdueFilteredRows]);
 
   // Transactions filtering and KPIs
   const transactionsFilteredRows = useMemo(() => {
@@ -1019,27 +1001,16 @@ export default function ReportsPanel({ api }) {
   // Removed trend and top-borrowers computations to simplify and avoid unused variables
 
   // Actions
-  function validateOverdueDates() {
-    if (!overdueStartDate || !overdueEndDate) return true; // allow empty for defaults
-    return new Date(overdueEndDate) >= new Date(overdueStartDate);
-  }
-
-  function onGenerate() {
-    if (!validateOverdueDates()) { setError('End date cannot be before start date'); return; }
-    loadReport('overdue');
-  }
-
   function onReset() {
     const d = new Date(); const lastMonth = new Date(d.getFullYear(), d.getMonth()-1, d.getDate());
     setOverdueStartDate(lastMonth.toISOString().slice(0,10));
     setOverdueEndDate(new Date().toISOString().slice(0,10));
     setOverdueBorrower("");
     setOverduePatronId("");
-    setOverdueMinDays(1);
+    setOverdueMinDays(0);
     setOverdueMediaType('all');
-  // no-op: borrowers view removed
-    setOverdueHasGenerated(false);
-    setReportData([]);
+    setOverdueGraceMode('all');
+    setOverdueSortMode('most');
   }
 
   function onClear() {
@@ -1049,9 +1020,8 @@ export default function ReportsPanel({ api }) {
     setOverduePatronId("");
     setOverdueMinDays(0);
     setOverdueMediaType('all');
-  // no-op: borrowers view removed
-    setOverdueHasGenerated(false);
-    setReportData([]);
+    setOverdueGraceMode('all');
+    setOverdueSortMode('most');
   }
 
   const handleUserTypeToggle = (type) => {
@@ -1071,9 +1041,17 @@ export default function ReportsPanel({ api }) {
   }
 
   useEffect(() => {
-    if (activeReport === "transactions" || activeReport === "overdue") return;
+    if (activeReport === "transactions") return;
+    if (activeReport === "overdue") {
+      if (overdueStartDate && overdueEndDate && new Date(overdueEndDate) < new Date(overdueStartDate)) {
+        setError('End date cannot be before start date');
+        return;
+      }
+      loadReport('overdue');
+      return;
+    }
     loadReport(activeReport);
-  }, [activeReport, loadReport]);
+  }, [activeReport, loadReport, overdueStartDate, overdueEndDate]);
 
   useEffect(() => {
     if (activeReport !== "transactions") return;
@@ -1095,15 +1073,7 @@ export default function ReportsPanel({ api }) {
   useEffect(() => {
     if (activeReport !== "overdue") return;
     setReportData([]);
-    setOverdueHasGenerated(false);
   }, [activeReport]);
-
-  useEffect(() => {
-    if (activeReport !== "overdue") return;
-    if (!overdueHasGenerated) return;
-    setOverdueHasGenerated(false);
-    setReportData([]);
-  }, [activeReport, overdueFilterKey]);
 
   // handleRefresh removed (unused)
 
@@ -1301,16 +1271,11 @@ export default function ReportsPanel({ api }) {
                       <option value="least">Least overdue -> most</option>
                     </select>
                   </div>
-                  <div className="pt-1 space-y-2">
-                    <button
-                      onClick={onGenerate}
-                      disabled={loading}
-                      className="w-full px-3 py-2 rounded-md bg-gray-700 text-white text-sm font-medium hover:bg-gray-800 disabled:opacity-50"
-                    >
-                      {loading ? "Loading..." : "Generate Report"}
-                    </button>
+                  <div className="pt-1 space-y-3">
+                    <p className="text-xs text-gray-500 text-center">Results update automatically as you adjust filters.</p>
                     <div className="flex gap-2">
                       <button
+                        type="button"
                         onClick={onReset}
                         disabled={loading}
                         className="flex-1 px-3 py-2 rounded-md bg-gray-200 text-gray-800 text-sm font-medium hover:bg-gray-300 disabled:opacity-50"
@@ -1318,6 +1283,7 @@ export default function ReportsPanel({ api }) {
                         Reset
                       </button>
                       <button
+                        type="button"
                         onClick={onClear}
                         disabled={loading}
                         className="flex-1 px-3 py-2 rounded-md bg-white border text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
@@ -1329,52 +1295,44 @@ export default function ReportsPanel({ api }) {
                 </div>
               </aside>
               <div className="overdue-report-content space-y-4">
-                {overdueHasGenerated && (
-                  <div className="space-y-3">
-                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                      <div className="rounded-md border bg-white p-3 text-sm">
-                        <div className="text-gray-500 whitespace-nowrap">Total Overdue</div>
-                        <div className="text-xl font-semibold">{overdueKPIs?.total || 0}</div>
-                      </div>
-                      <div className="rounded-md border bg-white p-3 text-sm">
-                        <div className="text-gray-500 whitespace-nowrap">Distinct Borrowers</div>
-                        <div className="text-xl font-semibold">{overdueKPIs?.uniqueBorrowers || 0}</div>
-                      </div>
-                      <div className="rounded-md border bg-white p-3 text-sm">
-                        <div className="text-gray-500 whitespace-nowrap">Avg Days</div>
-                        <div className="text-xl font-semibold">{overdueKPIs?.avg ?? 0}</div>
-                      </div>
-                      <div className="rounded-md border bg-white p-3 text-sm">
-                        <div className="text-gray-500 whitespace-nowrap">Median / Max</div>
-                        <div className="text-xl font-semibold whitespace-nowrap">
-                          {overdueKPIs?.med ?? 0} / {overdueKPIs?.max ?? 0}
-                        </div>
-                      </div>
+                <div className="space-y-3">
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-md border bg-white p-3 text-sm">
+                      <div className="text-gray-500 whitespace-nowrap">Total Overdue</div>
+                      <div className="text-xl font-semibold">{overdueKPIs?.total ?? 0}</div>
                     </div>
-                    <div className="text-sm text-gray-700">
-                      {overdueFilteredRows.length === 0 ? (
-                        <span>No overdue items matched the selected parameters.</span>
-                      ) : (
-                        <span>
-                          {`There are ${overdueKPIs?.total} overdue items across ${overdueKPIs?.uniqueBorrowers} patrons. Average delay is ${overdueKPIs?.avg} days with a median of ${overdueKPIs?.med} and maximum of ${overdueKPIs?.max}.`}
-                        </span>
-                      )}
+                    <div className="rounded-md border bg-white p-3 text-sm">
+                      <div className="text-gray-500 whitespace-nowrap">Distinct Borrowers</div>
+                      <div className="text-xl font-semibold">{overdueKPIs?.uniqueBorrowers ?? 0}</div>
+                    </div>
+                    <div className="rounded-md border bg-white p-3 text-sm">
+                      <div className="text-gray-500 whitespace-nowrap">Avg Days</div>
+                      <div className="text-xl font-semibold">{overdueKPIs?.avg ?? 0}</div>
+                    </div>
+                    <div className="rounded-md border bg-white p-3 text-sm">
+                      <div className="text-gray-500 whitespace-nowrap">Median / Max</div>
+                      <div className="text-xl font-semibold whitespace-nowrap">
+                        {overdueKPIs?.med ?? 0} / {overdueKPIs?.max ?? 0}
+                      </div>
                     </div>
                   </div>
-                )}
+                  <div className="text-sm text-gray-700">
+                    {overdueFilteredRows.length === 0 ? (
+                      <span>No overdue items matched the selected parameters.</span>
+                    ) : (
+                      <span>
+                        {`There are ${overdueKPIs?.total ?? 0} overdue items across ${overdueKPIs?.uniqueBorrowers ?? 0} patrons. Average delay is ${overdueKPIs?.avg ?? 0} days with a median of ${overdueKPIs?.med ?? 0} and maximum of ${overdueKPIs?.max ?? 0}.`}
+                      </span>
+                    )}
+                  </div>
+                </div>
                 {error && (
                   <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-800">
                     {error}
                   </div>
                 )}
                 <div className="rounded-lg border overflow-hidden">
-                  {overdueHasGenerated ? (
-                    <OverdueReportTable data={overdueFilteredRows} loading={loading} />
-                  ) : (
-                    <div className="p-6 text-sm text-gray-500">
-                      Choose your parameters and press <span className="font-semibold">Generate Report</span> to view overdue loans.
-                    </div>
-                  )}
+                  <OverdueReportTable data={overdueFilteredRows} loading={loading} />
                 </div>
               </div>
             </div>
