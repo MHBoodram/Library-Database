@@ -1210,16 +1210,187 @@ export default function ReportsPanel({ api }) {
             </div>
           </div>
 
+          {activeReport === "overdue" && (
+            <div className="overdue-report-layout">
+              <aside className="overdue-report-sidebar">
+                <div className="rounded-md border bg-white p-4 space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
+                      <input
+                        type="date"
+                        value={overdueStartDate}
+                        onChange={(e) => setOverdueStartDate(e.target.value)}
+                        className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
+                      <input
+                        type="date"
+                        value={overdueEndDate}
+                        onChange={(e) => setOverdueEndDate(e.target.value)}
+                        className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Borrower</label>
+                    <input
+                      type="text"
+                      placeholder="Search borrower name"
+                      value={overdueBorrower}
+                      onChange={(e) => setOverdueBorrower(e.target.value)}
+                      className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Patron ID</label>
+                    <input
+                      type="text"
+                      placeholder="partial match"
+                      value={overduePatronId}
+                      onChange={(e) => setOverduePatronId(e.target.value)}
+                      className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Min Days Overdue</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={overdueMinDays}
+                      onChange={(e) => setOverdueMinDays(e.target.value)}
+                      className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Media Type</label>
+                    <select
+                      value={overdueMediaType}
+                      onChange={(e) => setOverdueMediaType(e.target.value)}
+                      className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                    >
+                      {mediaTypeOptions.map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt === "all" ? "All" : opt.toUpperCase()}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Grace Window</label>
+                    <select
+                      value={overdueGraceMode}
+                      onChange={(e) => setOverdueGraceMode(e.target.value)}
+                      className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                    >
+                      <option value="beyond">Beyond grace (overdue)</option>
+                      <option value="within">Within grace</option>
+                      <option value="all">All past due</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Sort By</label>
+                    <select
+                      value={overdueSortMode}
+                      onChange={(e) => setOverdueSortMode(e.target.value)}
+                      className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                    >
+                      <option value="most">Most overdue -> least</option>
+                      <option value="least">Least overdue -> most</option>
+                    </select>
+                  </div>
+                  <div className="pt-1 space-y-2">
+                    <button
+                      onClick={onGenerate}
+                      disabled={loading}
+                      className="w-full px-3 py-2 rounded-md bg-gray-700 text-white text-sm font-medium hover:bg-gray-800 disabled:opacity-50"
+                    >
+                      {loading ? "Loading..." : "Generate Report"}
+                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={onReset}
+                        disabled={loading}
+                        className="flex-1 px-3 py-2 rounded-md bg-gray-200 text-gray-800 text-sm font-medium hover:bg-gray-300 disabled:opacity-50"
+                      >
+                        Reset
+                      </button>
+                      <button
+                        onClick={onClear}
+                        disabled={loading}
+                        className="flex-1 px-3 py-2 rounded-md bg-white border text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </aside>
+              <div className="overdue-report-content space-y-4">
+                {overdueHasGenerated && (
+                  <div className="space-y-3">
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                      <div className="rounded-md border bg-white p-3 text-sm">
+                        <div className="text-gray-500 whitespace-nowrap">Total Overdue</div>
+                        <div className="text-xl font-semibold">{overdueKPIs?.total || 0}</div>
+                      </div>
+                      <div className="rounded-md border bg-white p-3 text-sm">
+                        <div className="text-gray-500 whitespace-nowrap">Distinct Borrowers</div>
+                        <div className="text-xl font-semibold">{overdueKPIs?.uniqueBorrowers || 0}</div>
+                      </div>
+                      <div className="rounded-md border bg-white p-3 text-sm">
+                        <div className="text-gray-500 whitespace-nowrap">Avg Days</div>
+                        <div className="text-xl font-semibold">{overdueKPIs?.avg ?? 0}</div>
+                      </div>
+                      <div className="rounded-md border bg-white p-3 text-sm">
+                        <div className="text-gray-500 whitespace-nowrap">Median / Max</div>
+                        <div className="text-xl font-semibold whitespace-nowrap">
+                          {overdueKPIs?.med ?? 0} / {overdueKPIs?.max ?? 0}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-sm text-gray-700">
+                      {overdueFilteredRows.length === 0 ? (
+                        <span>No overdue items matched the selected parameters.</span>
+                      ) : (
+                        <span>
+                          {`There are ${overdueKPIs?.total} overdue items across ${overdueKPIs?.uniqueBorrowers} patrons. Average delay is ${overdueKPIs?.avg} days with a median of ${overdueKPIs?.med} and maximum of ${overdueKPIs?.max}.`}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {error && (
+                  <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-800">
+                    {error}
+                  </div>
+                )}
+                <div className="rounded-lg border overflow-hidden">
+                  {overdueHasGenerated ? (
+                    <OverdueReportTable data={overdueFilteredRows} loading={loading} />
+                  ) : (
+                    <div className="p-6 text-sm text-gray-500">
+                      Choose your parameters and press <span className="font-semibold">Generate Report</span> to view overdue loans.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Filters section - now below the panels */}
+          {activeReport !== "overdue" && (
           <div className="space-y-3">
-            {activeReport === "overdue" && (
+            {activeReport === "topItems" && (
               <div className="flex flex-wrap items-end gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
                   <input
                     type="date"
-                    value={overdueStartDate}
-                    onChange={(e) => setOverdueStartDate(e.target.value)}
+                    value={topItemsStartDate}
+                    onChange={(e) => setTopItemsStartDate(e.target.value)}
                     className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
                   />
                 </div>
@@ -1227,8 +1398,8 @@ export default function ReportsPanel({ api }) {
                   <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
                   <input
                     type="date"
-                    value={overdueEndDate}
-                    onChange={(e) => setOverdueEndDate(e.target.value)}
+                    value={topItemsEndDate}
+                    onChange={(e) => setTopItemsEndDate(e.target.value)}
                     className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
                   />
                 </div>
@@ -1442,102 +1613,9 @@ export default function ReportsPanel({ api }) {
                 </div>
               </div>
             )}
-            {/* Balances filters removed */}
-            {activeReport === "topItems" && (
-              <div className="flex flex-wrap items-end gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
-                  <input
-                    type="date"
-                    value={topItemsStartDate}
-                    onChange={(e) => setTopItemsStartDate(e.target.value)}
-                    className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
-                  <input
-                    type="date"
-                    value={topItemsEndDate}
-                    onChange={(e) => setTopItemsEndDate(e.target.value)}
-                    className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
-                  />
-                </div>
-              </div>
-            )}
-            {activeReport === "newPatrons" && (
-              <div className="flex flex-wrap items-end gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
-                  <input
-                    type="date"
-                    value={newPatronsStartDate}
-                    onChange={(e) => setNewPatronsStartDate(e.target.value)}
-                    className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
-                  <input
-                    type="date"
-                    value={newPatronsEndDate}
-                    onChange={(e) => setNewPatronsEndDate(e.target.value)}
-                    className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
-                  />
-                </div>
-              </div>
-            )}
           </div>
-
-          {/* Right-aligned filter block shown under the panel bar for Overdue Loans and Fines (dates moved to toolbar; export moved to toolbar) */}
-          {activeReport === "overdue" && (
-            <div className="flex justify-end">
-              <div className="w-full md:w-72">
-                <div className="rounded-md border bg-white p-3 space-y-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Borrower</label>
-                    <input type="text" placeholder="Search borrower name" value={overdueBorrower} onChange={(e)=>setOverdueBorrower(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Patron ID</label>
-                    <input type="text" placeholder="partial match" value={overduePatronId} onChange={(e)=>setOverduePatronId(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Min Days Overdue</label>
-                    <input type="number" min="0" value={overdueMinDays} onChange={(e)=>setOverdueMinDays(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Media Type</label>
-                    <select value={overdueMediaType} onChange={(e)=>setOverdueMediaType(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm">
-                      {mediaTypeOptions.map(opt => (<option key={opt} value={opt}>{opt === 'all' ? 'All' : opt.toUpperCase()}</option>))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Grace Window</label>
-                    <select value={overdueGraceMode} onChange={(e)=>setOverdueGraceMode(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm">
-                      <option value="beyond">Beyond grace (overdue)</option>
-                      <option value="within">Within grace</option>
-                      <option value="all">All past due</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Sort By</label>
-                    <select value={overdueSortMode} onChange={(e)=>setOverdueSortMode(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm">
-                      <option value="most">Most overdue → least</option>
-                      <option value="least">Least overdue → most</option>
-                    </select>
-                  </div>
-                  <div className="pt-1 space-y-2">
-                    <button onClick={onGenerate} disabled={loading} className="w-full px-3 py-2 rounded-md bg-gray-700 text-white text-sm font-medium hover:bg-gray-800 disabled:opacity-50">{loading ? 'Loading...' : 'Generate Report'}</button>
-                    <div className="flex gap-2">
-                      <button onClick={onReset} disabled={loading} className="flex-1 px-3 py-2 rounded-md bg-gray-200 text-gray-800 text-sm font-medium hover:bg-gray-300 disabled:opacity-50">Reset</button>
-                      <button onClick={onClear} disabled={loading} className="flex-1 px-3 py-2 rounded-md bg-white border text-sm font-medium hover:bg-gray-50 disabled:opacity-50">Clear</button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
           )}
+
 
           {activeReport === "fines" && (
             <div className="flex justify-end">
@@ -1613,28 +1691,7 @@ export default function ReportsPanel({ api }) {
             </div>
           )}
 
-          {activeReport === 'overdue' && overdueHasGenerated && (
-            <div className="space-y-3">
-              <div className="flex justify-between gap-3">
-                <div className="rounded-md border bg-white p-3 text-sm flex-1"><div className="text-gray-500 whitespace-nowrap">Total Overdue</div><div className="text-xl font-semibold">{overdueKPIs?.total || 0}</div></div>
-                <div className="rounded-md border bg-white p-3 text-sm flex-1"><div className="text-gray-500 whitespace-nowrap">Distinct Borrowers</div><div className="text-xl font-semibold">{overdueKPIs?.uniqueBorrowers || 0}</div></div>
-                <div className="rounded-md border bg-white p-3 text-sm flex-1"><div className="text-gray-500 whitespace-nowrap">Avg Days</div><div className="text-xl font-semibold">{overdueKPIs?.avg ?? 0}</div></div>
-                <div className="rounded-md border bg-white p-3 text-sm flex-1"><div className="text-gray-500 whitespace-nowrap">Median / Max</div><div className="text-xl font-semibold whitespace-nowrap">{overdueKPIs?.med ?? 0} / {overdueKPIs?.max ?? 0}</div></div>
-              </div>
-              <div className="text-sm text-gray-700">
-                {overdueFilteredRows.length === 0 ? (
-                  <span>No overdue items matched the selected parameters.</span>
-                ) : (
-                  <span>
-                    {`There are ${overdueKPIs?.total} overdue items across ${overdueKPIs?.uniqueBorrowers} patrons. Average delay is ${overdueKPIs?.avg} days with a median of ${overdueKPIs?.med} and maximum of ${overdueKPIs?.max}.`}
-                  </span>
-                )}
-              </div>
-              {/* Trend chart removed per request */}
-              {/* Top borrowers chart removed per request */}
-            </div>
-          )}
-          {error && (
+          {error && activeReport !== "overdue" && (
             <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-800">
               {error}
             </div>
@@ -1649,15 +1706,6 @@ export default function ReportsPanel({ api }) {
             </div>
           ) : (
             <div className="rounded-lg border overflow-hidden">
-              {activeReport === "overdue" && (
-                overdueHasGenerated ? (
-                  <OverdueReportTable data={overdueFilteredRows} loading={loading} />
-                ) : (
-                  <div className="p-6 text-sm text-gray-500">
-                    Choose your parameters above and press <span className="font-semibold">Generate Report</span> to view overdue loans.
-                  </div>
-                )
-              )}
 {/* User Balances table removed */}
               {activeReport === "topItems" && <TopItemsReportTable data={reportData} loading={loading} />}
               {activeReport === "transactions" && (

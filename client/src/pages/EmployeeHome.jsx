@@ -52,6 +52,7 @@ export default function EmployeeDashboard() {
   }, [api]);
   const [manageItemsOpen, setManageItemsOpen] = useState(false);
   const [manageLoansOpen, setManageLoansOpen] = useState(false);
+  const contentWidth = 'min(1500px, calc(100vw - 2rem))';
   useEffect(() => {
     if (!api) return;
     loadCounts();
@@ -74,7 +75,7 @@ export default function EmployeeDashboard() {
     <div style={{ minHeight: '100vh', background: '#f9fafb', paddingTop: 'var(--nav-height, 60px)' }}>
       <NavBar />
       <header className="employee-dashboard-header">
-        <div className="header-inner" style={{ maxWidth: 1200, margin: '0 auto', padding: '1rem' }}>
+        <div className="header-inner" style={{ width: contentWidth, margin: '0 auto', padding: '1rem 1.5rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
             <h1 style={{ fontSize: '1.5rem', fontWeight: 600, margin: 0 }}>Staff Dashboard</h1>
             <div className="eh-widgets">
@@ -211,7 +212,7 @@ export default function EmployeeDashboard() {
         </div>
       </header>
 
-      <main style={{ maxWidth: 1200, margin: '0 auto', padding: '1.5rem' }}>
+      <main style={{ width: contentWidth, margin: '0 auto', padding: '1.5rem' }}>
   {tab === "fines" && <FinesPanel api={api} />}
   {tab === "checkout" && <CheckoutPanel api={api} staffUser={user} onChanged={loadCounts} />}
   {tab === "return" && <ReturnLoanPanel api={api} staffUser={user} onChanged={loadCounts} />}
