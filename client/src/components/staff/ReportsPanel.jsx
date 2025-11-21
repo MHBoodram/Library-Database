@@ -14,6 +14,77 @@ const timeframePresets = [
 ];
 const fallbackUserTypeOptions = ["student", "faculty", "staff", "community"];
 
+function CheckboxMultiSelect({
+  label,
+  options = [],
+  selectedValues = [],
+  onChange,
+  placeholder = "Search...",
+  searchable = true,
+  loading = false,
+  helperText = "",
+  emptyLabel = "No options available",
+}) {
+  const [query, setQuery] = useState("");
+  const safeSelected = Array.isArray(selectedValues) ? selectedValues : [];
+  const safeOptions = Array.isArray(options) ? options : [];
+  const filtered = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) return safeOptions;
+    return safeOptions.filter((opt) => {
+      const labelMatch = (opt.label || "").toLowerCase().includes(term);
+      const metaMatch = (opt.meta || "").toLowerCase().includes(term);
+      return labelMatch || metaMatch;
+    });
+  }, [safeOptions, query]);
+
+  const toggleValue = (value) => {
+    if (!value) return;
+    const next = safeSelected.includes(value)
+      ? safeSelected.filter((v) => v !== value)
+      : [...safeSelected, value];
+    onChange?.(next);
+  };
+
+  return (
+    <div className="space-y-2">
+      {label && <label className="block text-xs font-medium text-gray-600">{label}</label>}
+      {searchable && (
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={placeholder}
+          className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+        />
+      )}
+      <div className="multiselect-list">
+        {loading ? (
+          <div className="text-sm text-gray-500">Loading...</div>
+        ) : filtered.length === 0 ? (
+          <div className="text-sm text-gray-500">{emptyLabel}</div>
+        ) : (
+          filtered.map((opt) => (
+            <label key={opt.value} className="multiselect-option">
+              <input
+                type="checkbox"
+                className="multiselect-checkbox"
+                checked={safeSelected.includes(opt.value)}
+                onChange={() => toggleValue(opt.value)}
+              />
+              <div className="flex flex-col">
+                <span className="text-sm text-gray-900">{opt.label}</span>
+                {opt.meta ? <span className="text-xs text-gray-500">{opt.meta}</span> : null}
+              </div>
+            </label>
+          ))
+        )}
+      </div>
+      {helperText ? <p className="text-xs text-red-600">{helperText}</p> : null}
+    </div>
+  );
+}
+
 const toTitle = (value = "") =>
   value
     .split(" ")
@@ -667,12 +738,15 @@ export default function ReportsPanel({ api }) {
   // Date ranges for all reports
   const [overdueStartDate, setOverdueStartDate] = useState("");
   const [overdueEndDate, setOverdueEndDate] = useState("");
-  const [overdueBorrower, setOverdueBorrower] = useState("");
+  const [selectedBorrowers, setSelectedBorrowers] = useState([]);
   const [overduePatronId, setOverduePatronId] = useState("");
   const [overdueMinDays, setOverdueMinDays] = useState(0);
-  const [overdueMediaType, setOverdueMediaType] = useState("all");
-  const [overdueGraceMode, setOverdueGraceMode] = useState('all'); // beyond | within | all
-  const [overdueSortMode, setOverdueSortMode] = useState('most'); // most | least
+  const [selectedMediaTypes, setSelectedMediaTypes] = useState([]);
+  const [selectedItemTitles, setSelectedItemTitles] = useState([]);
+  const [overdueRecencySort, setOverdueRecencySort] = useState("recent");
+  const [patronOptions, setPatronOptions] = useState([]);
+  const [patronLoading, setPatronLoading] = useState(false);
+  const [patronError, setPatronError] = useState("");
 
   // Fines report state
   const [finesStartDate, setFinesStartDate] = useState(() => {
@@ -742,6 +816,46 @@ export default function ReportsPanel({ api }) {
     )
   );
 
+  useEffect(() => {
+    if (activeReport !== "overdue" || !api) return;
+    let alive = true;
+    (async () => {
+      setPatronLoading(true);
+      setPatronError("");
+      try {
+        const payload = await api("staff/patrons/search?limit=1200");
+        if (!alive) return;
+        const normalized = (Array.isArray(payload) ? payload : []).map((row) => {
+          const id = row.user_id ?? row.account_id ?? row.employee_id ?? null;
+          const labelInput = `${row.first_name || ""} ${row.last_name || ""}`.trim();
+          const label = toTitle(labelInput) || row.email || (id ? `User #${id}` : "");
+          return {
+            value: id ? String(id) : "",
+            label,
+            meta: row.email || "",
+          };
+        }).filter((opt) => opt.value);
+        const dedup = new Map();
+        normalized.forEach((opt) => {
+          if (!dedup.has(opt.value)) {
+            dedup.set(opt.value, opt);
+          }
+        });
+        const sorted = Array.from(dedup.values()).sort((a, b) => a.label.localeCompare(b.label));
+        setPatronOptions(sorted);
+      } catch (err) {
+        if (!alive) return;
+        setPatronOptions([]);
+        setPatronError(err?.data?.error || err?.message || "Failed to load patrons.");
+      } finally {
+        if (alive) setPatronLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [api, activeReport]);
+
   const loadReport = useCallback(async (reportType, overrides = {}) => {
     if (!api) return;
     const targetReport = reportType || activeReport;
@@ -764,12 +878,6 @@ export default function ReportsPanel({ api }) {
           endpoint = "reports/overdue";
           if (overdueStartDate) params.set("start_date", overdueStartDate);
           if (overdueEndDate) params.set("end_date", overdueEndDate);
-          if (overdueBorrower && overdueBorrower.trim()) {
-            params.set("borrower", overdueBorrower.trim());
-          }
-          // Patron ID partial match handled client-side; avoid over-filtering on server
-          if (overdueGraceMode) params.set('grace', overdueGraceMode);
-          if (overdueSortMode) params.set('sort', overdueSortMode);
           break;
         case "fines":
           // staff fines endpoint; request a large page and all statuses so we can filter client-side
@@ -848,12 +956,28 @@ export default function ReportsPanel({ api }) {
     } finally {
       setLoading(false);
     }
-  }, [api, activeReport, overdueStartDate, overdueEndDate, overdueBorrower, overdueGraceMode, overdueSortMode, balancesStartDate, balancesEndDate, topItemsStartDate, topItemsEndDate, newPatronsStartDate, newPatronsEndDate, newPatronsTimeframe, newPatronsUserTypes, transactionsStartDate, transactionsEndDate, txEventTypes, txStatuses, txStaff, txSearch, txPage, txPageSize]);
+  }, [api, activeReport, overdueStartDate, overdueEndDate, balancesStartDate, balancesEndDate, topItemsStartDate, topItemsEndDate, newPatronsStartDate, newPatronsEndDate, newPatronsTimeframe, newPatronsUserTypes, transactionsStartDate, transactionsEndDate, txEventTypes, txStatuses, txStaff, txSearch, txPage, txPageSize]);
 
   // Derived media types from the currently loaded overdue dataset
   const mediaTypeOptions = useMemo(() => {
     const types = new Set((reportData || []).map(r => (r.media_type || 'book').toString().toLowerCase()));
-    return ['all', ...Array.from(types).sort()];
+    return Array.from(types).sort();
+  }, [reportData]);
+  const mediaTypeMultiOptions = useMemo(() => mediaTypeOptions.map((type) => ({
+    value: type,
+    label: type.toUpperCase(),
+  })), [mediaTypeOptions]);
+  const itemTitleOptions = useMemo(() => {
+    const map = new Map();
+    (reportData || []).forEach((row) => {
+      const title = (row.title || "").trim();
+      if (!title) return;
+      if (!map.has(title)) {
+        const meta = (row.media_type || "").toString().toUpperCase();
+        map.set(title, { value: title, label: title, meta: meta || undefined });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
   }, [reportData]);
 
   // Fines: derived options
@@ -872,15 +996,33 @@ export default function ReportsPanel({ api }) {
     const pidFilter = overduePatronId.trim();
     const pidActive = pidFilter.length > 0;
     const pidLower = pidFilter.toLowerCase();
-    const mt = (overdueMediaType || 'all').toLowerCase();
     const minDays = Number.isFinite(Number(overdueMinDays)) ? Number(overdueMinDays) : 0;
-    return (reportData || []).filter(r => {
+    const borrowerSet = new Set((selectedBorrowers || []).map((id) => String(id)));
+    const borrowerActive = borrowerSet.size > 0;
+    const mediaSet = new Set((selectedMediaTypes || []).map((mt) => mt.toLowerCase()));
+    const mediaActive = mediaSet.size > 0;
+    const titleSet = new Set((selectedItemTitles || []).map((title) => title));
+    const titleActive = titleSet.size > 0;
+    const filtered = (reportData || []).filter(r => {
       const daysOk = Number(r.days_overdue || 0) >= minDays;
-      const mtOk = mt === 'all' || (String(r.media_type || 'book').toLowerCase() === mt);
-      const pidOk = !pidActive || String(r.patron_id ?? r.user_id ?? '').toLowerCase().includes(pidLower);
-      return daysOk && mtOk && pidOk;
+      const borrowerId = String(r.patron_id ?? r.user_id ?? '');
+      const borrowerOk = !borrowerActive || (borrowerId && borrowerSet.has(borrowerId));
+      const pidOk = !pidActive || borrowerId.toLowerCase().includes(pidLower);
+      const mediaValue = String(r.media_type || 'book').toLowerCase();
+      const mediaOk = !mediaActive || mediaSet.has(mediaValue);
+      const titleValue = (r.title || "").trim();
+      const titleOk = !titleActive || titleSet.has(titleValue);
+      return daysOk && borrowerOk && pidOk && mediaOk && titleOk;
     });
-  }, [activeReport, reportData, overdueMinDays, overdueMediaType, overduePatronId]);
+    const parseDue = (value) => {
+      const ts = Date.parse(value);
+      return Number.isNaN(ts) ? 0 : ts;
+    };
+    return [...filtered].sort((a, b) => {
+      const diff = parseDue(a.due_date) - parseDue(b.due_date);
+      return overdueRecencySort === 'recent' ? -diff : diff;
+    });
+  }, [activeReport, reportData, overdueMinDays, overduePatronId, selectedBorrowers, selectedMediaTypes, selectedItemTitles, overdueRecencySort]);
 
   // KPI calculations for overdue
   const overdueKPIs = useMemo(() => {
@@ -1005,23 +1147,12 @@ export default function ReportsPanel({ api }) {
     const d = new Date(); const lastMonth = new Date(d.getFullYear(), d.getMonth()-1, d.getDate());
     setOverdueStartDate(lastMonth.toISOString().slice(0,10));
     setOverdueEndDate(new Date().toISOString().slice(0,10));
-    setOverdueBorrower("");
+    setSelectedBorrowers([]);
+    setSelectedItemTitles([]);
     setOverduePatronId("");
     setOverdueMinDays(0);
-    setOverdueMediaType('all');
-    setOverdueGraceMode('all');
-    setOverdueSortMode('most');
-  }
-
-  function onClear() {
-    setOverdueStartDate("");
-    setOverdueEndDate("");
-    setOverdueBorrower("");
-    setOverduePatronId("");
-    setOverdueMinDays(0);
-    setOverdueMediaType('all');
-    setOverdueGraceMode('all');
-    setOverdueSortMode('most');
+    setSelectedMediaTypes([]);
+    setOverdueRecencySort("recent");
   }
 
   const handleUserTypeToggle = (type) => {
@@ -1183,7 +1314,8 @@ export default function ReportsPanel({ api }) {
           {activeReport === "overdue" && (
             <div className="overdue-report-layout">
               <aside className="overdue-report-sidebar">
-                <div className="rounded-md border bg-white p-4 space-y-4">
+                <div className="rounded-md border bg-white p-4 overdue-filters-panel">
+                  <div className="overdue-filters-scroll space-y-4">
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
@@ -1204,16 +1336,24 @@ export default function ReportsPanel({ api }) {
                       />
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Borrower</label>
-                    <input
-                      type="text"
-                      placeholder="Search borrower name"
-                      value={overdueBorrower}
-                      onChange={(e) => setOverdueBorrower(e.target.value)}
-                      className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
-                    />
-                  </div>
+                  <CheckboxMultiSelect
+                    label="Borrowers"
+                    options={patronOptions}
+                    selectedValues={selectedBorrowers}
+                    onChange={setSelectedBorrowers}
+                    placeholder="Search patrons"
+                    loading={patronLoading}
+                    helperText={patronError}
+                    emptyLabel="No patrons found"
+                  />
+                  <CheckboxMultiSelect
+                    label="Item Titles"
+                    options={itemTitleOptions}
+                    selectedValues={selectedItemTitles}
+                    onChange={setSelectedItemTitles}
+                    placeholder="Search item titles"
+                    emptyLabel={itemTitleOptions.length ? "No titles match search" : "No items yet"}
+                  />
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Patron ID</label>
                     <input
@@ -1234,63 +1374,36 @@ export default function ReportsPanel({ api }) {
                       className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
                     />
                   </div>
+                  <CheckboxMultiSelect
+                    label="Media Types"
+                    options={mediaTypeMultiOptions}
+                    selectedValues={selectedMediaTypes}
+                    onChange={setSelectedMediaTypes}
+                    searchable={false}
+                    emptyLabel={mediaTypeOptions.length ? "No media types match" : "Load report to see media types"}
+                  />
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Media Type</label>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Sort By Due Date</label>
                     <select
-                      value={overdueMediaType}
-                      onChange={(e) => setOverdueMediaType(e.target.value)}
+                      value={overdueRecencySort}
+                      onChange={(e) => setOverdueRecencySort(e.target.value)}
                       className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
                     >
-                      {mediaTypeOptions.map((opt) => (
-                        <option key={opt} value={opt}>
-                          {opt === "all" ? "All" : opt.toUpperCase()}
-                        </option>
-                      ))}
+                      <option value="recent">Most recent → oldest</option>
+                      <option value="oldest">Oldest → most recent</option>
                     </select>
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Grace Window</label>
-                    <select
-                      value={overdueGraceMode}
-                      onChange={(e) => setOverdueGraceMode(e.target.value)}
-                      className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
-                    >
-                      <option value="beyond">Beyond grace (overdue)</option>
-                      <option value="within">Within grace</option>
-                      <option value="all">All past due</option>
-                    </select>
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Sort By</label>
-                    <select
-                      value={overdueSortMode}
-                      onChange={(e) => setOverdueSortMode(e.target.value)}
-                      className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
-                    >
-                      <option value="most">Most overdue -> least</option>
-                      <option value="least">Least overdue -> most</option>
-                    </select>
-                  </div>
-                  <div className="pt-1 space-y-3">
+                  <div className="overdue-filters-actions">
                     <p className="text-xs text-gray-500 text-center">Results update automatically as you adjust filters.</p>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={onReset}
-                        disabled={loading}
-                        className="flex-1 px-3 py-2 rounded-md bg-gray-200 text-gray-800 text-sm font-medium hover:bg-gray-300 disabled:opacity-50"
-                      >
-                        Reset
-                      </button>
-                      <button
-                        type="button"
-                        onClick={onClear}
-                        disabled={loading}
-                        className="flex-1 px-3 py-2 rounded-md bg-white border text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
-                      >
-                        Clear
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={onReset}
+                      disabled={loading}
+                      className="w-full px-3 py-2 rounded-md bg-gray-200 text-gray-800 text-sm font-medium hover:bg-gray-300 disabled:opacity-50"
+                    >
+                      Reset Filters
+                    </button>
                   </div>
                 </div>
               </aside>
