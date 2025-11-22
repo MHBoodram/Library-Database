@@ -48,7 +48,7 @@ async function upsertAdmin() {
     }
 
     await conn.commit();
-    console.log(`✅ Staff account ready: ${email} / ${password}`);
+    console.log(`Staff account ready: ${email} / ${password}`);
     process.exit(0);
   } catch (e) {
     try { await conn.rollback(); } catch {}
