@@ -71,6 +71,30 @@ function NavBar() {
         };
     }, [token]);
 
+    useEffect(() => {
+        if (!token) return;
+        const handleUpdate = () => {
+            // Immediately poll for updated unread count
+            const normalizeRows = (payload) => {
+                if (Array.isArray(payload?.rows)) return payload.rows;
+                if (Array.isArray(payload)) return payload;
+                return [];
+            };
+            listNotifications(token, { status: "unread", limit: 1 })
+                .then(data => {
+                    const rows = normalizeRows(data);
+                    setHasUnread(rows.length > 0);
+                })
+                .catch(err => {
+                    if (err?.status !== 401) {
+                        console.warn("Failed to update notifications", err);
+                    }
+                });
+        };
+        window.addEventListener('notificationsUpdated', handleUpdate);
+        return () => window.removeEventListener('notificationsUpdated', handleUpdate);
+    }, [token]);
+
     const initials = (user?.name || user?.email || '')
         .split(' ')
         .map(part => part[0])

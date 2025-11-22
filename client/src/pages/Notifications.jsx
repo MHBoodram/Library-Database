@@ -110,6 +110,7 @@ export default function Notifications() {
             : n
         )
       );
+      window.dispatchEvent(new CustomEvent('notificationsUpdated'));
     } catch (err) {
       setError(getFriendlyError(err, "Unable to mark notification as read."));
     } finally {
@@ -123,6 +124,7 @@ export default function Notifications() {
     try {
       await dismissNotification(token, notificationId);
       await loadNotifications(filter);
+      window.dispatchEvent(new CustomEvent('notificationsUpdated'));
     } catch (err) {
       setError(getFriendlyError(err, "Unable to dismiss notification."));
     } finally {
