@@ -18,6 +18,8 @@ export default function ReservationsPanel({ api, staffUser, onChanged }) {
   const [roomsError, setRoomsError] = useState("");
   const [editingRoomId, setEditingRoomId] = useState(null);
   const [editRoomForm, setEditRoomForm] = useState({ room_number: "", capacity: "", features: "" });
+  const [newRoomVisible, setNewRoomVisible] = useState(false);
+  const [newRoomForm, setNewRoomForm] = useState({ room_number: "", capacity: "", features: "" });
   const [toast, setToast] = useState(null);
   const [confirmState, setConfirmState] = useState(null);
 
@@ -165,13 +167,73 @@ export default function ReservationsPanel({ api, staffUser, onChanged }) {
       <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
         <div className="flex items-center justify-between border-b bg-gray-50 px-5 py-3 text-sm">
           <span className="text-md font-semibold mb-2">Manage Rooms</span>
-          <button
-            onClick={() => setRefreshFlag((f) => f + 1)}
-            className="text-xs font-medium text-gray-700 hover:underline"
-          >
-            Refresh
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setNewRoomVisible((v) => !v)}
+              className={`text-xs px-3 py-1 rounded btn-primary ${newRoomVisible ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'} text-white`}
+            >
+              {newRoomVisible ? 'Cancel' : 'Add Room'}
+            </button>
+            <button
+              onClick={() => setRefreshFlag((f) => f + 1)}
+              className="text-xs font-medium text-gray-700 hover:underline"
+            >
+              Refresh
+            </button>
+          </div>
         </div>
+        {newRoomVisible && (
+          <div className="p-4 border-b bg-white">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <input
+                className="rounded-md border px-2 py-1"
+                placeholder="Room number (e.g., A2)"
+                value={newRoomForm.room_number}
+                onChange={(e) => setNewRoomForm((p) => ({ ...p, room_number: e.target.value }))}
+              />
+              <input
+                type="number"
+                min={0}
+                className="rounded-md border px-2 py-1"
+                placeholder="Capacity"
+                value={newRoomForm.capacity}
+                onChange={(e) => setNewRoomForm((p) => ({ ...p, capacity: e.target.value }))}
+              />
+              <input
+                className="rounded-md border px-2 py-1"
+                placeholder="Features (comma separated)"
+                value={newRoomForm.features}
+                onChange={(e) => setNewRoomForm((p) => ({ ...p, features: e.target.value }))}
+              />
+            </div>
+            <div className="mt-3">
+              <button
+                className="text-sm px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
+                onClick={async () => {
+                  try {
+                    const payload = {
+                      room_number: newRoomForm.room_number,
+                      capacity: newRoomForm.capacity === "" ? null : Number(newRoomForm.capacity),
+                      features: newRoomForm.features === "" ? null : newRoomForm.features,
+                    };
+                    await api('staff/rooms', { method: 'POST', body: payload });
+                    setNewRoomForm({ room_number: "", capacity: "", features: "" });
+                    setNewRoomVisible(false);
+                    setRefreshFlag((f) => f + 1);
+                    showToast({ type: 'success', text: 'Room created' });
+                  } catch (err) {
+                    const code = err?.data?.error;
+                    const msg = err?.data?.message || err.message;
+                    if (code === 'room_exists') showToast({ type: 'error', text: msg || 'Room already exists' });
+                    else showToast({ type: 'error', text: msg || 'Failed to create room' });
+                  }
+                }}
+              >
+                Create Room
+              </button>
+            </div>
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead className="bg-gray-100 text-left">

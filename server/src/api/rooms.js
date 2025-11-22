@@ -1,9 +1,13 @@
-import { sendJSON, readJSONBody, requireRole } from "../lib/http.js";
+import { sendJSON, readJSONBody, requireRole, requireAuth } from "../lib/http.js";
 import { pool } from "../lib/db.js";
 
 export const createRoom = (JWT_SECRET) => async (req, res) => {
-  const auth = requireRole(req, res, JWT_SECRET, "staff");
-  if (!auth) return;
+  // allow staff or admin users to create rooms
+  const user = requireAuth(req, res, JWT_SECRET);
+  if (!user) return;
+  if (user.role !== 'staff' && user.role !== 'admin') {
+    return sendJSON(res, 403, { error: 'forbidden' });
+  }
 
   const body = await readJSONBody(req);
   const room_number = (body.room_number || "").trim();
@@ -44,8 +48,11 @@ export const listRooms = () => async (_req, res) => {
 
 // Update a room (partial update)
 export const updateRoom = (JWT_SECRET) => async (req, res, params) => {
-  const auth = requireRole(req, res, JWT_SECRET, "staff");
-  if (!auth) return;
+  const user = requireAuth(req, res, JWT_SECRET);
+  if (!user) return;
+  if (user.role !== 'staff' && user.role !== 'admin') {
+    return sendJSON(res, 403, { error: 'forbidden' });
+  }
 
   const roomId = Number(params?.id);
   if (!Number.isInteger(roomId) || roomId <= 0) {
@@ -97,8 +104,11 @@ export const updateRoom = (JWT_SECRET) => async (req, res, params) => {
 
 // Delete a room
 export const deleteRoom = (JWT_SECRET) => async (req, res, params) => {
-  const auth = requireRole(req, res, JWT_SECRET, "staff");
-  if (!auth) return;
+  const user = requireAuth(req, res, JWT_SECRET);
+  if (!user) return;
+  if (user.role !== 'staff' && user.role !== 'admin') {
+    return sendJSON(res, 403, { error: 'forbidden' });
+  }
 
   const roomId = Number(params?.id);
   if (!Number.isInteger(roomId) || roomId <= 0) {
