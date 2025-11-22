@@ -106,7 +106,7 @@ function NavBar() {
                                 Manage Loans
                             </NavLink>
                         )}
-                        {user && (
+                        {user && !user.is_employee && (
                             <NavLink to="/fines" className = {({ isActive }) => (isActive? 'sub-nav-link active' : 'sub-nav-link')}>
                                 Pay Fines
                             </NavLink>
