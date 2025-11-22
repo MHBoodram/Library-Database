@@ -143,6 +143,11 @@
   color: #b91c1c;
 }
 
+.action-btn.subtle {
+  background: #f1f5f9;
+  color: #1e293b;
+}
+
 .action-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -168,6 +173,14 @@
 .notice-info {
   background: #e0f2fe;
   color: #075985;
+}
+
+.status-cell,
+.flagged-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
 }
 
 .edit-name-fields {

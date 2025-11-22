@@ -31,6 +31,7 @@ export default function ManageAccounts() {
   const [editForm, setEditForm] = useState({});
   const [savingId, setSavingId] = useState(null);
   const [flaggingId, setFlaggingId] = useState(null);
+  const [statusUpdatingId, setStatusUpdatingId] = useState(null);
   const [message, setMessage] = useState({ type: "", text: "" });
   const [toast, setToast] = useState(null);
   const [confirmState, setConfirmState] = useState(null);
@@ -144,23 +145,47 @@ export default function ManageAccounts() {
     }
   };
 
-  const handleFlag = async (row) => {
-    if (row.flagged_for_deletion) return;
+  const handleToggleStatus = async (row) => {
+    setStatusUpdatingId(row.account_id);
+    try {
+      await useApi(`manage/accounts/${row.account_id}`, {
+        method: "PATCH",
+        body: { is_active: !row.is_active },
+      });
+      const text = row.is_active ? "Account deactivated." : "Account reactivated.";
+      setMessage({ type: "success", text });
+      showToast({ type: "success", text });
+      refresh();
+    } catch (err) {
+      const msg = err?.data?.error || err?.message || "Failed to update status.";
+      setMessage({ type: "error", text: msg });
+      showToast({ type: "error", text: msg });
+    } finally {
+      setStatusUpdatingId(null);
+    }
+  };
+
+  const handleFlag = (row) => {
+    const clearing = Boolean(row.flagged_for_deletion);
     setConfirmState({
-      title: "Flag account for deletion?",
-      message: `Flag ${row.email} for deletion?`,
-      confirmLabel: "Flag account",
+      title: clearing ? "Clear delete flag?" : "Flag account for deletion?",
+      message: clearing
+        ? `Remove the deletion flag from ${row.email}?`
+        : `Flag ${row.email} for deletion?`,
+      confirmLabel: clearing ? "Clear flag" : "Flag account",
       cancelLabel: "Cancel",
-      tone: "danger",
+      tone: clearing ? "primary" : "danger",
       onConfirm: async () => {
         setFlaggingId(row.account_id);
         try {
-          await useApi(`manage/accounts/${row.account_id}/flag`, { method: "POST" });
-          setMessage({ type: "success", text: "Account flagged for deletion." });
-          showToast({ type: "success", text: "Account flagged for deletion." });
+          const method = clearing ? "DELETE" : "POST";
+          await useApi(`manage/accounts/${row.account_id}/flag`, { method });
+          const successMsg = clearing ? "Flag cleared." : "Account flagged for deletion.";
+          setMessage({ type: "success", text: successMsg });
+          showToast({ type: "success", text: successMsg });
           refresh();
         } catch (err) {
-          const msg = err?.data?.error || err?.message || "Failed to flag account.";
+          const msg = err?.data?.error || err?.message || "Flag update failed.";
           setMessage({ type: "error", text: msg });
           showToast({ type: "error", text: msg });
         } finally {
@@ -344,19 +369,47 @@ export default function ManageAccounts() {
                               <option value="0">Inactive</option>
                             </select>
                           ) : (
-                            <span className={row.is_active ? "status-badge active" : "status-badge inactive"}>
-                              {row.is_active ? "Active" : "Inactive"}
-                            </span>
+                            <div className="status-cell">
+                              <span className={row.is_active ? "status-badge active" : "status-badge inactive"}>
+                                {row.is_active ? "Active" : "Inactive"}
+                              </span>
+                              <button
+                                className="action-btn subtle"
+                                disabled={statusUpdatingId === row.account_id}
+                                onClick={() => handleToggleStatus(row)}
+                              >
+                                {statusUpdatingId === row.account_id
+                                  ? "Updating…"
+                                  : row.is_active
+                                  ? "Deactivate"
+                                  : "Activate"}
+                              </button>
+                            </div>
                           )}
                         </Td>
                         <Td>{formatDateTime(row.created_at)}</Td>
                         <Td>
                           {row.flagged_for_deletion ? (
-                            <span className="flagged-badge">
-                              Flagged {formatDate(row.flagged_at)}
-                            </span>
+                            <div className="flagged-cell">
+                              <span className="flagged-badge">
+                                Flagged {formatDate(row.flagged_at)}
+                              </span>
+                              <button
+                                className="action-btn subtle"
+                                disabled={flaggingId === row.account_id}
+                                onClick={() => handleFlag(row)}
+                              >
+                                {flaggingId === row.account_id ? "Updating…" : "Clear"}
+                              </button>
+                            </div>
                           ) : (
-                            "—"
+                            <button
+                              className="action-btn subtle"
+                              disabled={flaggingId === row.account_id}
+                              onClick={() => handleFlag(row)}
+                            >
+                              {flaggingId === row.account_id ? "Flagging…" : "Flag"}
+                            </button>
                           )}
                         </Td>
                         <Td>

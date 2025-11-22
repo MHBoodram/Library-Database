@@ -324,3 +324,42 @@ export const flagAccount = (JWT_SECRET) => async (req, res, params) => {
     conn.release();
   }
 };
+
+export const clearFlagAccount = (JWT_SECRET) => async (req, res, params) => {
+  const admin = requireEmployeeRole(req, res, JWT_SECRET, "admin");
+  if (!admin) return;
+
+  const accountId = Number(params?.id);
+  if (!Number.isInteger(accountId) || accountId <= 0) {
+    return sendJSON(res, 400, { error: "invalid_account" });
+  }
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const [result] = await conn.execute(
+      `UPDATE account
+         SET flagged_for_deletion = 0,
+             flagged_at = NULL,
+             flagged_by_account_id = NULL
+       WHERE account_id = ?`,
+      [accountId]
+    );
+
+    if (!result.affectedRows) {
+      await conn.rollback();
+      return sendJSON(res, 404, { error: "account_not_found" });
+    }
+
+    await conn.commit();
+    const refreshed = await fetchAccountById(conn, accountId);
+    return sendJSON(res, 200, { account: normalizeRow(refreshed) });
+  } catch (err) {
+    try { await conn.rollback(); } catch {}
+    console.error("Failed to clear flag:", err.message);
+    return sendJSON(res, 500, { error: "clear_flag_failed" });
+  } finally {
+    conn.release();
+  }
+};
