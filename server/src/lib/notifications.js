@@ -109,7 +109,6 @@ export async function notificationExists(runner, { userId, type, hint }) {
       WHERE user_id = ?
         AND type = ?
         ${likeHint ? "AND metadata LIKE ?" : ""}
-        AND status IN ('unread','read','resolved')
       LIMIT 1
     `,
     likeHint ? [userId, type, likeHint] : [userId, type]
