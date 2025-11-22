@@ -73,6 +73,19 @@
   vertical-align: top;
 }
 
+/* Column widths */
+.accounts-table th:nth-child(1), .accounts-table td:nth-child(1) { width: 5%; } /* ID */
+.accounts-table th:nth-child(2), .accounts-table td:nth-child(2) { width: 10%; } /* Name */
+.accounts-table th:nth-child(3), .accounts-table td:nth-child(3) { width: 8%; } /* Email */
+.accounts-table th:nth-child(4), .accounts-table td:nth-child(4) { width: 10%; } /* Phone */
+.accounts-table th:nth-child(5), .accounts-table td:nth-child(5) { width: 16%; } /* Address */
+.accounts-table th:nth-child(6), .accounts-table td:nth-child(6) { width: 12%; } /* DOB */
+.accounts-table th:nth-child(7), .accounts-table td:nth-child(7) { width: 8%; } /* Role */
+.accounts-table th:nth-child(8), .accounts-table td:nth-child(8) { width: 8%; } /* Status */
+.accounts-table th:nth-child(9), .accounts-table td:nth-child(9) { width: 8%; } /* Created */
+.accounts-table th:nth-child(10), .accounts-table td:nth-child(10) { width: 5%; } /* Flag */
+.accounts-table th:nth-child(11), .accounts-table td:nth-child(11) { width: 10%; } /* Actions */
+
 .flagged-row {
   background: #fef2f2;
 }
