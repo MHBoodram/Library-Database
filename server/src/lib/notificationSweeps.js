@@ -109,7 +109,8 @@ export async function sweepLoanNotifications() {
         const exists = await notificationExists(conn, {
           userId: loan.user_id,
           type: NOTIFICATION_TYPES.DUE_SOON,
-          hint: `"loan_id":${loan.loan_id}`,
+          uniqueField: 'loan_id',
+          uniqueValue: loan.loan_id,
         });
         if (!exists) {
           await createNotification(conn, {
@@ -128,7 +129,8 @@ export async function sweepLoanNotifications() {
         const exists = await notificationExists(conn, {
           userId: loan.user_id,
           type: NOTIFICATION_TYPES.OVERDUE,
-          hint: `"loan_id":${loan.loan_id}`,
+          uniqueField: 'loan_id',
+          uniqueValue: loan.loan_id,
         });
         if (!exists) {
           await createNotification(conn, {
@@ -149,7 +151,8 @@ export async function sweepLoanNotifications() {
         const lostExists = await notificationExists(conn, {
           userId: loan.user_id,
           type: NOTIFICATION_TYPES.LOST_MARKED,
-          hint: `"loan_id":${loan.loan_id}`,
+          uniqueField: 'loan_id',
+          uniqueValue: loan.loan_id,
         });
         if (!lostExists) {
           await createNotification(conn, {
@@ -165,7 +168,8 @@ export async function sweepLoanNotifications() {
         const suspendExists = await notificationExists(conn, {
           userId: loan.user_id,
           type: NOTIFICATION_TYPES.LOST_WARNING,
-          hint: `"loan_id":${loan.loan_id}`,
+          uniqueField: 'loan_id',
+          uniqueValue: loan.loan_id,
         });
         if (!suspendExists) {
           await createNotification(conn, {
@@ -182,7 +186,8 @@ export async function sweepLoanNotifications() {
           const suspended = await notificationExists(conn, {
             userId: loan.user_id,
             type: NOTIFICATION_TYPES.SUSPENDED,
-            hint: `"loan_id":${loan.loan_id}`,
+            uniqueField: 'loan_id',
+            uniqueValue: loan.loan_id,
           });
           if (!suspended) {
             await createNotification(conn, {
@@ -234,7 +239,8 @@ export async function sweepRoomNotifications() {
         const exists = await notificationExists(conn, {
           userId: res.user_id,
           type: NOTIFICATION_TYPES.ROOM_EXPIRING,
-          hint: `"reservation_id":${res.reservation_id}`,
+          uniqueField: 'reservation_id',
+          uniqueValue: res.reservation_id,
         });
         if (!exists) {
           await createNotification(conn, {
@@ -252,7 +258,8 @@ export async function sweepRoomNotifications() {
         const exists = await notificationExists(conn, {
           userId: res.user_id,
           type: NOTIFICATION_TYPES.ROOM_EXPIRED,
-          hint: `"reservation_id":${res.reservation_id}`,
+          uniqueField: 'reservation_id',
+          uniqueValue: res.reservation_id,
         });
         if (!exists) {
           await createNotification(conn, {

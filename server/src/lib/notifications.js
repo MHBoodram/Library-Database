@@ -98,9 +98,33 @@ export async function listUserNotifications(runner, userId, { status = "open", l
   return rows.map(mapNotificationRow);
 }
 
-export async function notificationExists(runner, { userId, type, hint }) {
+/**
+ * Checks for existence of a notification by user, type, and optionally a unique field in metadata.
+ * @param {object} runner - DB connection
+ * @param {object} opts - { userId, type, uniqueField, uniqueValue, hint }
+ * @returns {Promise<boolean>}
+ */
+export async function notificationExists(runner, { userId, type, uniqueField, uniqueValue, hint }) {
   const conn = ensureRunner(runner);
   if (!userId || !type) return false;
+
+  // If uniqueField and uniqueValue are provided, use JSON_EXTRACT for robust uniqueness
+  if (uniqueField && uniqueValue !== undefined && uniqueValue !== null) {
+    const [rows] = await conn.query(
+      `
+        SELECT notification_id
+        FROM notification
+        WHERE user_id = ?
+          AND type = ?
+          AND JSON_EXTRACT(metadata, ?) = ?
+        LIMIT 1
+      `,
+      [userId, type, `$.${uniqueField}`, uniqueValue]
+    );
+    return rows.length > 0;
+  }
+
+  // Fallback to LIKE for legacy/other cases
   const likeHint = hint ? `%${hint}%` : null;
   const [rows] = await conn.query(
     `
