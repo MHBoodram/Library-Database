@@ -7,8 +7,9 @@ import {
 } from "./notifications.js";
 
 const DUE_SOON_HOURS = Number(process.env.LOAN_DUE_SOON_HOURS || 48);
-const LOST_AFTER_DAYS = Number(process.env.LOAN_LOST_AFTER_DAYS || 15);
+const LOST_AFTER_DAYS = Number(process.env.LOAN_LOST_AFTER_DAYS || 28);
 const LOST_SUSPEND_GRACE_DAYS = Number(process.env.LOST_SUSPEND_GRACE_DAYS || 3);
+const LOST_REPLACEMENT_FEE = Number(process.env.LOST_REPLACEMENT_FEE || 20);
 const ROOM_EXPIRING_MINUTES = Number(process.env.ROOM_EXPIRING_MINUTES || 30);
 
 function hoursFromNow(hours) {
@@ -23,6 +24,60 @@ function iso(input) {
   return input instanceof Date ? input.toISOString() : new Date(input).toISOString();
 }
 
+async function markLoanAndCopyLost(conn, loan) {
+  if (!loan?.loan_id || !loan?.copy_id) return;
+  if (loan.status !== "lost") {
+    await conn.execute(
+      "UPDATE loan SET status = 'lost' WHERE loan_id = ? AND status <> 'lost'",
+      [loan.loan_id]
+    );
+  }
+  await conn.execute(
+    "UPDATE copy SET status = 'lost' WHERE copy_id = ? AND status <> 'lost'",
+    [loan.copy_id]
+  );
+}
+
+async function ensureLostFine(conn, loan) {
+  if (!loan?.loan_id || !loan?.user_id) return;
+  const [existing] = await conn.query(
+    `
+      SELECT fine_id, reason, amount_assessed
+      FROM fine
+      WHERE loan_id = ?
+        AND status NOT IN ('paid','waived','written_off')
+      ORDER BY fine_id ASC
+    `,
+    [loan.loan_id]
+  );
+  const targetAmount = LOST_REPLACEMENT_FEE;
+  const lostFine = existing.find((row) => row.reason === "lost");
+  if (lostFine) {
+    if (Number(lostFine.amount_assessed) !== targetAmount) {
+      await conn.execute(
+        "UPDATE fine SET amount_assessed = ? WHERE fine_id = ?",
+        [targetAmount, lostFine.fine_id]
+      );
+    }
+    return;
+  }
+  const overdueFine = existing.find((row) => row.reason === "overdue");
+  if (overdueFine) {
+    await conn.execute(
+      "UPDATE fine SET reason = 'lost', amount_assessed = ? WHERE fine_id = ?",
+      [targetAmount, overdueFine.fine_id]
+    );
+    return;
+  }
+  await conn.execute(
+    `
+      INSERT INTO fine (loan_id, user_id, assessed_at, reason, amount_assessed, status)
+      VALUES (?, ?, NOW(), 'lost', ?, 'open')
+    `,
+    [loan.loan_id, loan.user_id, targetAmount]
+  );
+}
+
 export async function sweepLoanNotifications() {
   const conn = await pool.getConnection();
   try {
@@ -33,12 +88,12 @@ export async function sweepLoanNotifications() {
 
     const [loans] = await conn.query(
       `
-        SELECT l.loan_id, l.user_id, l.due_date, l.status, l.return_date,
+        SELECT l.loan_id, l.user_id, l.copy_id, l.due_date, l.status, l.return_date,
                i.title AS item_title
         FROM loan l
         JOIN copy c ON c.copy_id = l.copy_id
         JOIN item i ON i.item_id = c.item_id
-        WHERE l.status = 'active'
+        WHERE l.status IN ('active','lost')
       `
     );
 
@@ -47,8 +102,10 @@ export async function sweepLoanNotifications() {
       if (!due || Number.isNaN(due.getTime())) continue;
       const meta = { loan_id: loan.loan_id, due_date: iso(due), item_title: loan.item_title };
 
-      // due soon
-      if (due > now && due <= dueSoonAt) {
+      const isActiveLoan = loan.status === "active";
+
+      // due soon (active loans only)
+      if (isActiveLoan && due > now && due <= dueSoonAt) {
         const exists = await notificationExists(conn, {
           userId: loan.user_id,
           type: NOTIFICATION_TYPES.DUE_SOON,
@@ -66,8 +123,8 @@ export async function sweepLoanNotifications() {
         continue;
       }
 
-      // overdue
-      if (due < now && due > lostCutoff) {
+      // overdue (active loans only)
+      if (isActiveLoan && due < now && due > lostCutoff) {
         const exists = await notificationExists(conn, {
           userId: loan.user_id,
           type: NOTIFICATION_TYPES.OVERDUE,
@@ -87,6 +144,8 @@ export async function sweepLoanNotifications() {
 
       // lost threshold reached
       if (due <= lostCutoff) {
+        await markLoanAndCopyLost(conn, loan);
+        await ensureLostFine(conn, loan);
         const lostExists = await notificationExists(conn, {
           userId: loan.user_id,
           type: NOTIFICATION_TYPES.LOST_MARKED,

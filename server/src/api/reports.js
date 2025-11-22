@@ -17,6 +17,7 @@ const MONTH_LABELS = [
 ];
 const DAY_MS = 24 * 60 * 60 * 1000;
 const TIMEFRAMES = new Set(["day", "week", "month", "quarter", "year"]);
+const LOST_FLAT_FEE = Number(process.env.LOST_REPLACEMENT_FEE || 20);
 
 function parseDateOnly(value) {
   if (!value) return null;
@@ -295,10 +296,13 @@ export const balances = (JWT_SECRET) => async (req, res) => {
           CASE 
             WHEN LOWER(f.status) NOT IN ('paid','waived') AND f.reason = 'overdue' THEN
               ROUND(
-                LEAST(
-                  COALESCE(l.max_fine_snapshot, 99999),
-                  GREATEST(0, DATEDIFF(CURDATE(), l.due_date)) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
-                ), 2
+                CASE
+                  WHEN l.status = 'lost' THEN ?
+                  ELSE LEAST(
+                    COALESCE(l.max_fine_snapshot, 99999),
+                    GREATEST(0, DATEDIFF(CURDATE(), l.due_date)) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
+                  )
+                END, 2
               )
             WHEN LOWER(f.status) NOT IN ('paid','waived') THEN f.amount_assessed
             ELSE 0
@@ -312,7 +316,7 @@ export const balances = (JWT_SECRET) => async (req, res) => {
       ORDER BY open_balance_current DESC, paid_total DESC
       LIMIT 500
     `;
-    const [rows] = await pool.query(sql, [startDate, endDate]);
+    const [rows] = await pool.query(sql, [LOST_FLAT_FEE, startDate, endDate]);
     return sendJSON(res, 200, rows);
   } catch (err) {
     console.error("balances report failed:", err.message);

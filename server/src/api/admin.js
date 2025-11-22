@@ -4,6 +4,7 @@ import { pool } from "../lib/db.js";
 
 const EMPLOYEE_ROLES = ["librarian", "clerk", "assistant", "admin"];
 const ACCOUNT_ROLES = ["student", "faculty", "staff", "admin"];
+const LOST_FLAT_FEE = Number(process.env.LOST_REPLACEMENT_FEE || 20);
 
 export const adminOverview = (JWT_SECRET) => async (req, res) => {
   const auth = requireEmployeeRole(req, res, JWT_SECRET, "admin");
@@ -39,10 +40,13 @@ export const adminOverview = (JWT_SECRET) => async (req, res) => {
          COALESCE(SUM(
            CASE 
              WHEN f.reason = 'overdue' THEN ROUND(
-               LEAST(
-                 COALESCE(l.max_fine_snapshot, 99999),
-                 GREATEST(0, DATEDIFF(CURDATE(), l.due_date)) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
-               ), 2
+               CASE
+                 WHEN l.status = 'lost' THEN ?
+                 ELSE LEAST(
+                   COALESCE(l.max_fine_snapshot, 99999),
+                   GREATEST(0, DATEDIFF(CURDATE(), l.due_date)) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
+                 )
+               END, 2
              )
              ELSE f.amount_assessed
            END
@@ -50,9 +54,9 @@ export const adminOverview = (JWT_SECRET) => async (req, res) => {
        FROM fine f
        JOIN loan l ON l.loan_id = f.loan_id
        WHERE LOWER(f.status) NOT IN ('paid','waived','written_off')
-         AND l.status = 'active'
+         AND l.status IN ('active','lost')
          AND l.due_date < CURDATE()`
-    );
+    , [LOST_FLAT_FEE]);
 
     return sendJSON(res, 200, {
       role_counts: roleCounts.map((row) => ({ role: row.role, count: Number(row.count) })),

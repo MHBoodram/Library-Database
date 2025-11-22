@@ -2,6 +2,7 @@ import { sendJSON, requireRole } from "../lib/http.js";
 import { pool } from "../lib/db.js";
 
 const ACTIVE_STATUSES = ["paid", "waived"]; // treated as inactive if matched
+const LOST_FLAT_FEE = Number(process.env.LOST_REPLACEMENT_FEE || 20);
 
 export const listActiveLoans = (JWT_SECRET) => async (req, res) => {
   const auth = requireRole(req, res, JWT_SECRET, "staff");
@@ -174,19 +175,25 @@ export const listFines = (JWT_SECRET) => async (req, res) => {
       GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) AS days_overdue,
       -- dynamic estimate without grace
       ROUND(
-        LEAST(
-          COALESCE(l.max_fine_snapshot, 99999),
-          GREATEST(0, DATEDIFF(CURDATE(), l.due_date)) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
-        ), 2
+        CASE
+          WHEN l.status = 'lost' THEN ?
+          ELSE LEAST(
+            COALESCE(l.max_fine_snapshot, 99999),
+            GREATEST(0, DATEDIFF(CURDATE(), l.due_date)) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
+          )
+        END, 2
       ) AS dynamic_est_fine,
       -- prefer assessed amount if fine is overdue/open
       COALESCE(
         f.amount_assessed,
         ROUND(
-          LEAST(
-            COALESCE(l.max_fine_snapshot, 99999),
-            GREATEST(0, DATEDIFF(CURDATE(), l.due_date)) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
-          ), 2
+          CASE
+            WHEN l.status = 'lost' THEN ?
+            ELSE LEAST(
+              COALESCE(l.max_fine_snapshot, 99999),
+              GREATEST(0, DATEDIFF(CURDATE(), l.due_date)) * COALESCE(l.daily_fine_rate_snapshot, 1.25)
+            )
+          END, 2
         )
       ) AS current_fine
     FROM fine f
@@ -203,7 +210,7 @@ export const listFines = (JWT_SECRET) => async (req, res) => {
   `;
 
   try {
-    const [rows] = await pool.query(finesSql, [...params, pageSize, offset]);
+    const [rows] = await pool.query(finesSql, [...params, LOST_FLAT_FEE, LOST_FLAT_FEE, pageSize, offset]);
     return sendJSON(res, 200, { rows, page, pageSize, query: q, status: statusParam || "active" });
   } catch (err) {
     console.error("Failed to load staff fines:", err.message);
