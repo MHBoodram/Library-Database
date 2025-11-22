@@ -220,7 +220,9 @@ export default function ManageAccounts() {
                   <Th>ID</Th>
                   <Th>Name</Th>
                   <Th>Email</Th>
-                  <Th>Contact</Th>
+                  <Th>Phone</Th>
+                  <Th>Address</Th>
+                  <Th>Date of Birth</Th>
                   <Th>Role</Th>
                   <Th>Status</Th>
                   <Th>Created</Th>
@@ -231,7 +233,7 @@ export default function ManageAccounts() {
               <tbody>
                 {!rows.length && !loading ? (
                   <tr>
-                    <td colSpan={9} style={{ padding: 12 }}>No accounts found.</td>
+                    <td colSpan={11} style={{ padding: 12 }}>No accounts found.</td>
                   </tr>
                 ) : (
                   rows.map((row) => {
@@ -265,46 +267,45 @@ export default function ManageAccounts() {
                         <Td>{row.email}</Td>
                         <Td>
                           {isEditing ? (
-                            <div className="contact-edit">
-                              <label>
-                                Phone
+                            <div className="phone-edit">
                                 <input
                                   type="tel"
                                   value={editForm.phone || ""}
                                   onChange={(e) => handleEditChange("phone", e.target.value)}
                                   placeholder="(555) 123-4567"
                                 />
-                              </label>
-                              <label>
-                                Date of birth
-                                <input
-                                  type="date"
-                                  value={editForm.date_of_birth || ""}
-                                  max={today}
-                                  onChange={(e) => handleEditChange("date_of_birth", e.target.value)}
-                                />
-                              </label>
-                              <label>
-                                Address
+                            </div>
+                          ) : (
+                            <div className="phone-display">
+                              {row.phone || "—"}
+                            </div>
+                          )}
+                        </Td>
+                        <Td>
+                          {isEditing ? (
+                            <div className="address-edit">
                                 <textarea
                                   value={editForm.address || ""}
                                   onChange={(e) => handleEditChange("address", e.target.value)}
                                   placeholder="Street, City, State, ZIP"
                                 />
-                              </label>
                             </div>
                           ) : (
-                            <div className="contact-display">
-                              <div><strong>Phone:</strong> {row.phone || "—"}</div>
-                              <div><strong>DOB:</strong> {formatDate(row.date_of_birth)}</div>
-                              <div>
-                                <strong>Address:</strong>{" "}
-                                <span className="contact-address">
-                                  {row.address || "—"}
-                                </span>
-                              </div>
+                            <div className="address-display">
+                              {row.address || "—"}
                             </div>
                           )}
+                        </Td>
+                        <Td>
+                        {isEditing ? (<input
+                          type="date"
+                          value={editForm.date_of_birth || ""}
+                          max={today}
+                          onChange={(e) => handleEditChange("date_of_birth", e.target.value)}
+                          />
+                        ) : (
+                          <span>{formatDate(row.date_of_birth)}</span>
+                        )} 
                         </Td>
                         <Td>
                           {isEditing ? (
