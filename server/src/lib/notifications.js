@@ -99,44 +99,50 @@ export async function listUserNotifications(runner, userId, { status = "open", l
 }
 
 /**
- * Checks for existence of a notification by user, type, and optionally a unique field in metadata.
+ * Checks for existence of a notification by user, type, and optionally a unique field in metadata and status.
  * @param {object} runner - DB connection
- * @param {object} opts - { userId, type, uniqueField, uniqueValue, hint }
+ * @param {object} opts - { userId, type, uniqueField, uniqueValue, statusNot, hint }
  * @returns {Promise<boolean>}
  */
-export async function notificationExists(runner, { userId, type, uniqueField, uniqueValue, hint }) {
+export async function notificationExists(runner, { userId, type, uniqueField, uniqueValue, statusNot, hint }) {
   const conn = ensureRunner(runner);
   if (!userId || !type) return false;
 
   // If uniqueField and uniqueValue are provided, use JSON_EXTRACT for robust uniqueness
   if (uniqueField && uniqueValue !== undefined && uniqueValue !== null) {
-    const [rows] = await conn.query(
-      `
-        SELECT notification_id
-        FROM notification
-        WHERE user_id = ?
-          AND type = ?
-          AND JSON_EXTRACT(metadata, ?) = ?
-        LIMIT 1
-      `,
-      [userId, type, `$.${uniqueField}`, uniqueValue]
-    );
+    let query = `
+      SELECT notification_id
+      FROM notification
+      WHERE user_id = ?
+        AND type = ?
+        AND JSON_EXTRACT(metadata, ?) = ?
+    `;
+    const params = [userId, type, `$.${uniqueField}`, uniqueValue];
+    if (statusNot) {
+      query += ' AND status != ?';
+      params.push(statusNot);
+    }
+    query += '\n      LIMIT 1';
+    const [rows] = await conn.query(query, params);
     return rows.length > 0;
   }
 
   // Fallback to LIKE for legacy/other cases
   const likeHint = hint ? `%${hint}%` : null;
-  const [rows] = await conn.query(
-    `
-      SELECT notification_id
-      FROM notification
-      WHERE user_id = ?
-        AND type = ?
-        ${likeHint ? "AND metadata LIKE ?" : ""}
-      LIMIT 1
-    `,
-    likeHint ? [userId, type, likeHint] : [userId, type]
-  );
+  let query = `
+    SELECT notification_id
+    FROM notification
+    WHERE user_id = ?
+      AND type = ?
+      ${likeHint ? "AND metadata LIKE ?" : ""}
+  `;
+  const params = likeHint ? [userId, type, likeHint] : [userId, type];
+  if (statusNot) {
+    query += ' AND status != ?';
+    params.push(statusNot);
+  }
+  query += '\n    LIMIT 1';
+  const [rows] = await conn.query(query, params);
   return rows.length > 0;
 }
 
@@ -237,6 +243,15 @@ export async function createHoldReadyNotification(conn, { holdId, userId, itemId
     expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
     queue_position: queuePosition ?? null,
   };
+  // Only create if not already present for this user, type, hold_id, and status != 'resolved'
+  const exists = await notificationExists(conn, {
+    userId,
+    type: NOTIFICATION_TYPES.HOLD_READY,
+    uniqueField: 'hold_id',
+    uniqueValue: holdId,
+    statusNot: 'resolved',
+  });
+  if (exists) return;
   await conn.execute(
     `
       INSERT INTO notification (
@@ -262,7 +277,7 @@ export async function createHoldReadyNotification(conn, { holdId, userId, itemId
       NOTIFICATION_STATUS.UNREAD,
       itemTitle ? `Hold ready: ${itemTitle}` : "Hold ready for pickup",
       itemTitle
-        ? `A copy of "${itemTitle}" is ready for pickup.`
+        ? `A copy of \"${itemTitle}\" is ready for pickup.`
         : "A hold you placed is ready for pickup.",
       1,
       serializeMetadata(metadata),

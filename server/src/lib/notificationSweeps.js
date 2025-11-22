@@ -111,6 +111,7 @@ export async function sweepLoanNotifications() {
           type: NOTIFICATION_TYPES.DUE_SOON,
           uniqueField: 'loan_id',
           uniqueValue: loan.loan_id,
+          statusNot: 'resolved',
         });
         if (!exists) {
           await createNotification(conn, {
@@ -131,6 +132,7 @@ export async function sweepLoanNotifications() {
           type: NOTIFICATION_TYPES.OVERDUE,
           uniqueField: 'loan_id',
           uniqueValue: loan.loan_id,
+          statusNot: 'resolved',
         });
         if (!exists) {
           await createNotification(conn, {
@@ -153,6 +155,7 @@ export async function sweepLoanNotifications() {
           type: NOTIFICATION_TYPES.LOST_MARKED,
           uniqueField: 'loan_id',
           uniqueValue: loan.loan_id,
+          statusNot: 'resolved',
         });
         if (!lostExists) {
           await createNotification(conn, {
@@ -170,6 +173,7 @@ export async function sweepLoanNotifications() {
           type: NOTIFICATION_TYPES.LOST_WARNING,
           uniqueField: 'loan_id',
           uniqueValue: loan.loan_id,
+          statusNot: 'resolved',
         });
         if (!suspendExists) {
           await createNotification(conn, {
@@ -188,6 +192,7 @@ export async function sweepLoanNotifications() {
             type: NOTIFICATION_TYPES.SUSPENDED,
             uniqueField: 'loan_id',
             uniqueValue: loan.loan_id,
+            statusNot: 'resolved',
           });
           if (!suspended) {
             await createNotification(conn, {
@@ -241,6 +246,7 @@ export async function sweepRoomNotifications() {
           type: NOTIFICATION_TYPES.ROOM_EXPIRING,
           uniqueField: 'reservation_id',
           uniqueValue: res.reservation_id,
+          statusNot: 'resolved',
         });
         if (!exists) {
           await createNotification(conn, {
@@ -260,6 +266,7 @@ export async function sweepRoomNotifications() {
           type: NOTIFICATION_TYPES.ROOM_EXPIRED,
           uniqueField: 'reservation_id',
           uniqueValue: res.reservation_id,
+          statusNot: 'resolved',
         });
         if (!exists) {
           await createNotification(conn, {
