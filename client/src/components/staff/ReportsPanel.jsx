@@ -14,6 +14,10 @@ const timeframePresets = [
 ];
 const fallbackUserTypeOptions = ["student", "faculty", "staff", "community"];
 const transactionEventOptions = ["checked_out", "returned"];
+const backendEventMappings = {
+  checked_out: ["checked_out", "checkout", "approved", "requested"],
+  returned: ["returned", "return"],
+};
 
 const normalizeEventCode = (value = "") => value.replace(/\s+/g, "_").toLowerCase();
 const isCheckoutEventType = (value = "") => {
@@ -24,23 +28,42 @@ const isReturnEventType = (value = "") => {
   const code = normalizeEventCode(value);
   return code === "returned" || code === "return";
 };
+const canonicalEventCode = (value = "") => {
+  if (isCheckoutEventType(value)) return "checked_out";
+  if (isReturnEventType(value)) return "returned";
+  return normalizeEventCode(value);
+};
 const formatEventTypeLabel = (value = "") => {
-  const friendly = value.replace(/_/g, " ").trim();
-  if (!friendly) return "—";
+  const code = canonicalEventCode(value);
+  if (code === "checked_out") return "Checked Out";
+  if (code === "returned") return "Returned";
+  const friendly = code.replace(/_/g, " ").trim();
+  if (!friendly) return "--";
   return friendly
     .split(" ")
     .map((word) => (word ? word[0].toUpperCase() + word.slice(1) : ""))
     .join(" ");
 };
 const getEventTypePillClasses = (value = "") => {
-  const code = normalizeEventCode(value);
-  if (code === "checked_out" || code === "checkout" || code === "approved") {
+  const code = canonicalEventCode(value);
+  if (code === "checked_out") {
     return "bg-blue-100 text-blue-800";
   }
-  if (code === "returned" || code === "return") {
+  if (code === "returned") {
     return "bg-gray-100 text-gray-800";
   }
   return "bg-gray-100 text-gray-600";
+};
+const expandEventFilters = (values = []) => {
+  const expanded = new Set();
+  values.forEach((value) => {
+    const code = canonicalEventCode(value);
+    const rawValues = backendEventMappings[code] || [code];
+    rawValues.forEach((raw) => {
+      if (raw) expanded.add(raw);
+    });
+  });
+  return Array.from(expanded);
 };
 
 function CheckboxMultiSelect({
@@ -1043,7 +1066,12 @@ export default function ReportsPanel({ api }) {
           const overridePageSize = Number(overrides.txPageSize);
           requestedTxPage = Number.isFinite(overridePage) && overridePage > 0 ? overridePage : txPage;
           requestedTxPageSize = Number.isFinite(overridePageSize) && overridePageSize > 0 ? overridePageSize : txPageSize;
-          if (Array.isArray(txEventTypes) && txEventTypes.length) params.set("types", txEventTypes.join(","));
+          if (Array.isArray(txEventTypes) && txEventTypes.length) {
+            const rawEventFilters = expandEventFilters(txEventTypes);
+            if (rawEventFilters.length) {
+              params.set("types", rawEventFilters.join(","));
+            }
+          }
           if (Array.isArray(txStatuses) && txStatuses.length) params.set("statuses", txStatuses.join(","));
           break;
         }
@@ -1243,14 +1271,14 @@ export default function ReportsPanel({ api }) {
   const transactionsFilteredRows = useMemo(() => {
     const sourceRows = Array.isArray(reportData) ? reportData : [];
     if (activeReport !== "transactions" || !txHasGenerated) return sourceRows;
-    const typeSet = new Set(txEventTypes.map((value) => normalizeEventCode(value)));
+    const typeSet = new Set(txEventTypes.map((value) => canonicalEventCode(value)));
     const typeActive = typeSet.size > 0;
     const statuses = new Set(txStatuses);
     const patronFilter = txPatronId ? txPatronId.toLowerCase() : "";
     const itemTypeFilter = txItemType ? txItemType.toLowerCase() : "";
     const itemTitleFilter = txItemTitle ? txItemTitle.toLowerCase() : "";
     return sourceRows.filter((r) => {
-      const rowEventCode = normalizeEventCode(r.event_type || r.raw_type || "");
+      const rowEventCode = canonicalEventCode(r.event_type || r.raw_type || "");
       const typeOk = !typeActive || !rowEventCode || typeSet.has(rowEventCode);
       const statusOk = !r.current_status || statuses.has(String(r.current_status));
       const patronValue = String(r.user_id ?? r.patron_id ?? r.account_id ?? "");
