@@ -117,7 +117,22 @@ export async function assignCopyToNextHold(conn, copyId, explicitItemId = null) 
     [itemId]
   );
   if (!holdRows.length) {
-    await conn.execute("UPDATE copy SET status='available' WHERE copy_id=?", [copyId]);
+    // If no queued holds remain, only mark the copy available if it is not
+    // already tied to an existing ready hold via the trigger. This prevents
+    // us from undoing trg_copy_available_promote's assignment.
+    const [readyHolds] = await conn.query(
+      `
+        SELECT hold_id
+        FROM hold
+        WHERE copy_id = ?
+          AND status = 'ready'
+        LIMIT 1
+      `,
+      [copyId]
+    );
+    if (!readyHolds.length) {
+      await conn.execute("UPDATE copy SET status='available' WHERE copy_id=?", [copyId]);
+    }
     return null;
   }
 
