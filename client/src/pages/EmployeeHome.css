@@ -425,6 +425,32 @@
   min-width: 0;
 }
 
+.transaction-report-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: flex-start;
+  margin-top: 1rem;
+}
+
+.transaction-report-sidebar {
+  position: relative;
+}
+
+.transaction-report-content {
+  min-width: 0;
+}
+
+@media (max-width: 1024px) {
+  .transaction-report-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .transaction-report-sidebar {
+    margin-bottom: 1rem;
+  }
+}
+
 @media (max-width: 1280px) {
   .overdue-report-layout {
     grid-template-columns: 320px minmax(0, 1fr);
@@ -720,12 +746,20 @@ button.disabled\:opacity-50:disabled {
   display: flex;
 }
 
+.flex-col {
+  flex-direction: column;
+}
+
 .items-center {
   align-items: center;
 }
 
 .justify-between {
   justify-content: space-between;
+}
+
+.justify-center {
+  justify-content: center;
 }
 
 .gap-3 {
@@ -819,6 +853,10 @@ tr.border-t {
   margin-top: 0.5rem;
 }
 
+.space-y-1 > * + * {
+  margin-top: 0.25rem;
+}
+
 .space-y-4 > * + * {
   margin-top: 1rem;
 }
@@ -880,4 +918,58 @@ tr.border-t {
 }
 .td-action-label-return{
   color:#01a5eb;
+}
+
+/* Transaction history KPI cards */
+.tx-kpi-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 0.35rem;
+  min-height: 8rem; /* match Tailwind h-32 */
+}
+
+.tx-kpi-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gray-500);
+}
+
+.dropdown-input-wrapper {
+  position: relative;
+}
+
+.dropdown-input {
+  padding-right: 2.5rem;
+}
+
+.dropdown-input-icon {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.85rem;
+  color: var(--gray-500);
+  pointer-events: none;
+}
+
+.dropdown-options-scroll {
+  max-height: 240px;
+  overflow-y: auto;
+  border-radius: inherit;
+}
+
+.tx-kpi-value {
+  font-size: 1.75rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--gray-900);
+}
+
+.tx-kpi-description {
+  font-size: 0.7rem;
+  line-height: 1.2;
+  color: var(--gray-500);
 }

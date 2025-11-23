@@ -85,6 +85,92 @@ function CheckboxMultiSelect({
   );
 }
 
+function SearchableDropdown({
+  label,
+  options = [],
+  value = "",
+  onChange,
+  placeholder = "Search...",
+  emptyLabel = "No options found",
+  helperText = "",
+  disabled = false,
+}) {
+  const [query, setQuery] = useState("");
+  const safeOptions = Array.isArray(options) ? options : [];
+  const filtered = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) return safeOptions;
+    return safeOptions.filter((opt) => {
+      const labelMatch = (opt.label || "").toLowerCase().includes(term);
+      const metaMatch = (opt.meta || "").toLowerCase().includes(term);
+      return labelMatch || metaMatch;
+    });
+  }, [safeOptions, query]);
+
+  useEffect(() => {
+    const match = safeOptions.find((opt) => opt.value === value);
+    setQuery(match ? match.label : "");
+  }, [safeOptions, value]);
+
+  const handleSelect = (nextValue) => {
+    onChange?.(nextValue === value ? "" : nextValue);
+  };
+
+  const visible = filtered;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        {label ? <label className="text-xs font-medium text-gray-600">{label}</label> : null}
+        {value ? (
+          <button
+            type="button"
+            onClick={() => handleSelect("")}
+            className="text-[11px] text-blue-600 hover:underline"
+          >
+            Clear
+          </button>
+        ) : null}
+      </div>
+      <div className="dropdown-input-wrapper">
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={placeholder}
+          disabled={disabled}
+          className="dropdown-input w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm disabled:opacity-60"
+        />
+        <span className="dropdown-input-icon" aria-hidden="true">{'\u25BE'}</span>
+      </div>
+      <div className={`rounded-md border bg-white ${disabled ? "pointer-events-none opacity-60" : ""}`}>
+        {disabled ? (
+          <div className="px-3 py-2 text-sm text-gray-500">Generate the report to load options.</div>
+        ) : visible.length === 0 ? (
+          <div className="px-3 py-2 text-sm text-gray-500">{emptyLabel}</div>
+        ) : (
+          <div className="dropdown-options-scroll">
+            {visible.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => handleSelect(opt.value)}
+                className={`flex w-full flex-col items-start px-3 py-2 text-left text-sm ${
+                  value === opt.value ? "bg-blue-50 text-blue-900" : "hover:bg-gray-50"
+                }`}
+              >
+                <span className="font-medium">{opt.label}</span>
+                {opt.meta ? <span className="text-xs text-gray-500">{opt.meta}</span> : null}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      {helperText ? <p className="text-xs text-gray-500">{helperText}</p> : null}
+    </div>
+  );
+}
+
 const toTitle = (value = "") =>
   value
     .split(" ")
@@ -792,12 +878,8 @@ export default function ReportsPanel({ api }) {
     userTypes: [],
   });
 
-  const [transactionsStartDate, setTransactionStartDate] = useState(() => {
-    const d = new Date();
-    d.setFullYear(d.getFullYear() - 1);
-    return d.toISOString().slice(0, 10);
-  });
-  const [transactionsEndDate, setTransactionsEndDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [transactionsStartDate, setTransactionStartDate] = useState("");
+  const [transactionsEndDate, setTransactionsEndDate] = useState("");
   // Pagination for transactions
   const [txPage, setTxPage] = useState(1);
   const [txPageSize, setTxPageSize] = useState(50);
@@ -806,8 +888,9 @@ export default function ReportsPanel({ api }) {
   // Transactions filters
   const [txEventTypes, setTxEventTypes] = useState(['requested','approved','rejected','returned']);
   const [txStatuses, setTxStatuses] = useState(['Pending','Approved & Active','Rejected','Returned']);
-  const [txStaff, setTxStaff] = useState('');
-  const [txSearch, setTxSearch] = useState('');
+  const [txPatronId, setTxPatronId] = useState("");
+  const [txItemType, setTxItemType] = useState("");
+  const [txItemTitle, setTxItemTitle] = useState("");
   const userTypeOptions = Array.from(
     new Set(
       (newPatronsFilterOptions.userTypes?.length ? newPatronsFilterOptions.userTypes : fallbackUserTypeOptions).map(
@@ -918,8 +1001,6 @@ export default function ReportsPanel({ api }) {
           params.set('pageSize', String(requestedTxPageSize));
           if (Array.isArray(txEventTypes) && txEventTypes.length) params.set('types', txEventTypes.join(','));
           if (Array.isArray(txStatuses) && txStatuses.length) params.set('statuses', txStatuses.join(','));
-          if (txStaff) params.set('staff', String(txStaff));
-          if ((txSearch||'').trim()) params.set('q', (txSearch||'').trim());
           break;
           }
         default:
@@ -956,7 +1037,7 @@ export default function ReportsPanel({ api }) {
     } finally {
       setLoading(false);
     }
-  }, [api, activeReport, overdueStartDate, overdueEndDate, balancesStartDate, balancesEndDate, topItemsStartDate, topItemsEndDate, newPatronsStartDate, newPatronsEndDate, newPatronsTimeframe, newPatronsUserTypes, transactionsStartDate, transactionsEndDate, txEventTypes, txStatuses, txStaff, txSearch, txPage, txPageSize]);
+  }, [api, activeReport, overdueStartDate, overdueEndDate, balancesStartDate, balancesEndDate, topItemsStartDate, topItemsEndDate, newPatronsStartDate, newPatronsEndDate, newPatronsTimeframe, newPatronsUserTypes, transactionsStartDate, transactionsEndDate, txEventTypes, txStatuses, txPage, txPageSize]);
 
   // Derived media types from the currently loaded overdue dataset
   const mediaTypeOptions = useMemo(() => {
@@ -979,6 +1060,53 @@ export default function ReportsPanel({ api }) {
     });
     return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
   }, [reportData]);
+  const transactionPatronOptions = useMemo(() => {
+    if (activeReport !== "transactions") return [];
+    const map = new Map();
+    (Array.isArray(reportData) ? reportData : []).forEach((row) => {
+      const id = row.user_id ?? row.patron_id ?? row.account_id;
+      if (!id) return;
+      const rawName = `${row.user_first_name || ""} ${row.user_last_name || ""}`.trim();
+      const labelName = rawName ? toTitle(rawName) : "";
+      const label = labelName ? `${labelName} (#${id})` : `Patron #${id}`;
+      const meta = row.user_email || "";
+      map.set(String(id), {
+        value: String(id),
+        label,
+        meta: meta || undefined,
+      });
+    });
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [activeReport, reportData]);
+  const transactionItemTypeOptions = useMemo(() => {
+    if (activeReport !== "transactions") return [];
+    const types = new Set();
+    (Array.isArray(reportData) ? reportData : []).forEach((row) => {
+      const raw = (row.media_type || row.item_type || "").toString().trim();
+      if (!raw) return;
+      types.add(raw.toLowerCase());
+    });
+    return Array.from(types)
+      .sort()
+      .map((type) => ({
+        value: type,
+        label: type.toUpperCase(),
+      }));
+  }, [activeReport, reportData]);
+  const transactionItemTitleOptions = useMemo(() => {
+    if (activeReport !== "transactions") return [];
+    const map = new Map();
+    (Array.isArray(reportData) ? reportData : []).forEach((row) => {
+      const title = (row.item_title || "").trim();
+      if (!title) return;
+      map.set(title.toLowerCase(), {
+        value: title,
+        label: title,
+        meta: row.media_type ? String(row.media_type).toUpperCase() : undefined,
+      });
+    });
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [activeReport, reportData]);
 
   // Fines: derived options
   const finesMediaOptions = useMemo(() => {
@@ -1046,75 +1174,70 @@ export default function ReportsPanel({ api }) {
     if (activeReport !== 'transactions' || !txHasGenerated) return sourceRows;
     const types = new Set(txEventTypes);
     const statuses = new Set(txStatuses);
-    const staffId = txStaff ? String(txStaff) : '';
-    const q = (txSearch || '').trim().toLowerCase();
+    const patronFilter = txPatronId ? txPatronId.toLowerCase() : '';
+    const itemTypeFilter = txItemType ? txItemType.toLowerCase() : '';
+    const itemTitleFilter = txItemTitle ? txItemTitle.toLowerCase() : '';
     return sourceRows.filter(r => {
       const typeOk = !r.event_type || types.has(String(r.event_type));
       const statusOk = !r.current_status || statuses.has(String(r.current_status));
-      const staffOk = !staffId || String(r.employee_id||'') === staffId;
-      if (!q) return typeOk && statusOk && staffOk;
-      const patron = `${r.user_first_name||''} ${r.user_last_name||''}`.toLowerCase();
-      const email = String(r.user_email||'').toLowerCase();
-      const title = String(r.item_title||'').toLowerCase();
-      const loan = String(r.loan_id||'');
-      const copy = String(r.copy_id||'');
-      const hit = patron.includes(q) || email.includes(q) || title.includes(q) || loan.includes(q) || copy.includes(q);
-      return typeOk && statusOk && staffOk && hit;
+      const patronValue = String(r.user_id ?? r.patron_id ?? r.account_id ?? '');
+      const patronOk = !patronFilter || patronValue.toLowerCase() === patronFilter;
+      const rowType = String(r.media_type || r.item_type || '').trim().toLowerCase();
+      const itemTypeOk = !itemTypeFilter || rowType === itemTypeFilter;
+      const rowTitle = String(r.item_title || '').trim().toLowerCase();
+      const itemTitleOk = !itemTitleFilter || rowTitle === itemTitleFilter;
+      return typeOk && statusOk && patronOk && itemTypeOk && itemTitleOk;
     });
-  }, [activeReport, reportData, txEventTypes, txStatuses, txStaff, txSearch, txHasGenerated]);
+  }, [activeReport, reportData, txEventTypes, txStatuses, txPatronId, txItemType, txItemTitle, txHasGenerated]);
 
   const transactionsKPIs = useMemo(() => {
     if (activeReport !== 'transactions' || !txHasGenerated) return null;
     const rows = transactionsFilteredRows;
-    const requests = rows.filter(r => r.event_type === 'requested');
     const byLoan = new Map();
-    rows.forEach(r => {
-      if (!r.loan_id) return;
-      const list = byLoan.get(r.loan_id) || [];
-      list.push(r);
-      byLoan.set(r.loan_id, list);
+    rows.forEach((row) => {
+      const key = row.loan_id || `loan-${row.copy_id || row.transaction_id || Math.random()}`;
+      const bucket = byLoan.get(key) || [];
+      bucket.push(row);
+      byLoan.set(key, bucket);
     });
-    let approvals = 0, rejections = 0, pendingQueue = 0;
-    const tta = []; // ms to approval
-    const ttr = []; // ms to return
-    byLoan.forEach(events => {
-      events.sort((a,b)=>new Date(a.event_timestamp)-new Date(b.event_timestamp));
-      const firstReq = events.find(e=>e.event_type==='requested');
-      const firstAppr = events.find(e=>e.event_type==='approved');
-      const firstRej = events.find(e=>e.event_type==='rejected');
-      const firstRet = events.find(e=>e.event_type==='returned');
-      if (firstReq && firstAppr) {
-        approvals += 1;
-        tta.push(new Date(firstAppr.event_timestamp) - new Date(firstReq.event_timestamp));
-      } else if (firstReq && firstRej) {
-        rejections += 1;
+    const ttr = [];
+    let activeLoans = 0;
+    let overdueCount = 0;
+    let lostCount = 0;
+    const normalize = (value) => String(value || "").toLowerCase();
+    byLoan.forEach((events) => {
+      events.sort((a, b) => new Date(a.event_timestamp) - new Date(b.event_timestamp));
+      const firstApproval = events.find((event) => normalize(event.event_type) === "approved");
+      const firstReturn = events.find((event) => normalize(event.event_type) === "returned");
+      if (firstApproval && firstReturn) {
+        ttr.push(new Date(firstReturn.event_timestamp) - new Date(firstApproval.event_timestamp));
       }
-      if (firstAppr && firstRet) {
-        ttr.push(new Date(firstRet.event_timestamp) - new Date(firstAppr.event_timestamp));
+      const latest = events[events.length - 1] || {};
+      const statusText = normalize(latest.current_status || latest.event_type);
+      const isReturned = statusText.includes("returned");
+      const isLost = statusText.includes("lost") || events.some((event) => normalize(event.event_type).includes("lost"));
+      const isOverdue = statusText.includes("overdue");
+      if (isLost) {
+        lostCount += 1;
+        return;
       }
-      const latest = events[events.length-1];
-      if (latest && latest.event_type === 'requested' && !firstAppr && !firstRej) pendingQueue += 1;
+      if (!isReturned) {
+        activeLoans += 1;
+        if (isOverdue) {
+          overdueCount += 1;
+        }
+      }
     });
-    const denom = approvals + rejections;
-    const approvalRate = denom ? (approvals/denom) : 0;
-    const avg = (arr)=> arr.length ? (arr.reduce((s,x)=>s+x,0)/arr.length) : 0;
-    const median = (arr)=>{
-      if (!arr.length) return 0; const a=[...arr].sort((x,y)=>x-y); const m=(a.length-1)/2; return (a[Math.floor(m)]+a[Math.ceil(m)])/2;
-    };
-    const p90 = (arr)=>{
-      if (!arr.length) return 0; const a=[...arr].sort((x,y)=>x-y); const idx=Math.floor(0.9*(a.length-1)); return a[idx];
-    };
-    const msToHours = (ms)=> Math.round((ms/36e5)*10)/10; // one decimal
+    const avg = (arr) => (arr.length ? arr.reduce((sum, value) => sum + value, 0) / arr.length : 0);
+    const msToHours = (ms) => Math.round((ms / 36e5) * 10) / 10;
+    const avgReturnHours = msToHours(avg(ttr));
+    const overduePercent = activeLoans ? (overdueCount / activeLoans) * 100 : 0;
     return {
-      requests: requests.length,
-      approvals,
-      rejections,
-      approvalRate,
-      avgTimeToApprovalH: msToHours(avg(tta)),
-      medTimeToApprovalH: msToHours(median(tta)),
-      p90TimeToApprovalH: msToHours(p90(tta)),
-      avgTimeToReturnH: msToHours(avg(ttr)),
-      pendingQueue,
+      activeLoans,
+      avgReturnHours,
+      overdueCount,
+      overduePercent,
+      lostCount,
     };
   }, [activeReport, transactionsFilteredRows, txHasGenerated]);
 
@@ -1185,26 +1308,21 @@ export default function ReportsPanel({ api }) {
   }, [activeReport, loadReport, overdueStartDate, overdueEndDate]);
 
   useEffect(() => {
-    if (activeReport !== "transactions") return;
-    setReportData([]);
-    setTxTotal(0);
-    setTxHasGenerated(false);
-    setTxPage(1);
+    if (activeReport === "transactions") return;
+    setTxPatronId("");
+    setTxItemType("");
+    setTxItemTitle("");
   }, [activeReport]);
-
-  useEffect(() => {
-    if (activeReport !== "transactions") return;
-    if (!txHasGenerated) return;
-    setTxHasGenerated(false);
-    setReportData([]);
-    setTxTotal(0);
-    setTxPage(1);
-  }, [activeReport, transactionsStartDate, transactionsEndDate, txEventTypes, txStatuses, txStaff, txSearch]);
 
   useEffect(() => {
     if (activeReport !== "overdue") return;
     setReportData([]);
   }, [activeReport]);
+
+  useEffect(() => {
+    if (activeReport !== "transactions") return;
+    loadReport("transactions", { txPage, txPageSize });
+  }, [activeReport, txPage, txPageSize, loadReport]);
 
   // handleRefresh removed (unused)
 
@@ -1561,129 +1679,6 @@ export default function ReportsPanel({ api }) {
                 </div>
               </div>
             )}
-            {activeReport === "transactions" && (
-              <div className="flex justify-end">
-                <div className="w-full">
-                  <div className="rounded-md border bg-white p-3 space-y-3">
-                        <div className="flex gap-3">
-                          <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
-                            <input type="date" value={transactionsStartDate} onChange={e=>setTransactionStartDate(e.target.value)} className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm" />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
-                            <input type="date" value={transactionsEndDate} onChange={e=>setTransactionsEndDate(e.target.value)} className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm" />
-                          </div>
-                        </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-2">Event Type</label>
-                      <div className="relative">
-                        <div className="flex gap-3 flex-wrap" style={{ paddingBottom: 6 }}>
-                        {['requested','approved','rejected','returned'].map(t => (
-                          <label key={t} className="inline-flex items-center gap-1.5 text-xs cursor-pointer">
-                            <input 
-                              type="checkbox" 
-                              checked={txEventTypes.includes(t)} 
-                              onChange={()=>setTxEventTypes(prev => prev.includes(t)? prev.filter(x=>x!==t) : [...prev, t])}
-                              className="w-4 h-4"
-                            /> 
-                            <span className="capitalize">{t}</span>
-                          </label>
-                        ))}
-                        </div>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-2">Current Status</label>
-                      <div className="relative">
-                        <div className="flex gap-3 flex-wrap" style={{ paddingBottom: 6 }}>
-                        {['Pending','Approved & Active','Rejected','Returned'].map(s => (
-                          <label key={s} className="inline-flex items-center gap-1.5 text-xs cursor-pointer">
-                            <input 
-                              type="checkbox" 
-                              checked={txStatuses.includes(s)} 
-                              onChange={()=>setTxStatuses(prev => prev.includes(s)? prev.filter(x=>x!==s) : [...prev, s])}
-                              className="w-4 h-4"
-                            /> 
-                            <span>{s}</span>
-                          </label>
-                        ))}
-                        </div>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Staff User</label>
-                      <select value={txStaff} onChange={e=>setTxStaff(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm">
-                        <option value="">All</option>
-                        {Array.from(new Map((reportData||[]).filter(r=>r.employee_id).map(r=>[r.employee_id, `${r.employee_first_name||''} ${r.employee_last_name||''}`.trim()||`#${r.employee_id}`])).entries()).map(([id,name]) => (
-                          <option key={id} value={id}>{name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Search</label>
-                      <input type="text" placeholder="Patron, item, Loan/Copy ID" value={txSearch} onChange={e=>setTxSearch(e.target.value)} className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm" />
-                    </div>
-                    <div className="pt-1 space-y-2">
-                      <button
-                        onClick={() => {
-                          const targetPage = 1;
-                          if (txPage !== targetPage) {
-                            setTxPage(targetPage);
-                          }
-                          loadReport("transactions", { txPage: targetPage, txPageSize });
-                        }}
-                        disabled={loading}
-                        className="w-full px-3 py-2 rounded-md bg-gray-700 text-white text-sm font-medium hover:bg-gray-800 disabled:opacity-50"
-                      >
-                        {loading ? "Loading..." : "Generate Report"}
-                      </button>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            const d = new Date();
-                            const sd = new Date();
-                            sd.setFullYear(sd.getFullYear() - 1);
-                            setTransactionStartDate(sd.toISOString().slice(0, 10));
-                            setTransactionsEndDate(d.toISOString().slice(0, 10));
-                            setTxEventTypes(["requested", "approved", "rejected", "returned"]);
-                            setTxStatuses(["Pending", "Approved & Active", "Rejected", "Returned"]);
-                            setTxStaff("");
-                            setTxSearch("");
-                            setTxPage(1);
-                            setTxHasGenerated(false);
-                            setReportData([]);
-                            setTxTotal(0);
-                          }}
-                          disabled={loading}
-                          className="flex-1 px-3 py-2 rounded-md bg-gray-200 text-gray-800 text-sm font-medium hover:bg-gray-300 disabled:opacity-50"
-                        >
-                          Reset
-                        </button>
-                        <button
-                          onClick={() => {
-                            setTransactionStartDate("");
-                            setTransactionsEndDate("");
-                            setTxEventTypes(["requested", "approved", "rejected", "returned"]);
-                            setTxStatuses(["Pending", "Approved & Active", "Rejected", "Returned"]);
-                            setTxStaff("");
-                            setTxSearch("");
-                            setTxPage(1);
-                            setTxHasGenerated(false);
-                            setReportData([]);
-                            setTxTotal(0);
-                          }}
-                          disabled={loading}
-                          className="flex-1 px-3 py-2 rounded-md bg-white border text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
-                        >
-                          Clear
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
           )}
 
@@ -1775,105 +1770,243 @@ export default function ReportsPanel({ api }) {
                 <NewPatronsReportTable data={reportData} loading={loading} />
               </div>
             </div>
+          ) : activeReport === "transactions" ? (
+            <div className="transaction-report-layout">
+              <aside className="transaction-report-sidebar">
+                <div className="rounded-md border bg-white p-4 space-y-4">
+                  <div className="flex gap-3 flex-wrap">
+                    <div className="flex-1 min-w-[140px]">
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
+                      <input
+                        type="date"
+                        value={transactionsStartDate}
+                        onChange={(e) => {
+                          setTransactionStartDate(e.target.value);
+                          setTxPage(1);
+                        }}
+                        className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                      />
+                    </div>
+                    <div className="flex-1 min-w-[140px]">
+                      <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
+                      <input
+                        type="date"
+                        value={transactionsEndDate}
+                        onChange={(e) => {
+                          setTransactionsEndDate(e.target.value);
+                          setTxPage(1);
+                        }}
+                        className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-2">Event Type</label>
+                    <div className="flex gap-3 flex-wrap pb-1">
+                      {["requested", "approved", "rejected", "returned"].map((type) => (
+                        <label key={type} className="inline-flex items-center gap-1.5 text-xs cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={txEventTypes.includes(type)}
+                            onChange={() => {
+                              setTxEventTypes((prev) => (prev.includes(type) ? prev.filter((x) => x !== type) : [...prev, type]));
+                              setTxPage(1);
+                            }}
+                            className="w-4 h-4"
+                          />
+                          <span className="capitalize">{type}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-2">Current Status</label>
+                    <div className="flex gap-3 flex-wrap pb-1">
+                      {["Pending", "Approved & Active", "Rejected", "Returned"].map((status) => (
+                        <label key={status} className="inline-flex items-center gap-1.5 text-xs cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={txStatuses.includes(status)}
+                            onChange={() => {
+                              setTxStatuses((prev) => (prev.includes(status) ? prev.filter((x) => x !== status) : [...prev, status]));
+                              setTxPage(1);
+                            }}
+                            className="w-4 h-4"
+                          />
+                          <span>{status}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <SearchableDropdown
+                    label="Patron"
+                    options={transactionPatronOptions}
+                    value={txPatronId}
+                    onChange={setTxPatronId}
+                    placeholder="Search patrons"
+                    helperText="Includes patron ID alongside the name."
+                    disabled={!txHasGenerated}
+                  />
+                  <SearchableDropdown
+                    label="Item Type"
+                    options={transactionItemTypeOptions}
+                    value={txItemType}
+                    onChange={setTxItemType}
+                    placeholder="Search item types"
+                    helperText="Matches media/item formats on each loan."
+                    disabled={!txHasGenerated}
+                  />
+                  <SearchableDropdown
+                    label="Item Name"
+                    options={transactionItemTitleOptions}
+                    value={txItemTitle}
+                    onChange={setTxItemTitle}
+                    placeholder="Search item names"
+                    helperText="Choose a specific title to filter results."
+                    disabled={!txHasGenerated}
+                  />
+                  <div className="pt-1 space-y-2">
+                    <p className="text-xs text-gray-500">Filters update automatically as you make changes.</p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          const d = new Date();
+                          const sd = new Date();
+                          sd.setFullYear(sd.getFullYear() - 1);
+                          setTransactionStartDate(sd.toISOString().slice(0, 10));
+                          setTransactionsEndDate(d.toISOString().slice(0, 10));
+                          setTxEventTypes(["requested", "approved", "rejected", "returned"]);
+                          setTxStatuses(["Pending", "Approved & Active", "Rejected", "Returned"]);
+                          setTxPatronId("");
+                          setTxItemType("");
+                          setTxItemTitle("");
+                          setTxPage(1);
+                          setTxTotal(0);
+                        }}
+                        disabled={loading}
+                        className="flex-1 px-3 py-2 rounded-md bg-gray-200 text-gray-800 text-sm font-medium hover:bg-gray-300 disabled:opacity-50"
+                      >
+                        Reset
+                      </button>
+                      <button
+                        onClick={() => {
+                          setTransactionStartDate("");
+                          setTransactionsEndDate("");
+                          setTxEventTypes(["requested", "approved", "rejected", "returned"]);
+                          setTxStatuses(["Pending", "Approved & Active", "Rejected", "Returned"]);
+                          setTxPatronId("");
+                          setTxItemType("");
+                          setTxItemTitle("");
+                          setTxPage(1);
+                          setTxTotal(0);
+                        }}
+                        disabled={loading}
+                        className="flex-1 px-3 py-2 rounded-md bg-white border text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </aside>
+              <div className="transaction-report-content flex-1 rounded-lg border bg-white">
+                {!txHasGenerated ? (
+                  <div className="p-6 text-sm text-gray-500">
+                    {loading
+                      ? "Loading transaction history..."
+                      : error
+                      ? "Unable to load transaction history."
+                      : "No transaction activity found yet."}
+                  </div>
+                ) : (
+                  <>
+                    {transactionsFilteredRows.length > 0 ? (
+                      <div className="flex flex-wrap gap-3 p-4 border-b bg-gray-50">
+                        <div className="h-32 w-full rounded-lg border bg-white p-3 text-left sm:h-32 sm:w-40 lg:w-44 tx-kpi-card">
+                          <div className="tx-kpi-label">Items Out</div>
+                          <div className="tx-kpi-value">{transactionsKPIs?.activeLoans ?? 0}</div>
+                          <p className="tx-kpi-description">Currently on loan</p>
+                        </div>
+                        <div className="h-32 w-full rounded-lg border bg-white p-3 text-left sm:h-32 sm:w-40 lg:w-44 tx-kpi-card">
+                          <div className="tx-kpi-label">Avg Return</div>
+                          <div className="tx-kpi-value">
+                            {(transactionsKPIs?.avgReturnHours ?? 0).toFixed(1)}h
+                          </div>
+                          <p className="tx-kpi-description">Approval → return</p>
+                        </div>
+                        <div className="h-32 w-full rounded-lg border bg-white p-3 text-left sm:h-32 sm:w-40 lg:w-44 tx-kpi-card">
+                          <div className="tx-kpi-label">Overdue</div>
+                          <div className="tx-kpi-value">{transactionsKPIs?.overdueCount ?? 0}</div>
+                          <p className="tx-kpi-description">
+                            {(transactionsKPIs?.overduePercent ?? 0).toFixed(1)}% of active
+                          </p>
+                        </div>
+                        <div className="h-32 w-full rounded-lg border bg-white p-3 text-left sm:h-32 sm:w-40 lg:w-44 tx-kpi-card">
+                          <div className="tx-kpi-label">Lost Items</div>
+                          <div className="tx-kpi-value">{transactionsKPIs?.lostCount ?? 0}</div>
+                          <p className="tx-kpi-description">Latest status is lost</p>
+                        </div>
+                      </div>
+                    ) : null}
+                    <TransactionReportTable data={transactionsFilteredRows} loading={loading} />
+                    <div className="p-4 flex items-center justify-between">
+                      <div className="text-sm text-gray-600">
+                        Showing {txHasGenerated ? reportData.length : 0} of {txHasGenerated ? txTotal : 0} events
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            if (!txHasGenerated || txPage <= 1) return;
+                            const prev = Math.max(1, txPage - 1);
+                            setTxPage(prev);
+                          }}
+                          disabled={txPage <= 1 || !txHasGenerated || loading}
+                          className="px-2 py-1 bg-gray-100 rounded disabled:opacity-50"
+                        >
+                          Previous
+                        </button>
+                        <span className="text-sm text-gray-700">
+                          Page {txPage} of {Math.max(1, Math.ceil((txTotal || 0) / txPageSize))}
+                        </span>
+                        <button
+                          onClick={() => {
+                            if (!txHasGenerated) return;
+                            const maxPage = Math.max(1, Math.ceil((txTotal || 0) / txPageSize));
+                            if (txPage >= maxPage) return;
+                            const next = Math.min(maxPage, txPage + 1);
+                            setTxPage(next);
+                          }}
+                          disabled={!txHasGenerated || txPage >= Math.ceil((txTotal || 0) / txPageSize) || loading}
+                          className="px-2 py-1 bg-gray-100 rounded disabled:opacity-50"
+                        >
+                          Next
+                        </button>
+                        <label className="text-sm text-gray-600">Per page:</label>
+                        <select
+                          value={txPageSize}
+                          onChange={(e) => {
+                            const newSize = Number(e.target.value);
+                            setTxPageSize(newSize);
+                            setTxPage(1);
+                          }}
+                          className="rounded-md border-2 px-2 py-1 text-sm"
+                        >
+                          <option value={25}>25</option>
+                          <option value={50}>50</option>
+                          <option value={100}>100</option>
+                        </select>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
           ) : (
             <div className="rounded-lg border overflow-hidden">
 {/* User Balances table removed */}
               {activeReport === "topItems" && <TopItemsReportTable data={reportData} loading={loading} />}
-              {activeReport === "transactions" && (
-                <>
-                  {!txHasGenerated ? (
-                    <div className="p-6 text-sm text-gray-500">
-                      Select your filters and click <span className="font-semibold">Generate Report</span> to view transaction history.
-                    </div>
-                  ) : (
-                    <>
-                  {transactionsFilteredRows.length > 0 ? (
-                    <div className="flex justify-between gap-3 p-4 border-b bg-gray-50 overflow-x-auto">
-                      <div className="rounded-md border bg-white p-3 text-center flex-1 min-w-0">
-                        <div className="text-xs text-gray-600 whitespace-nowrap">Requests</div>
-                        <div className="text-xl font-semibold">{transactionsKPIs?.requests ?? 0}</div>
-                      </div>
-                      <div className="rounded-md border bg-white p-3 text-center flex-1 min-w-0">
-                        <div className="text-xs text-gray-600 whitespace-nowrap">Approvals</div>
-                        <div className="text-xl font-semibold">{transactionsKPIs?.approvals ?? 0}</div>
-                      </div>
-                      <div className="rounded-md border bg-white p-3 text-center flex-1 min-w-0">
-                        <div className="text-xs text-gray-600 whitespace-nowrap">Rejections</div>
-                        <div className="text-xl font-semibold">{transactionsKPIs?.rejections ?? 0}</div>
-                      </div>
-                      <div className="rounded-md border bg-white p-3 text-center flex-1 min-w-0">
-                        <div className="text-xs text-gray-600 whitespace-nowrap">Approval Rate</div>
-                        <div className="text-xl font-semibold">{Math.round((transactionsKPIs?.approvalRate || 0)*100)}%</div>
-                      </div>
-                      <div className="rounded-md border bg-white p-3 text-center flex-1 min-w-0">
-                        <div className="text-xs text-gray-600 whitespace-nowrap">Avg Time → Approval</div>
-                        <div className="text-sm font-medium">{transactionsKPIs?.avgTimeToApprovalH ?? 0} h (med {transactionsKPIs?.medTimeToApprovalH ?? 0} h, p90 {transactionsKPIs?.p90TimeToApprovalH ?? 0} h)</div>
-                      </div>
-                      <div className="rounded-md border bg-white p-3 text-center flex-1 min-w-0">
-                        <div className="text-xs text-gray-600 whitespace-nowrap">Avg Time → Return</div>
-                        <div className="text-sm font-medium">{transactionsKPIs?.avgTimeToReturnH ?? 0} h</div>
-                      </div>
-                      <div className="rounded-md border bg-white p-3 text-center flex-1 min-w-0">
-                        <div className="text-xs text-gray-600 whitespace-nowrap">Pending Queue</div>
-                        <div className="text-xl font-semibold">{transactionsKPIs?.pendingQueue ?? 0}</div>
-                      </div>
-                    </div>
-                  ) : null}
-                  <TransactionReportTable data={transactionsFilteredRows} loading={loading} />
-                  <div className="p-4 flex items-center justify-between">
-                    <div className="text-sm text-gray-600">Showing {txHasGenerated ? reportData.length : 0} of {txHasGenerated ? txTotal : 0} events</div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => {
-                          if (!txHasGenerated || txPage <= 1) return;
-                          const prev = Math.max(1, txPage - 1);
-                          setTxPage(prev);
-                          loadReport("transactions", { txPage: prev, txPageSize });
-                        }}
-                        disabled={txPage <= 1 || !txHasGenerated || loading}
-                        className="px-2 py-1 bg-gray-100 rounded disabled:opacity-50"
-                      >
-                        Previous
-                      </button>
-                      <span className="text-sm text-gray-700">Page {txPage} of {Math.max(1, Math.ceil((txTotal || 0) / txPageSize))}</span>
-                      <button
-                        onClick={() => {
-                          if (!txHasGenerated) return;
-                          const maxPage = Math.max(1, Math.ceil((txTotal || 0) / txPageSize));
-                          if (txPage >= maxPage) return;
-                          const next = Math.min(maxPage, txPage + 1);
-                          setTxPage(next);
-                          loadReport("transactions", { txPage: next, txPageSize });
-                        }}
-                        disabled={!txHasGenerated || txPage >= Math.ceil((txTotal || 0) / txPageSize) || loading}
-                        className="px-2 py-1 bg-gray-100 rounded disabled:opacity-50"
-                      >
-                        Next
-                      </button>
-                      <label className="text-sm text-gray-600">Per page:</label>
-                      <select
-                        value={txPageSize}
-                        onChange={(e) => {
-                          const newSize = Number(e.target.value);
-                          setTxPageSize(newSize);
-                          setTxPage(1);
-                          if (txHasGenerated) {
-                            loadReport("transactions", { txPage: 1, txPageSize: newSize });
-                          }
-                        }}
-                        className="rounded-md border-2 px-2 py-1 text-sm"
-                      >
-                        <option value={25}>25</option>
-                        <option value={50}>50</option>
-                        <option value={100}>100</option>
-                      </select>
-                    </div>
-                  </div>
-                    </>
-                  )}
-                </>
-              )}
             </div>
+          )}
           )}
         </div>
       </div>
