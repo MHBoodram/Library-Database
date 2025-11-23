@@ -4,7 +4,6 @@ import { ToastBanner } from "./shared/Feedback";
 import { formatDate } from "../../utils";
 
 const numberFormatter = new Intl.NumberFormat();
-const donutPalette = ["#2563eb", "#10b981", "#f97316", "#a855f7", "#0ea5e9", "#ef4444"];
 const timeframePresets = [
   { label: "By Day", value: "day" },
   { label: "By Week", value: "week" },
@@ -237,110 +236,6 @@ function formatPercent(value) {
   return "▬ 0%";
 }
 
-function SparklineChart({ data, valueKey, color = "#2563eb", fill = "rgba(37,99,235,0.18)", height = 140 }) {
-  if (!Array.isArray(data) || data.length === 0) {
-    return <div className="h-[140px] flex items-center justify-center text-sm text-gray-500">No data yet</div>;
-  }
-  const safeData = data.map((entry) => Number(entry?.[valueKey] || 0));
-  const maxValue = Math.max(...safeData, 0);
-  if (maxValue === 0) {
-    return <div className="h-[140px] flex items-center justify-center text-sm text-gray-500">No data yet</div>;
-  }
-  const domainMax = maxValue;
-  const stepX = data.length === 1 ? 100 : 100 / (data.length - 1);
-  const points = safeData.map((value, idx) => {
-    const x = idx * stepX;
-    const y = 100 - (value / domainMax) * 100;
-    return { x, y, label: data[idx].label, raw: value, change: data[idx].changePercent };
-  });
-  const polygonPoints = [
-    `0,100`,
-    ...points.map((p) => `${p.x},${p.y}`),
-    `${points[points.length - 1].x},100`,
-  ].join(" ");
-
-  return (
-    <div style={{ height, width: '100%', position: 'relative', overflow: 'hidden' }} className="relative w-full h-full flex items-center justify-center">
-      <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ display: 'block', width: '100%', height: '100%' }}>
-        <polygon points={polygonPoints} fill={fill} />
-        <polyline
-          points={points.map((p) => `${p.x},${p.y}`).join(" ")}
-          fill="none"
-          stroke={color}
-          strokeWidth={2}
-          strokeLinecap="round"
-        />
-        {points.map((point, idx) => (
-          <circle key={`${point.x}-${idx}`} cx={point.x} cy={point.y} r={1.8} fill={color}>
-            <title>
-              {`${point.label}: ${numberFormatter.format(point.raw)} new patrons${
-                point.change === null || point.change === undefined
-                  ? ""
-                  : ` (${formatPercent(point.change)})`
-              }`}
-            </title>
-          </circle>
-        ))}
-      </svg>
-    </div>
-  );
-}
-
-function DonutChart({ title, breakdown, total, palette = donutPalette }) {
-  const entries = Object.entries(breakdown || {}).sort((a, b) => Number(b[1]) - Number(a[1]));
-  if (!entries.length) {
-    return (
-      <div className="rounded-xl border bg-white p-4 shadow-sm flex flex-col justify-between">
-        <p className="text-sm text-gray-500">{title}</p>
-        <p className="text-sm text-gray-500 mt-6">No breakdown data yet.</p>
-      </div>
-    );
-  }
-  const totalValue = entries.reduce((sum, [, value]) => sum + Number(value || 0), 0) || 1;
-  let currentPercent = 0;
-  const slices = entries.map(([label, value], idx) => {
-    const percent = (Number(value || 0) / totalValue) * 100;
-    const slice = {
-      label,
-      value: Number(value || 0),
-      percent,
-      color: palette[idx % palette.length],
-      start: currentPercent,
-      end: currentPercent + percent,
-    };
-    currentPercent += percent;
-    return slice;
-  });
-  const gradientStops = slices
-    .map((slice) => `${slice.color} ${slice.start}% ${slice.end}%`)
-    .join(", ");
-
-  return (
-    <div className="rounded-xl border bg-white p-4 shadow-sm flex flex-col gap-4">
-      <p className="text-sm text-gray-500">{title}</p>
-      <div className="flex items-center gap-4">
-        <div className="relative h-32 w-32 shrink-0">
-          <div className="h-full w-full rounded-full" style={{ background: `conic-gradient(${gradientStops})` }} />
-          <div className="absolute inset-6 rounded-full bg-white flex flex-col items-center justify-center text-center">
-            <span className="text-lg font-semibold">{numberFormatter.format(total)}</span>
-            <span className="text-xs text-gray-500">total</span>
-          </div>
-        </div>
-        <ul className="flex-1 space-y-2 text-sm">
-          {slices.slice(0, 5).map((slice) => (
-            <li key={slice.label} className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: slice.color }} />
-              <span className="flex-1 text-gray-700 capitalize">{slice.label}</span>
-              <span className="text-gray-900 font-medium">{numberFormatter.format(slice.value)}</span>
-              <span className="text-gray-500 text-xs">{slice.percent.toFixed(1)}%</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
-  );
-}
-
 function TopPeriodCard({ period }) {
   const percentLabel =
     typeof period.percent_of_total === "number"
@@ -405,61 +300,105 @@ function RetentionSnapshotCard({ retention, loading }) {
   );
 }
 
+function UserTypeBreakdownList({ breakdown, total }) {
+  const entries = Object.entries(breakdown || {}).sort((a, b) => Number(b[1]) - Number(a[1]));
+  if (!entries.length) {
+    return (
+      <div className="rounded-xl border bg-white p-4 shadow-sm flex flex-col gap-3">
+        <p className="text-sm text-gray-500">User Type Breakdown</p>
+        <p className="text-sm text-gray-500">No breakdown data yet.</p>
+      </div>
+    );
+  }
+  const safeTotal = total || entries.reduce((sum, [, value]) => sum + Number(value || 0), 0);
+  return (
+    <div className="rounded-xl border bg-white p-4 shadow-sm flex flex-col gap-3">
+      <div>
+        <p className="text-sm text-gray-500">User Type Breakdown</p>
+        <p className="text-xs text-gray-500">Top patron types by volume</p>
+      </div>
+      <ul className="space-y-2 text-sm">
+        {entries.slice(0, 6).map(([label, value]) => {
+          const numeric = Number(value || 0);
+          const percent = safeTotal ? ((numeric / safeTotal) * 100).toFixed(1) : "0.0";
+          return (
+            <li key={label} className="flex items-center gap-2">
+              <span className="flex-1 text-gray-700 capitalize">{label}</span>
+              <span className="text-gray-900 font-semibold">{numberFormatter.format(numeric)}</span>
+              <span className="text-xs text-gray-500">{percent}%</span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 function NewPatronInsights({ report, loading }) {
   if (!report) return null;
   const timeline = Array.isArray(report.timeline) ? report.timeline : [];
   const meta = report.meta || {};
   const breakdowns = report.breakdowns || {};
   const topPeriods = Array.isArray(report.topPeriods) ? report.topPeriods : [];
+  const latestBucket = timeline[timeline.length - 1];
+  const previousBucket = timeline.length > 1 ? timeline[timeline.length - 2] : null;
+  const latestComparison =
+    latestBucket && previousBucket
+      ? latestBucket.total - previousBucket.total
+      : latestBucket?.total ?? null;
+  const latestLabel = latestBucket?.label || meta.endDate || "Latest period";
+  const latestDeltaLabel =
+    previousBucket && latestComparison != null
+      ? `${latestComparison >= 0 ? "+" : ""}${numberFormatter.format(latestComparison)} vs prior period`
+      : "Awaiting previous period";
+  const cumulativeTotal = timeline.length ? Number(timeline[timeline.length - 1].cumulative || 0) : 0;
+  const cumulativeDelta = timeline.length ? cumulativeTotal - Number(timeline[0]?.cumulative || 0) : 0;
+  const cumulativeDeltaLabel = timeline.length
+    ? cumulativeDelta === 0
+      ? "No change in this window"
+      : `${cumulativeDelta >= 0 ? "+" : ""}${numberFormatter.format(cumulativeDelta)} during range`
+    : "Awaiting activity";
+  const timeframeLabel = meta.timeframe ? toTitle(meta.timeframe) : "Period";
+  const changeClass =
+    meta.lastChangePercent > 0 ? "text-green-600" : meta.lastChangePercent < 0 ? "text-rose-600" : "text-gray-500";
+
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-xl border bg-white p-4 shadow-sm flex flex-col gap-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500">New Patrons Over Time</p>
-              <p className="text-2xl font-semibold text-gray-900">{numberFormatter.format(meta.totalNewPatrons || 0)}</p>
-              <p
-                className={`text-xs ${
-                  meta.lastChangePercent > 0
-                    ? "text-green-600"
-                    : meta.lastChangePercent < 0
-                    ? "text-rose-600"
-                    : "text-gray-500"
-                }`}
-              >
-                {meta.lastChangePercent == null ? "Awaiting previous period" : formatPercent(meta.lastChangePercent)}
-              </p>
-            </div>
-            <div className="text-right text-xs text-gray-500">
-              <p>Avg / {meta.timeframe || "period"}</p>
-              <p className="font-semibold text-gray-900">
-                {meta.averagePerBucket ? meta.averagePerBucket.toFixed(1) : "0.0"}
-              </p>
-            </div>
-          </div>
-          <SparklineChart data={timeline} valueKey="total" color="#2563eb" />
+      <div className="new-patrons-kpi-grid">
+        <div className="new-patrons-kpi-card">
+          <p className="new-patrons-kpi-label">Total New Patrons</p>
+          <p className="new-patrons-kpi-value">{numberFormatter.format(meta.totalNewPatrons || 0)}</p>
+          <p className={`new-patrons-kpi-footnote ${changeClass}`}>
+            {meta.lastChangePercent == null ? "Awaiting previous period" : formatPercent(meta.lastChangePercent)}
+          </p>
         </div>
-        <div className="rounded-xl border bg-white p-4 shadow-sm flex flex-col gap-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500">Cumulative Growth</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {numberFormatter.format(timeline.length ? timeline[timeline.length - 1].cumulative : 0)}
-              </p>
-              <p className="text-xs text-gray-500">{meta.startDate} → {meta.endDate}</p>
-            </div>
-            <div className="text-right text-xs text-gray-500">
-              <p>Periods tracked</p>
-              <p className="font-semibold text-gray-900">{meta.bucketCount || 0}</p>
-            </div>
-          </div>
-          <SparklineChart data={timeline} valueKey="cumulative" color="#10b981" fill="rgba(16,185,129,0.25)" />
+        <div className="new-patrons-kpi-card">
+          <p className="new-patrons-kpi-label">Avg / {timeframeLabel}</p>
+          <p className="new-patrons-kpi-value">
+            {meta.averagePerBucket ? meta.averagePerBucket.toFixed(1) : "0.0"}
+          </p>
+          <p className="new-patrons-kpi-footnote">
+            {meta.startDate} → {meta.endDate}
+          </p>
+        </div>
+        <div className="new-patrons-kpi-card">
+          <p className="new-patrons-kpi-label">Latest Period</p>
+          <p className="new-patrons-kpi-subtitle">{latestLabel}</p>
+          <p className="new-patrons-kpi-value">
+            {numberFormatter.format(latestBucket?.total || 0)}
+          </p>
+          <p className="new-patrons-kpi-footnote">{latestDeltaLabel}</p>
+        </div>
+        <div className="new-patrons-kpi-card">
+          <p className="new-patrons-kpi-label">Cumulative Total</p>
+          <p className="new-patrons-kpi-value">{numberFormatter.format(cumulativeTotal)}</p>
+          <p className="new-patrons-kpi-footnote">{cumulativeDeltaLabel}</p>
+          <p className="new-patrons-kpi-footnote">Periods tracked: {meta.bucketCount || timeline.length}</p>
         </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <DonutChart title="User Type Breakdown" breakdown={breakdowns.byType} total={meta.totalNewPatrons || 0} />
+        <UserTypeBreakdownList breakdown={breakdowns.byType} total={meta.totalNewPatrons || 0} />
         <RetentionSnapshotCard retention={report.retention} loading={loading} />
       </div>
 
