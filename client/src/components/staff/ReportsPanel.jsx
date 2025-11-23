@@ -13,6 +13,35 @@ const timeframePresets = [
   { label: "By Year", value: "year" },
 ];
 const fallbackUserTypeOptions = ["student", "faculty", "staff", "community"];
+const transactionEventOptions = ["checked_out", "returned"];
+
+const normalizeEventCode = (value = "") => value.replace(/\s+/g, "_").toLowerCase();
+const isCheckoutEventType = (value = "") => {
+  const code = normalizeEventCode(value);
+  return code === "checked_out" || code === "checkout" || code === "approved" || code === "requested";
+};
+const isReturnEventType = (value = "") => {
+  const code = normalizeEventCode(value);
+  return code === "returned" || code === "return";
+};
+const formatEventTypeLabel = (value = "") => {
+  const friendly = value.replace(/_/g, " ").trim();
+  if (!friendly) return "—";
+  return friendly
+    .split(" ")
+    .map((word) => (word ? word[0].toUpperCase() + word.slice(1) : ""))
+    .join(" ");
+};
+const getEventTypePillClasses = (value = "") => {
+  const code = normalizeEventCode(value);
+  if (code === "checked_out" || code === "checkout" || code === "approved") {
+    return "bg-blue-100 text-blue-800";
+  }
+  if (code === "returned" || code === "return") {
+    return "bg-gray-100 text-gray-800";
+  }
+  return "bg-gray-100 text-gray-600";
+};
 
 function CheckboxMultiSelect({
   label,
@@ -692,8 +721,12 @@ function TransactionReportTable({ data = [], loading }) {
               <Td>{row.copy_id ? `#${row.copy_id}` : '—'}</Td>
               <Td>{row.loan_id ? `#${row.loan_id}` : '—'}</Td>
               <Td>
-                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${row.event_type==='approved' ? 'bg-green-100 text-green-800' : row.event_type==='requested' ? 'bg-blue-100 text-blue-800' : row.event_type==='rejected' ? 'bg-red-100 text-red-800' : row.event_type==='returned' ? 'bg-gray-100 text-gray-800' : 'bg-gray-100 text-gray-600'}`}>
-                  {String(row.event_type || row.raw_type || '').toUpperCase()}
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${getEventTypePillClasses(
+                    row.event_type || row.raw_type || ""
+                  )}`}
+                >
+                  {formatEventTypeLabel(row.event_type || row.raw_type || "")}
                 </span>
               </Td>
               <Td>{row.event_timestamp ? new Date(row.event_timestamp).toLocaleString() : '—'}</Td>
@@ -723,7 +756,7 @@ function TransactionsFilters({
   search,
   setSearch,
 }) {
-  const allTypes = ['requested','approved','rejected','returned'];
+  const allTypes = transactionEventOptions;
   const allStatuses = ['Pending','Approved & Active','Rejected','Returned'];
   const staffOptions = React.useMemo(() => {
     const byId = new Map();
@@ -747,7 +780,7 @@ function TransactionsFilters({
     const sd = new Date(); sd.setFullYear(sd.getFullYear()-1);
     setStartDate(sd.toISOString().slice(0,10));
     setEndDate(d.toISOString().slice(0,10));
-    setEventTypes(allTypes);
+    setEventTypes([...allTypes]);
     setStatuses(allStatuses);
     setStaff('');
     setSearch('');
@@ -756,7 +789,7 @@ function TransactionsFilters({
   const onClear = () => {
     setStartDate('');
     setEndDate('');
-    setEventTypes(allTypes);
+    setEventTypes([...allTypes]);
     setStatuses(allStatuses);
     setStaff('');
     setSearch('');
@@ -890,7 +923,7 @@ export default function ReportsPanel({ api }) {
   const txPageRef = useRef(txPage);
   const txPageSizeRef = useRef(txPageSize);
   // Transactions filters
-  const [txEventTypes, setTxEventTypes] = useState(['requested','approved','rejected','returned']);
+  const [txEventTypes, setTxEventTypes] = useState([...transactionEventOptions]);
   const [txStatuses, setTxStatuses] = useState(['Pending','Approved & Active','Rejected','Returned']);
   const [txPatronId, setTxPatronId] = useState("");
   const [txItemType, setTxItemType] = useState("");
@@ -1209,20 +1242,22 @@ export default function ReportsPanel({ api }) {
   // Transactions filtering and KPIs
   const transactionsFilteredRows = useMemo(() => {
     const sourceRows = Array.isArray(reportData) ? reportData : [];
-    if (activeReport !== 'transactions' || !txHasGenerated) return sourceRows;
-    const types = new Set(txEventTypes);
+    if (activeReport !== "transactions" || !txHasGenerated) return sourceRows;
+    const typeSet = new Set(txEventTypes.map((value) => normalizeEventCode(value)));
+    const typeActive = typeSet.size > 0;
     const statuses = new Set(txStatuses);
-    const patronFilter = txPatronId ? txPatronId.toLowerCase() : '';
-    const itemTypeFilter = txItemType ? txItemType.toLowerCase() : '';
-    const itemTitleFilter = txItemTitle ? txItemTitle.toLowerCase() : '';
-    return sourceRows.filter(r => {
-      const typeOk = !r.event_type || types.has(String(r.event_type));
+    const patronFilter = txPatronId ? txPatronId.toLowerCase() : "";
+    const itemTypeFilter = txItemType ? txItemType.toLowerCase() : "";
+    const itemTitleFilter = txItemTitle ? txItemTitle.toLowerCase() : "";
+    return sourceRows.filter((r) => {
+      const rowEventCode = normalizeEventCode(r.event_type || r.raw_type || "");
+      const typeOk = !typeActive || !rowEventCode || typeSet.has(rowEventCode);
       const statusOk = !r.current_status || statuses.has(String(r.current_status));
-      const patronValue = String(r.user_id ?? r.patron_id ?? r.account_id ?? '');
+      const patronValue = String(r.user_id ?? r.patron_id ?? r.account_id ?? "");
       const patronOk = !patronFilter || patronValue.toLowerCase() === patronFilter;
-      const rowType = String(r.media_type || r.item_type || '').trim().toLowerCase();
+      const rowType = String(r.media_type || r.item_type || "").trim().toLowerCase();
       const itemTypeOk = !itemTypeFilter || rowType === itemTypeFilter;
-      const rowTitle = String(r.item_title || '').trim().toLowerCase();
+      const rowTitle = String(r.item_title || "").trim().toLowerCase();
       const itemTitleOk = !itemTitleFilter || rowTitle === itemTitleFilter;
       return typeOk && statusOk && patronOk && itemTypeOk && itemTitleOk;
     });
@@ -1232,7 +1267,7 @@ export default function ReportsPanel({ api }) {
   const totalTransactionsCount = txHasGenerated ? reportData.length : 0;
 
   const transactionsKPIs = useMemo(() => {
-    if (activeReport !== 'transactions' || !txHasGenerated) return null;
+    if (activeReport !== "transactions" || !txHasGenerated) return null;
     const rows = transactionsFilteredRows;
     const byLoan = new Map();
     rows.forEach((row) => {
@@ -1245,19 +1280,20 @@ export default function ReportsPanel({ api }) {
     let activeLoans = 0;
     let overdueCount = 0;
     let lostCount = 0;
-    const normalize = (value) => String(value || "").toLowerCase();
     byLoan.forEach((events) => {
       events.sort((a, b) => new Date(a.event_timestamp) - new Date(b.event_timestamp));
-      const firstApproval = events.find((event) => normalize(event.event_type) === "approved");
-      const firstReturn = events.find((event) => normalize(event.event_type) === "returned");
-      if (firstApproval && firstReturn) {
-        ttr.push(new Date(firstReturn.event_timestamp) - new Date(firstApproval.event_timestamp));
+      const firstCheckout = events.find((event) => isCheckoutEventType(event.event_type || event.raw_type));
+      const firstReturn = events.find((event) => isReturnEventType(event.event_type || event.raw_type));
+      if (firstCheckout && firstReturn) {
+        ttr.push(new Date(firstReturn.event_timestamp) - new Date(firstCheckout.event_timestamp));
       }
       const latest = events[events.length - 1] || {};
-      const statusText = normalize(latest.current_status || latest.event_type);
-      const isReturned = statusText.includes("returned");
-      const isLost = statusText.includes("lost") || events.some((event) => normalize(event.event_type).includes("lost"));
-      const isOverdue = statusText.includes("overdue");
+      const statusCode = normalizeEventCode(latest.current_status || latest.event_type || "");
+      const isReturned = statusCode.includes("returned") || isReturnEventType(latest.current_status || latest.event_type);
+      const isLost =
+        statusCode.includes("lost") ||
+        events.some((event) => normalizeEventCode(event.event_type || event.raw_type || "").includes("lost"));
+      const isOverdue = statusCode.includes("overdue");
       if (isLost) {
         lostCount += 1;
         return;
@@ -1864,18 +1900,20 @@ export default function ReportsPanel({ api }) {
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-2">Event Type</label>
                     <div className="flex gap-3 flex-wrap pb-1">
-                      {["requested", "approved", "rejected", "returned"].map((type) => (
+                      {transactionEventOptions.map((type) => (
                         <label key={type} className="inline-flex items-center gap-1.5 text-xs cursor-pointer">
                           <input
                             type="checkbox"
                             checked={txEventTypes.includes(type)}
                             onChange={() => {
-                              setTxEventTypes((prev) => (prev.includes(type) ? prev.filter((x) => x !== type) : [...prev, type]));
+                              setTxEventTypes((prev) =>
+                                prev.includes(type) ? prev.filter((x) => x !== type) : [...prev, type]
+                              );
                               setTxPage(1);
                             }}
                             className="w-4 h-4"
                           />
-                          <span className="capitalize">{type}</span>
+                          <span>{formatEventTypeLabel(type)}</span>
                         </label>
                       ))}
                     </div>
@@ -1936,7 +1974,7 @@ export default function ReportsPanel({ api }) {
                           sd.setFullYear(sd.getFullYear() - 1);
                           setTransactionStartDate(sd.toISOString().slice(0, 10));
                           setTransactionsEndDate(d.toISOString().slice(0, 10));
-                          setTxEventTypes(["requested", "approved", "rejected", "returned"]);
+                          setTxEventTypes([...transactionEventOptions]);
                           setTxStatuses(["Pending", "Approved & Active", "Rejected", "Returned"]);
                           setTxPatronId("");
                           setTxItemType("");
@@ -1952,7 +1990,7 @@ export default function ReportsPanel({ api }) {
                         onClick={() => {
                           setTransactionStartDate("");
                           setTransactionsEndDate("");
-                          setTxEventTypes(["requested", "approved", "rejected", "returned"]);
+                          setTxEventTypes([...transactionEventOptions]);
                           setTxStatuses(["Pending", "Approved & Active", "Rejected", "Returned"]);
                           setTxPatronId("");
                           setTxItemType("");
