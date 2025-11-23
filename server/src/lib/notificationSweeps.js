@@ -246,7 +246,6 @@ export async function sweepRoomNotifications() {
           type: NOTIFICATION_TYPES.ROOM_EXPIRING,
           uniqueField: 'reservation_id',
           uniqueValue: res.reservation_id,
-          statusNot: 'resolved',
         });
         if (!exists) {
           await createNotification(conn, {
@@ -266,7 +265,6 @@ export async function sweepRoomNotifications() {
           type: NOTIFICATION_TYPES.ROOM_EXPIRED,
           uniqueField: 'reservation_id',
           uniqueValue: res.reservation_id,
-          statusNot: 'resolved',
         });
         if (!exists) {
           await createNotification(conn, {
@@ -276,6 +274,14 @@ export async function sweepRoomNotifications() {
             message: `Your reservation for room ${res.room_number} has ended.`,
             metadata: meta,
           });
+        }
+
+        // Mark the reservation as completed so we don't keep reprocessing it
+        if (res.status === 'active') {
+          await conn.execute(
+            "UPDATE reservation SET status = 'completed' WHERE reservation_id = ? AND status = 'active'",
+            [res.reservation_id]
+          );
         }
       }
     }
