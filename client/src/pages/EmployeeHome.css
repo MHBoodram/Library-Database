@@ -441,12 +441,36 @@
   min-width: 0;
 }
 
+.new-patrons-report-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: flex-start;
+  margin-top: 1.5rem;
+}
+
+.new-patrons-report-sidebar {
+  position: relative;
+}
+
+.new-patrons-report-content {
+  min-width: 0;
+}
+
 @media (max-width: 1024px) {
   .transaction-report-layout {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .transaction-report-sidebar {
+    margin-bottom: 1rem;
+  }
+
+  .new-patrons-report-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .new-patrons-report-sidebar {
     margin-bottom: 1rem;
   }
 }

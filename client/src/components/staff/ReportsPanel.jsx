@@ -753,7 +753,11 @@ function TransactionReportTable({ data = [], loading }) {
                 </span>
               </Td>
               <Td>{row.event_timestamp ? new Date(row.event_timestamp).toLocaleString() : '—'}</Td>
-              <Td>{row.employee_first_name || row.employee_last_name ? `${row.employee_first_name || ''} ${row.employee_last_name || ''}`.trim() : '—'}</Td>
+              <Td>
+                {row.employee_first_name || row.employee_last_name
+                  ? `${row.employee_first_name || ""} ${row.employee_last_name || ""}`.trim()
+                  : "—"}
+              </Td>
               <Td>{row.current_status || '—'}</Td>
             </tr>
           ))}
@@ -1414,6 +1418,92 @@ export default function ReportsPanel({ api }) {
     loadReport("newPatrons");
   }
 
+  const newPatronFiltersSection = (
+    <div className="space-y-4 rounded-md border bg-white/80 p-4">
+      <div>
+        <label className="block text-xs font-medium text-gray-600 mb-2">Time Frame</label>
+        <div className="flex flex-wrap gap-2">
+          {timeframePresets.map((preset) => (
+            <button
+              key={preset.value}
+              type="button"
+              onClick={() => setNewPatronsTimeframe(preset.value)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium ${
+                newPatronsTimeframe === preset.value
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
+          <input
+            type="date"
+            value={newPatronsStartDate}
+            onChange={(e) => setNewPatronsStartDate(e.target.value)}
+            className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
+          <input
+            type="date"
+            value={newPatronsEndDate}
+            onChange={(e) => setNewPatronsEndDate(e.target.value)}
+            className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
+          />
+        </div>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-xs font-medium text-gray-600">User Types</label>
+            <button
+              type="button"
+              onClick={() => setNewPatronsUserTypes([])}
+              className="text-[11px] text-blue-600 hover:underline"
+            >
+              Clear
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            {userTypeOptions.map((type) => {
+              const value = type.toLowerCase();
+              return (
+                <label key={value} className="inline-flex items-center gap-1 text-xs capitalize cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newPatronsUserTypes.includes(value)}
+                    onChange={() => handleUserTypeToggle(value)}
+                    className="h-4 w-4"
+                  />
+                  {toTitle(value)}
+                </label>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-[11px] text-gray-500">Leave unchecked to include every patron type.</p>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
+        <button
+          type="button"
+          onClick={handleNewPatronsReset}
+          disabled={loading}
+          className="px-3 py-2 rounded-md bg-gray-100 text-gray-800 text-sm font-medium hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Reset Filters
+        </button>
+        <span>Filters auto-apply and refresh charts instantly.</span>
+      </div>
+    </div>
+  );
+
   useEffect(() => {
     if (activeReport === "transactions") return;
     if (activeReport === "overdue") {
@@ -1695,7 +1785,7 @@ export default function ReportsPanel({ api }) {
           )}
 
           {/* Filters section - now below the panels */}
-          {activeReport !== "overdue" && (
+          {activeReport !== "overdue" && activeReport !== "newPatrons" && (
           <div className="space-y-3">
             {activeReport === "topItems" && (
               <div className="flex flex-wrap items-end gap-3">
@@ -1715,95 +1805,10 @@ export default function ReportsPanel({ api }) {
                     value={topItemsEndDate}
                     onChange={(e) => setTopItemsEndDate(e.target.value)}
                     className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
-                  />
-                </div>
-              </div>
-            )}
-            {activeReport === "newPatrons" && (
-              <div className="space-y-4 rounded-md border bg-white/80 p-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-2">Time Frame</label>
-                  <div className="flex flex-wrap gap-2">
-                    {timeframePresets.map((preset) => (
-                      <button
-                        key={preset.value}
-                        type="button"
-                        onClick={() => setNewPatronsTimeframe(preset.value)}
-                        className={`px-3 py-1.5 rounded-full text-xs font-medium ${
-                          newPatronsTimeframe === preset.value
-                            ? "bg-blue-600 text-white"
-                            : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                        }`}
-                      >
-                        {preset.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
-                    <input
-                      type="date"
-                      value={newPatronsStartDate}
-                      onChange={(e) => setNewPatronsStartDate(e.target.value)}
-                      className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
-                    <input
-                      type="date"
-                      value={newPatronsEndDate}
-                      onChange={(e) => setNewPatronsEndDate(e.target.value)}
-                      className="w-full rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
-                    />
-                  </div>
-                </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="block text-xs font-medium text-gray-600">User Types</label>
-                      <button
-                        type="button"
-                        onClick={() => setNewPatronsUserTypes([])}
-                        className="text-[11px] text-blue-600 hover:underline"
-                      >
-                        Clear
-                      </button>
-                    </div>
-                    <div className="flex flex-wrap gap-3">
-                      {userTypeOptions.map((type) => {
-                        const value = type.toLowerCase();
-                        return (
-                          <label key={value} className="inline-flex items-center gap-1 text-xs capitalize cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={newPatronsUserTypes.includes(value)}
-                              onChange={() => handleUserTypeToggle(value)}
-                              className="h-4 w-4"
-                            />
-                            {toTitle(value)}
-                          </label>
-                        );
-                      })}
-                    </div>
-                    <p className="mt-2 text-[11px] text-gray-500">Leave unchecked to include every patron type.</p>
-                  </div>
-                </div>
-                <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
-                  <button
-                    type="button"
-                    onClick={handleNewPatronsReset}
-                    disabled={loading}
-                    className="px-3 py-2 rounded-md bg-gray-100 text-gray-800 text-sm font-medium hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Reset Filters
-                  </button>
-                  <span>Filters auto-apply and refresh charts instantly.</span>
-                </div>
-              </div>
-            )}
+                   />
+                 </div>
+               </div>
+             )}
           </div>
           )}
 
@@ -1889,10 +1894,13 @@ export default function ReportsPanel({ api }) {
           )}
 
           {activeReport === "newPatrons" ? (
-            <div className="space-y-4">
-              <NewPatronInsights report={newPatronsReport} loading={loading} />
-              <div className="rounded-lg border overflow-hidden">
-                <NewPatronsReportTable data={reportData} loading={loading} />
+            <div className="new-patrons-report-layout">
+              <aside className="new-patrons-report-sidebar">{newPatronFiltersSection}</aside>
+              <div className="new-patrons-report-content space-y-4">
+                <NewPatronInsights report={newPatronsReport} loading={loading} />
+                <div className="rounded-lg border overflow-hidden">
+                  <NewPatronsReportTable data={reportData} loading={loading} />
+                </div>
               </div>
             </div>
           ) : activeReport === "transactions" ? (
