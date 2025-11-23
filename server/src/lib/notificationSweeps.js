@@ -61,6 +61,23 @@ async function ensureLostFine(conn, loan) {
     }
     return;
   }
+
+  // If a lost fine ever existed for this loan (even if now paid/waived/written_off),
+  // do not create another one. This prevents duplicate lost fines after payment.
+  const [historicalLost] = await conn.query(
+    `
+      SELECT fine_id
+      FROM fine
+      WHERE loan_id = ?
+        AND reason = 'lost'
+      LIMIT 1
+    `,
+    [loan.loan_id]
+  );
+  if (historicalLost.length > 0) {
+    return;
+  }
+
   const overdueFine = existing.find((row) => row.reason === "overdue");
   if (overdueFine) {
     await conn.execute(
@@ -155,7 +172,6 @@ export async function sweepLoanNotifications() {
           type: NOTIFICATION_TYPES.LOST_MARKED,
           uniqueField: 'loan_id',
           uniqueValue: loan.loan_id,
-          statusNot: 'resolved',
         });
         if (!lostExists) {
           await createNotification(conn, {
@@ -173,7 +189,6 @@ export async function sweepLoanNotifications() {
           type: NOTIFICATION_TYPES.LOST_WARNING,
           uniqueField: 'loan_id',
           uniqueValue: loan.loan_id,
-          statusNot: 'resolved',
         });
         if (!suspendExists) {
           await createNotification(conn, {
@@ -192,7 +207,6 @@ export async function sweepLoanNotifications() {
             type: NOTIFICATION_TYPES.SUSPENDED,
             uniqueField: 'loan_id',
             uniqueValue: loan.loan_id,
-            statusNot: 'resolved',
           });
           if (!suspended) {
             await createNotification(conn, {
@@ -207,6 +221,23 @@ export async function sweepLoanNotifications() {
         }
       }
     }
+
+    // Auto-resolve suspension-related notifications once accounts are active again.
+    // If an account is no longer locked (is_active = 1), clear any lingering
+    // LOST_WARNING or SUSPENDED notifications so they don't confuse patrons.
+    await conn.execute(
+      `
+        UPDATE notification n
+        JOIN account a ON a.user_id = n.user_id
+        SET
+          n.status = 'resolved',
+          n.read_at = COALESCE(n.read_at, NOW()),
+          n.resolved_at = NOW()
+        WHERE n.type IN ('lost_warning','suspended')
+          AND n.status <> 'resolved'
+          AND a.is_active = 1
+      `
+    );
   } catch (err) {
     console.error("[sweepLoanNotifications] failed:", err);
   } finally {
