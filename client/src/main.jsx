@@ -14,6 +14,7 @@ import Loans from "./pages/Loans.jsx";
 import PayFines from "./pages/PayFines.jsx";
 import Rooms from "./pages/Rooms.jsx";
 import BookPage from "./pages/BookPage.jsx";
+import Locked from "./pages/Locked.jsx";
 import { getCustomCoverForTitle, DEFAULT_BOOK_PLACEHOLDER } from "./coverImages";
 import ManageAccounts from "./pages/ManageAccounts.jsx";
 import Notifications from "./pages/Notifications.jsx";
@@ -111,7 +112,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/Login" element={<Navigate to="/login" replace />} /> {/* optional redirect */}
+          <Route path="/Login" element={<Navigate to="/login" replace />} />
           <Route path="/books" element={<Books />} />
           <Route path="/books/:id" element={<Protected><BookRoute /></Protected>} />
           <Route path="/loans" element={<Loans />} />
@@ -124,7 +125,6 @@ ReactDOM.createRoot(document.getElementById("root")).render(
             }
           />
           <Route path="/fines" element={<Protected><PayFines /></Protected>} />
-          {/** Pending Loans merged into Manage Loans; route removed **/}
           <Route path="/rooms" element={<Rooms />} />
           <Route path="/reports" element={<Reports />} />
 
@@ -153,7 +153,10 @@ ReactDOM.createRoot(document.getElementById("root")).render(
               </Protected>
             }
           />
-
+          <Route
+            path = "/Locked"
+            element = {<Locked />}
+            />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

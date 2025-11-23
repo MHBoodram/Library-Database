@@ -30,7 +30,7 @@ import { getProfile, updateProfile } from "./api/profile.js";
 import { listAccounts, updateAccount as updateManagedAccount, flagAccount, clearFlagAccount } from "./api/manageAcc.js";
 import { searchPatrons } from "./api/patrons.js";
 import { updateRoom, deleteRoom } from "./api/rooms.js";
-import { listMyFines, payFine } from "./api/fines.js";
+import { listMyFines,getTotalDue, payFine, payFinesTotal } from "./api/fines.js";
 import { listNotifications, markNotificationRead, dismissNotification } from "./api/notifications.js";
 import { sweepLoanNotifications, sweepRoomNotifications } from "./lib/notificationSweeps.js";
 
@@ -109,7 +109,9 @@ r.add("POST", "/api/manage/accounts/:id/flag", flagAccount(JWT_SECRET));
 r.add("DELETE", "/api/manage/accounts/:id/flag", clearFlagAccount(JWT_SECRET));
 
 r.add("GET", "/api/fines/my", listMyFines(JWT_SECRET));
+r.add("GET", "/api/fines/total", getTotalDue(JWT_SECRET));
 r.add("POST", "/api/fines/pay", payFine(JWT_SECRET));
+r.add("POST", "/api/fines/pay-total", payFinesTotal(JWT_SECRET));
 
 r.add("POST", "/api/reservations", createReservationSelf(JWT_SECRET));
 r.add("GET", "/api/reservations/my", listMyReservations(JWT_SECRET));

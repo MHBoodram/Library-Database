@@ -61,6 +61,33 @@ export const listMyFines = (JWT_SECRET) => async (req, res) => {
   }
 };
 
+export const getTotalDue = (JWT_SECRET) => async (req, res) => {
+  const auth = requireAuth(req, res, JWT_SECRET);
+  if (!auth) return;
+  const userId = Number(auth.uid || auth.user_id || auth.userId || 0);
+  if (!userId) return sendJSON(res, 400, { error: "invalid_user" });
+
+  try{
+    const [rows] = await pool.query(`
+      SELECT SUM(f.amount_assessed - COALESCE((
+        SELECT SUM(
+          CASE WHEN fp.type='refund' THEN -COALESCE(fp.amount,0)
+            ELSE COALESCE(fp.amount,0)
+          END
+        )
+        FROM fine_payment fp WHERE fp.fine_id = f.fine_id
+      ),0)) AS total_due
+      FROM fine f
+      WHERE f.userId=? AND f.status NOT IN ('paid','waived','written_off')
+    `,[userId]);
+    const total_due = Number(rows[0]?.total_due || 0);
+     return sendJSON(res, 200, { total_due: totalDue });
+  } catch (err) {
+    console.error("Failed to fetch total due:", err.message);
+    return sendJSON(res, 500, { error: "total_due_failed" });
+  }
+};
+
 export const payFine = (JWT_SECRET) => async (req, res) => {
   const auth = requireAuth(req, res, JWT_SECRET);
   if (!auth) return;
@@ -150,3 +177,68 @@ export const payFine = (JWT_SECRET) => async (req, res) => {
     conn.release();
   }
 };
+
+export const payFinesTotal = (JWT_SECRET)  => async(req,res) => {
+  const auth = requireAuth(req, res, JWT_SECRET)
+  if (!auth) return;
+  const body = await readJSONBody(req);
+  let amount = Number(body.amount);
+  if(amount <=0){return sendJSON(res, 400, { error: "invalid_amount" })}
+
+  const userId = Number(auth.uid || auth.user_id || auth.userId || 0);
+  if(!userId){return sendJSON(res,400,{error: "invalid_user"})}
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [rows] = await conn.query(
+      `SELECT f.fine_id, f.amount_assessed, f.status
+        COALESCE((
+          SELECT SUM(
+            CASE WHEN fp.type = 'refund' THEN -COALESCE(fp.amount,0)
+            ELSE COALESCE(fp.amount,0)
+            END)
+          FROM fine_payment fp WHERE fp.fine_id = f.fine_id),0) AS amount_paid
+      FROM fine f
+      WHERE f.user_id=? AND f.status NOT IN ('paid','waived','written_off')
+      ORDER BY f.assessed_at ASC
+      `,
+    [userId]
+    );
+
+    if(!rows.length){
+      await conn.rollback();
+      return sendJSON(res, 404, { error: "no_outstanding_fines" });
+    }
+
+    let remaining = amount;
+    const applied = [];
+    for(const fine of rows){
+      const outstanding = Math.max(0,amount_assessed-fine.amount_paid);
+      if(outstanding > 0 && remaining > 0){
+        const toPay = Math.min(outstanding,remaining);
+        await conn.execute(`
+          INSERT INTO fine_payment (fine_id, employee_id, payment_at, amount, type, method, reference)
+          VALUES (?, NULL, NOW(), ?, 'payment', 'online', NULL)
+        `,[fine.fine_id, toPay]);
+        if(toPay === outstanding){
+          await conn.execute("UPDATE fine SET status='paid' WHERE fine_id=?", [fine.fine_id]);
+        }
+        /*else{
+          await conn.execute("UPDATE fine SET status='partially_paid' WHERE fine_id=?", [fine.fine_id]);
+        }*/
+        applied.push({ fine_id: fine.fine_id, paid: toPay });
+        remaining -= toPay;
+      }
+    }
+    await conn.commit();
+    return sendJSON(res, 200, { applied, leftover: remaining });
+  }catch(err){
+    try{await conn.rollback();}
+    catch {}
+    console.error("Failed to pay account fines:", err.message);
+    return sendJSON(res,500,{ error: "account_payment_failed" });
+  }finally{
+    conn.release();
+  }
+}

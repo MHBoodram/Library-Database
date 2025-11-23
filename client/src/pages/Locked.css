@@ -1,0 +1,115 @@
+.lock-page{
+    background-color: #a8a8a8;
+    width:100vw;
+    height:100vh;
+    display:flex;
+    align-items:center;
+}
+
+.lock-container{
+    width: 100%;
+    max-width:420px;
+    position:relative;
+    margin: 0 auto;
+}
+.lock-core{
+    width: 100%;
+    height:auto;
+    max-width: 420px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.06);
+    position:relative;
+    margin: 0 auto;
+    font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif;
+}
+.lock-header{
+    width:100%;
+    height:15%;
+    background-color: red;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    display:flex;
+}
+
+.lock-img-container{
+    width:15%;
+    margin:auto;
+    text-align: center;
+    font-size:xx-large;
+}
+
+.lock-header-text{
+    width:85%;
+    font-size: 20px;
+    margin:auto;
+    color:#fff;
+}
+
+.lock-text-reason{
+    padding-top:1%;
+    padding-left:4%;
+    padding-right:4%;
+}
+
+.lock-text-reason p{
+    margin-bottom:0.5em;
+}
+
+.lock-payment{
+    padding-left:4%;
+    padding-right:4%;
+}
+
+#amount{
+    margin:1%;
+}
+
+.cardHolder-input{
+    width:100%;
+}
+
+.cardNum-input{
+    width:100%;
+}
+
+.cardInfo-short{
+    display:flex;
+    gap:1%;
+}
+
+#card-CVV{
+    width:100%;
+    margin:2%;
+}
+
+#expiry-date{
+    width:100%;
+    margin:2%;
+}
+
+.lock-footer{
+    display:block;
+    margin:auto;
+    padding-left: 2%;
+    padding-right:2%;
+}
+
+.lock-actions{
+    display:flex;
+    gap:1%;
+}
+.logout-btn{
+    display:block;
+    margin:2% auto;
+    width:100%;
+    border-radius: 4px;
+    background-color: red;
+}
+
+.pay-btn{
+    display:block;
+    margin:2% auto;
+    width:100%;
+    border-radius: 4px;
+}
