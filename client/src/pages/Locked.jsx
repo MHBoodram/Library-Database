@@ -43,7 +43,10 @@ export default function Locked() {
                 showToast({ type: "error", text: `Payment failed: ${res.error}`});
                 return;
             }
-            showToast({type:"success", text:"Payment successful!"})
+            showToast({
+              type:"success",
+              text:"Payment successful! Please log out and log back in to restore access."
+            });
         }catch(err){
             showToast({ type: "error", text: `Payment request failed`})
             console.error(err);

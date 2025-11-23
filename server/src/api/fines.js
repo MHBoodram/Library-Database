@@ -192,7 +192,10 @@ export const payFinesTotal = (JWT_SECRET)  => async(req,res) => {
   try {
     await conn.beginTransaction();
     const [rows] = await conn.query(
-      `SELECT f.fine_id, f.amount_assessed, f.status
+      `SELECT 
+        f.fine_id,
+        f.amount_assessed,
+        f.status,
         COALESCE((
           SELECT SUM(
             CASE WHEN fp.type = 'refund' THEN -COALESCE(fp.amount,0)
@@ -214,7 +217,7 @@ export const payFinesTotal = (JWT_SECRET)  => async(req,res) => {
     let remaining = amount;
     const applied = [];
     for(const fine of rows){
-      const outstanding = Math.max(0,amount_assessed-fine.amount_paid);
+      const outstanding = Math.max(0, Number(fine.amount_assessed ?? 0) - Number(fine.amount_paid ?? 0));
       if(outstanding > 0 && remaining > 0){
         const toPay = Math.min(outstanding,remaining);
         await conn.execute(`

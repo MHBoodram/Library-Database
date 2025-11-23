@@ -36,6 +36,7 @@ function normalizeUser(user) {
     employee_role: employeeRole,
     is_employee: Boolean(user.employee_id),
     is_admin: Boolean(employeeRole === "admin"),
+     locked: Boolean(user.locked),
     name: (user.name && typeof user.name === "string" && user.name) || fullName || user.email || "",
   };
 }

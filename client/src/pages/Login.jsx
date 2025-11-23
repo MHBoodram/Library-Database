@@ -14,7 +14,11 @@ export default function Login() {
 
   useEffect(() => {
     if (token && user) {
-      navigate(user.employee_id ? '/staff' : '/');
+      if (user.locked) {
+        navigate('/Locked');
+      } else {
+        navigate(user.employee_id ? '/staff' : '/');
+      }
     }
   }, [token, user, navigate]);
 
@@ -25,7 +29,11 @@ export default function Login() {
 
     try {
       const signedIn = await login(email, password);
-      navigate(signedIn?.employee_id ? '/staff' : '/');
+      if (signedIn?.locked) {
+        navigate('/Locked');
+      } else {
+        navigate(signedIn?.employee_id ? '/staff' : '/');
+      }
     } catch (err) {
       setError(err.message || 'Login failed');
     } finally {

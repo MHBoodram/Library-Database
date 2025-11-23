@@ -18,6 +18,7 @@ export function login(JWT_SECRET) {
           a.email,
           a.password_hash,
           a.is_active,
+          a.flagged_for_deletion,
           a.employee_id,               -- from account
           a.role,
           u.first_name,
@@ -37,15 +38,22 @@ export function login(JWT_SECRET) {
       if (rows.length === 0) return sendJSON(res, 401, { error: "invalid_login" });
 
       const acc = rows[0];
-      if (!Number(acc.is_active)) return sendJSON(res, 403, { error: "account_inactive" });
-
       const ok = await bcrypt.compare(password, acc.password_hash);
       if (!ok) return sendJSON(res, 401, { error: "invalid_login" });
+
+      const isActive = Number(acc.is_active) === 1;
+      const flaggedForDeletion = Number(acc.flagged_for_deletion) === 1;
+
+      // Hard block: flagged for deletion AND inactive => cannot log in at all
+      if (!isActive && flaggedForDeletion) {
+        return sendJSON(res, 403, { error: "Account unavailable" });
+      }
 
       const isStaff = Boolean(acc.employee_id);
       const employeeRole = acc.employee_role || null;
       const role = isStaff ? "staff" : acc.role || "student";
       const name = [acc.first_name, acc.last_name].filter(Boolean).join(" ").trim();
+      const locked = !isActive && !flaggedForDeletion;
 
       const token = jwt.sign(
         {
@@ -55,6 +63,7 @@ export function login(JWT_SECRET) {
           role,
           employee_id: acc.employee_id,
           employee_role: employeeRole,
+          locked,
         },
         JWT_SECRET,
         { expiresIn: "7d" }
@@ -72,6 +81,7 @@ export function login(JWT_SECRET) {
           employee_id: acc.employee_id,
           employee_role: employeeRole,
           is_admin: employeeRole === "admin",
+          locked,
           phone: acc.phone,
           address: acc.address,
           name: name || acc.email,
