@@ -48,9 +48,9 @@
   color: white;
   padding: 1 rem 0;
   box-shadow: var(--shadow-lg);
-  position: sticky;
-  top: var(--nav-height, 60px);
-  z-index: 10;
+  position: relative;
+  top: 0;
+  z-index: 1;
 }
 
 .employee-dashboard-header h1 {
