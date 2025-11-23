@@ -102,6 +102,7 @@
 .logout-btn{
     display:block;
     margin:2% auto;
+    color:white;
     width:100%;
     border-radius: 4px;
     background-color: red;
@@ -112,4 +113,13 @@
     margin:2% auto;
     width:100%;
     border-radius: 4px;
+}
+
+input{
+    background: #ffffff;
+    color: #111827;
+    border: 1px solid #d1d5db;
+    padding: 8px;
+    border-radius: 4px;
+    box-sizing: border-box;
 }

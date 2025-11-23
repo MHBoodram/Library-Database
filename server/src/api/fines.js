@@ -78,10 +78,10 @@ export const getTotalDue = (JWT_SECRET) => async (req, res) => {
         FROM fine_payment fp WHERE fp.fine_id = f.fine_id
       ),0)) AS total_due
       FROM fine f
-      WHERE f.userId=? AND f.status NOT IN ('paid','waived','written_off')
+      WHERE f.user_id=? AND f.status NOT IN ('paid','waived','written_off')
     `,[userId]);
     const total_due = Number(rows[0]?.total_due || 0);
-     return sendJSON(res, 200, { total_due: totalDue });
+     return sendJSON(res, 200, { total_due: total_due });
   } catch (err) {
     console.error("Failed to fetch total due:", err.message);
     return sendJSON(res, 500, { error: "total_due_failed" });
