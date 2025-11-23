@@ -191,7 +191,10 @@ function SparklineChart({ data, valueKey, color = "#2563eb", fill = "rgba(37,99,
   }
   const safeData = data.map((entry) => Number(entry?.[valueKey] || 0));
   const maxValue = Math.max(...safeData, 0);
-  const domainMax = maxValue === 0 ? 1 : maxValue;
+  if (maxValue === 0) {
+    return <div className="h-[140px] flex items-center justify-center text-sm text-gray-500">No data yet</div>;
+  }
+  const domainMax = maxValue;
   const stepX = data.length === 1 ? 100 : 100 / (data.length - 1);
   const points = safeData.map((value, idx) => {
     const x = idx * stepX;
@@ -199,14 +202,14 @@ function SparklineChart({ data, valueKey, color = "#2563eb", fill = "rgba(37,99,
     return { x, y, label: data[idx].label, raw: value, change: data[idx].changePercent };
   });
   const polygonPoints = [
-    "0,100",
+    `0,100`,
     ...points.map((p) => `${p.x},${p.y}`),
     `${points[points.length - 1].x},100`,
   ].join(" ");
 
   return (
-    <div style={{ height }} className="text-[0px]">
-      <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-full w-full">
+    <div style={{ height, width: '100%', position: 'relative', overflow: 'hidden' }} className="relative w-full h-full flex items-center justify-center">
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ display: 'block', width: '100%', height: '100%' }}>
         <polygon points={polygonPoints} fill={fill} />
         <polyline
           points={points.map((p) => `${p.x},${p.y}`).join(" ")}
@@ -2006,7 +2009,6 @@ export default function ReportsPanel({ api }) {
 {/* User Balances table removed */}
               {activeReport === "topItems" && <TopItemsReportTable data={reportData} loading={loading} />}
             </div>
-          )}
           )}
         </div>
       </div>
