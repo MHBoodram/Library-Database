@@ -126,14 +126,25 @@ export default function ReservationsPanel({ api, staffUser, onChanged }) {
               required
             />
           </Field>
-          <Field label="Room ID">
-            <input
-              className="w-full rounded-md border px-3 py-2"
+          <Field label="Room">
+            <select
+              className="w-full rounded-md border px-3 py-2 bg-white"
               value={form.room_id}
               onChange={(e) => update("room_id", e.target.value)}
-              placeholder="e.g., 2"
+              disabled={roomsLoading || roomsError}
               required
-            />
+            >
+              <option value="" disabled>
+                {roomsLoading ? "Loading rooms..." : roomsError ? "Rooms unavailable" : "Select a room"}
+              </option>
+              {rooms.map((r) => (
+                <option key={r.room_id} value={r.room_id}>
+                  {r.room_number || `Room ${r.room_id}`}
+                  {r.capacity ? ` · ${r.capacity} seats` : ""}
+                </option>
+              ))}
+            </select>
+            {roomsError && <p className="text-xs text-red-600 mt-1">{roomsError}</p>}
           </Field>
           <Field label="Start Time">
             <input
