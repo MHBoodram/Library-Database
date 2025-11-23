@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from "react";
+import React, { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { Th, Td } from "./shared/CommonComponents";
 import { ToastBanner } from "./shared/Feedback";
 import { formatDate } from "../../utils";
@@ -883,8 +883,9 @@ export default function ReportsPanel({ api }) {
   // Pagination for transactions
   const [txPage, setTxPage] = useState(1);
   const [txPageSize, setTxPageSize] = useState(50);
-  const [txTotal, setTxTotal] = useState(0);
   const [txHasGenerated, setTxHasGenerated] = useState(false);
+  const txPageRef = useRef(txPage);
+  const txPageSizeRef = useRef(txPageSize);
   // Transactions filters
   const [txEventTypes, setTxEventTypes] = useState(['requested','approved','rejected','returned']);
   const [txStatuses, setTxStatuses] = useState(['Pending','Approved & Active','Rejected','Returned']);
@@ -898,6 +899,14 @@ export default function ReportsPanel({ api }) {
       )
     )
   );
+
+  useEffect(() => {
+    txPageRef.current = txPage;
+  }, [txPage]);
+
+  useEffect(() => {
+    txPageSizeRef.current = txPageSize;
+  }, [txPageSize]);
 
   useEffect(() => {
     if (activeReport !== "overdue" || !api) return;
@@ -948,9 +957,12 @@ export default function ReportsPanel({ api }) {
     if (targetReport === "newPatrons") {
       setNewPatronsReport(null);
     }
+    if (targetReport === "transactions") {
+      setTxHasGenerated(false);
+    }
 
-    let requestedTxPage = txPage;
-    let requestedTxPageSize = txPageSize;
+    let requestedTxPage = txPageRef.current;
+    let requestedTxPageSize = txPageSizeRef.current;
 
     try {
       let endpoint = "";
@@ -987,46 +999,69 @@ export default function ReportsPanel({ api }) {
             params.set("user_type", newPatronsUserTypes.join(","));
           }
           break;
-        case "transactions":
-          {
+        case "transactions": {
           endpoint = "reports/transactions";
-          params.set("start_date", transactionsStartDate);
-          params.set("end_date", transactionsEndDate);
-          // include pagination params
+          if (transactionsStartDate) params.set("start_date", transactionsStartDate);
+          if (transactionsEndDate) params.set("end_date", transactionsEndDate);
           const overridePage = Number(overrides.txPage);
           const overridePageSize = Number(overrides.txPageSize);
           requestedTxPage = Number.isFinite(overridePage) && overridePage > 0 ? overridePage : txPage;
           requestedTxPageSize = Number.isFinite(overridePageSize) && overridePageSize > 0 ? overridePageSize : txPageSize;
-          params.set('page', String(requestedTxPage));
-          params.set('pageSize', String(requestedTxPageSize));
-          if (Array.isArray(txEventTypes) && txEventTypes.length) params.set('types', txEventTypes.join(','));
-          if (Array.isArray(txStatuses) && txStatuses.length) params.set('statuses', txStatuses.join(','));
+          if (Array.isArray(txEventTypes) && txEventTypes.length) params.set("types", txEventTypes.join(","));
+          if (Array.isArray(txStatuses) && txStatuses.length) params.set("statuses", txStatuses.join(","));
           break;
-          }
+        }
         default:
           throw new Error("Unknown report type");
       }
+      if (targetReport === "transactions") {
+        const aggregatedRows = [];
+        const fetchPageSize = Math.max(requestedTxPageSize, 250);
+        let currentPage = 1;
+        let expectedTotal = 0;
+        const maxPages = 200;
+        while (currentPage <= maxPages) {
+          const pageParams = new URLSearchParams(params.toString());
+          pageParams.set("page", String(currentPage));
+          pageParams.set("pageSize", String(fetchPageSize));
+          const payload = await api(`${endpoint}?${pageParams.toString()}`);
+          const rows = Array.isArray(payload?.rows)
+            ? payload.rows
+            : Array.isArray(payload)
+            ? payload
+            : [];
+          if (rows.length === 0) break;
+          aggregatedRows.push(...rows);
+          const payloadTotal = Number(payload?.total);
+          if (Number.isFinite(payloadTotal) && payloadTotal >= 0) {
+            expectedTotal = payloadTotal;
+          } else if (aggregatedRows.length > expectedTotal) {
+            expectedTotal = aggregatedRows.length;
+          }
+          if (
+            (Number.isFinite(payloadTotal) && aggregatedRows.length >= payloadTotal) ||
+            rows.length < fetchPageSize
+          ) {
+            break;
+          }
+          currentPage += 1;
+        }
+        setReportData(aggregatedRows);
+        setTxPage(requestedTxPage);
+        setTxPageSize(requestedTxPageSize);
+        setTxHasGenerated(true);
+        return;
+      }
+
       const data = await api(`${endpoint}?${params.toString()}`);
-      console.log("DATA: ", data);
       if (targetReport === "newPatrons") {
         setNewPatronsReport(data || null);
         setNewPatronsFilterOptions({
           userTypes: data?.filterOptions?.userTypes || [],
         });
         setReportData(Array.isArray(data?.tableRows) ? data.tableRows : []);
-        } else {
-        const rows = Array.isArray(data?.rows) ? data.rows : (Array.isArray(data) ? data : []);
-          // Save pagination info for transactions
-          if (targetReport === 'transactions') {
-            const incomingPage = Number(data?.page);
-            const incomingPageSize = Number(data?.pageSize);
-            const safePage = Number.isFinite(incomingPage) && incomingPage > 0 ? incomingPage : requestedTxPage;
-            const safePageSize = Number.isFinite(incomingPageSize) && incomingPageSize > 0 ? incomingPageSize : requestedTxPageSize;
-            setTxTotal(Number(data?.total || 0));
-            setTxPage(safePage);
-            setTxPageSize(safePageSize);
-            setTxHasGenerated(true);
-          }
+      } else {
+        const rows = Array.isArray(data?.rows) ? data.rows : Array.isArray(data) ? data : [];
         setReportData(rows);
       }
     } catch (err) {
@@ -1037,7 +1072,7 @@ export default function ReportsPanel({ api }) {
     } finally {
       setLoading(false);
     }
-  }, [api, activeReport, overdueStartDate, overdueEndDate, balancesStartDate, balancesEndDate, topItemsStartDate, topItemsEndDate, newPatronsStartDate, newPatronsEndDate, newPatronsTimeframe, newPatronsUserTypes, transactionsStartDate, transactionsEndDate, txEventTypes, txStatuses, txPage, txPageSize]);
+  }, [api, activeReport, overdueStartDate, overdueEndDate, balancesStartDate, balancesEndDate, topItemsStartDate, topItemsEndDate, newPatronsStartDate, newPatronsEndDate, newPatronsTimeframe, newPatronsUserTypes, transactionsStartDate, transactionsEndDate, txEventTypes, txStatuses]);
 
   // Derived media types from the currently loaded overdue dataset
   const mediaTypeOptions = useMemo(() => {
@@ -1190,6 +1225,9 @@ export default function ReportsPanel({ api }) {
     });
   }, [activeReport, reportData, txEventTypes, txStatuses, txPatronId, txItemType, txItemTitle, txHasGenerated]);
 
+  const filteredTransactionCount = txHasGenerated ? transactionsFilteredRows.length : 0;
+  const totalTransactionsCount = txHasGenerated ? reportData.length : 0;
+
   const transactionsKPIs = useMemo(() => {
     if (activeReport !== 'transactions' || !txHasGenerated) return null;
     const rows = transactionsFilteredRows;
@@ -1240,6 +1278,21 @@ export default function ReportsPanel({ api }) {
       lostCount,
     };
   }, [activeReport, transactionsFilteredRows, txHasGenerated]);
+
+  const paginatedTransactions = useMemo(() => {
+    if (activeReport !== "transactions" || !txHasGenerated) return [];
+    const start = (txPage - 1) * txPageSize;
+    return transactionsFilteredRows.slice(start, start + txPageSize);
+  }, [activeReport, txHasGenerated, transactionsFilteredRows, txPage, txPageSize]);
+  const filteredMaxPage = Math.max(1, Math.ceil((filteredTransactionCount || 0) / txPageSize));
+
+  useEffect(() => {
+    if (activeReport !== "transactions" || !txHasGenerated) return;
+    const maxPage = Math.max(1, Math.ceil((filteredTransactionCount || 0) / txPageSize));
+    if (txPage > maxPage) {
+      setTxPage(maxPage);
+    }
+  }, [activeReport, txHasGenerated, filteredTransactionCount, txPageSize, txPage]);
 
   // Fines filtering and KPIs
   // Legacy fines filtering/KPIs removed until the fines report is re-enabled
@@ -1306,6 +1359,11 @@ export default function ReportsPanel({ api }) {
     }
     loadReport(activeReport);
   }, [activeReport, loadReport, overdueStartDate, overdueEndDate]);
+
+  useEffect(() => {
+    if (activeReport !== "transactions") return;
+    loadReport("transactions");
+  }, [activeReport, loadReport, transactionsStartDate, transactionsEndDate, txEventTypes, txStatuses]);
 
   useEffect(() => {
     if (activeReport === "transactions") return;
@@ -1881,7 +1939,6 @@ export default function ReportsPanel({ api }) {
                           setTxItemType("");
                           setTxItemTitle("");
                           setTxPage(1);
-                          setTxTotal(0);
                         }}
                         disabled={loading}
                         className="flex-1 px-3 py-2 rounded-md bg-gray-200 text-gray-800 text-sm font-medium hover:bg-gray-300 disabled:opacity-50"
@@ -1898,7 +1955,6 @@ export default function ReportsPanel({ api }) {
                           setTxItemType("");
                           setTxItemTitle("");
                           setTxPage(1);
-                          setTxTotal(0);
                         }}
                         disabled={loading}
                         className="flex-1 px-3 py-2 rounded-md bg-white border text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
@@ -1920,7 +1976,7 @@ export default function ReportsPanel({ api }) {
                   </div>
                 ) : (
                   <>
-                    {transactionsFilteredRows.length > 0 ? (
+                    {filteredTransactionCount > 0 ? (
                       <div className="flex flex-wrap gap-3 p-4 border-b bg-gray-50">
                         <div className="h-32 w-full rounded-lg border bg-white p-3 text-left sm:h-32 sm:w-40 lg:w-44 tx-kpi-card">
                           <div className="tx-kpi-label">Items Out</div>
@@ -1948,17 +2004,18 @@ export default function ReportsPanel({ api }) {
                         </div>
                       </div>
                     ) : null}
-                    <TransactionReportTable data={transactionsFilteredRows} loading={loading} />
+                    <TransactionReportTable data={paginatedTransactions} loading={loading} />
                     <div className="p-4 flex items-center justify-between">
                       <div className="text-sm text-gray-600">
-                        Showing {txHasGenerated ? reportData.length : 0} of {txHasGenerated ? txTotal : 0} events
+                        {txHasGenerated
+                          ? `Showing ${paginatedTransactions.length} of ${filteredTransactionCount} matching events (total ${totalTransactionsCount})`
+                          : "Preparing transaction history..."}
                       </div>
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => {
                             if (!txHasGenerated || txPage <= 1) return;
-                            const prev = Math.max(1, txPage - 1);
-                            setTxPage(prev);
+                            setTxPage((prev) => Math.max(1, prev - 1));
                           }}
                           disabled={txPage <= 1 || !txHasGenerated || loading}
                           className="px-2 py-1 bg-gray-100 rounded disabled:opacity-50"
@@ -1966,17 +2023,15 @@ export default function ReportsPanel({ api }) {
                           Previous
                         </button>
                         <span className="text-sm text-gray-700">
-                          Page {txPage} of {Math.max(1, Math.ceil((txTotal || 0) / txPageSize))}
+                          Page {txPage} of {filteredMaxPage}
                         </span>
                         <button
                           onClick={() => {
                             if (!txHasGenerated) return;
-                            const maxPage = Math.max(1, Math.ceil((txTotal || 0) / txPageSize));
-                            if (txPage >= maxPage) return;
-                            const next = Math.min(maxPage, txPage + 1);
-                            setTxPage(next);
+                            if (txPage >= filteredMaxPage) return;
+                            setTxPage((prev) => Math.min(filteredMaxPage, prev + 1));
                           }}
-                          disabled={!txHasGenerated || txPage >= Math.ceil((txTotal || 0) / txPageSize) || loading}
+                          disabled={!txHasGenerated || txPage >= filteredMaxPage || loading}
                           className="px-2 py-1 bg-gray-100 rounded disabled:opacity-50"
                         >
                           Next
