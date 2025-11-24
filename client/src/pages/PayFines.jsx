@@ -3,7 +3,7 @@ import NavBar from "../components/NavBar";
 import { useAuth } from "../AuthContext";
 import { formatCurrency, formatDate } from "../utils";
 import { getMyFines, payFine } from "../api";
-import { ConfirmDialog, ToastBanner } from "../components/staff/shared/Feedback";
+import { ToastBanner } from "../components/staff/shared/Feedback";
 import "./PayFines.css";
 
 export default function PayFines() {
@@ -14,7 +14,11 @@ export default function PayFines() {
   const [payingId, setPayingId] = useState(null);
   const [message, setMessage] = useState("");
   const [toast, setToast] = useState(null);
-  const [confirmState, setConfirmState] = useState(null);
+  const [paymentFine, setPaymentFine] = useState(null);
+  const [cardNumber, setCardNumber] = useState("");
+  const [cardCvv, setCardCvv] = useState("");
+  const [cardExpiry, setCardExpiry] = useState("");
+  const [cardName, setCardName] = useState("");
 
   const showToast = useCallback((payload) => {
     if (!payload) return;
@@ -48,31 +52,75 @@ export default function PayFines() {
     [fines]
   );
 
+  const resetPaymentForm = () => {
+    setCardNumber("");
+    setCardCvv("");
+    setCardExpiry("");
+    setCardName("");
+  };
+
   const handlePay = (fine) => {
     if (!fine?.fine_id || fine.outstanding <= 0) return;
-    const amount = Number(fine.outstanding).toFixed(2);
-    setConfirmState({
-      title: "Confirm payment",
-      message: `Pay $${amount} for fine #${fine.fine_id}?`,
-      confirmLabel: "Pay now",
-      cancelLabel: "Cancel",
-      onConfirm: async () => {
-        setPayingId(fine.fine_id);
-        setMessage("");
-        try {
-          await payFine(token, fine.fine_id);
-          setMessage(`Fine #${fine.fine_id} paid successfully.`);
-          showToast({ type: "success", text: `Paid $${amount} for fine #${fine.fine_id}.` });
-          await fetchFines();
-        } catch (err) {
-          const msg = err?.data?.error || err?.message || "Payment failed.";
-          setError(msg);
-          showToast({ type: "error", text: msg });
-        } finally {
-          setPayingId(null);
-        }
-      },
-    });
+    setPaymentFine(fine);
+    resetPaymentForm();
+  };
+
+  const formatCardNumber = (value = "") => {
+    const digitsOnly = value.replace(/\D/g, "").slice(0, 16);
+    const groups = digitsOnly.match(/.{1,4}/g) || [];
+    return groups.join(" ");
+  };
+
+  const formatExpiry = (value = "") => {
+    const digits = value.replace(/\D/g, "").slice(0, 4);
+    if (digits.length <= 2) return digits;
+    return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  };
+
+  const sanitizedCardNumber = cardNumber.replace(/\D/g, "");
+  const isCardValid = sanitizedCardNumber.length === 16;
+  const isCvvValid = /^[0-9]{3,4}$/.test(cardCvv.trim());
+  const isExpiryValid = /^(0[1-9]|1[0-2])\/(0[1-9]|[12][0-9]|3[01])$/.test(cardExpiry.trim());
+  const isNameValid = cardName.trim().length > 1;
+  const canSubmitPayment = paymentFine && isCardValid && isCvvValid && isExpiryValid && isNameValid && !payingId;
+
+  const submitPayment = async (e) => {
+    e.preventDefault();
+    if (!paymentFine) return;
+    if (!isCardValid) {
+      showToast({ type: "error", text: "Enter a valid 16-digit card number." });
+      return;
+    }
+    if (!isCvvValid) {
+      showToast({ type: "error", text: "CVV must be 3 or 4 digits." });
+      return;
+    }
+    if (!isExpiryValid) {
+      showToast({ type: "error", text: "Use MM/DD format for expiry date." });
+      return;
+    }
+    if (!isNameValid) {
+      showToast({ type: "error", text: "Card holder name is required." });
+      return;
+    }
+
+    const amount = Number(paymentFine.outstanding).toFixed(2);
+    setPayingId(paymentFine.fine_id);
+    setMessage("");
+    try {
+      await payFine(token, paymentFine.fine_id);
+      setMessage(`Fine #${paymentFine.fine_id} paid successfully.`);
+      showToast({ type: "success", text: `Paid $${amount} for fine #${paymentFine.fine_id}.` });
+      setPaymentFine(null);
+      resetPaymentForm();
+      await fetchFines();
+    } catch (err) {
+      const msg = err?.data?.error || err?.message || "Payment failed.";
+      setError(msg);
+      showToast({ type: "error", text: msg });
+    } finally {
+      setPayingId(null);
+    }
   };
 
   return (
@@ -150,21 +198,88 @@ export default function PayFines() {
           </div>
         </div>
       </main>
-      <ConfirmDialog
-        open={Boolean(confirmState)}
-        title={confirmState?.title}
-        message={confirmState?.message}
-        confirmLabel={confirmState?.confirmLabel || "Confirm"}
-        cancelLabel={confirmState?.cancelLabel || "Cancel"}
-        tone="primary"
-        onConfirm={async () => {
-          if (confirmState?.onConfirm) {
-            await confirmState.onConfirm();
-          }
-          setConfirmState(null);
-        }}
-        onCancel={() => setConfirmState(null)}
-      />
+      {paymentFine && (
+        <div className="pay-fines-modal">
+          <div className="pay-fines-modal__backdrop" onClick={() => setPaymentFine(null)} />
+          <div className="pay-fines-modal__card">
+            <header className="pay-fines-modal__header">
+              <div>
+                <p className="pay-fines-modal__eyebrow">Pay fine #{paymentFine.fine_id}</p>
+                <h3>{formatCurrency(paymentFine.outstanding)}</h3>
+                <p className="pay-fines-modal__item">{paymentFine.item_title || "Library item"}</p>
+              </div>
+              <button type="button" className="pay-fines-modal__close" onClick={() => setPaymentFine(null)}>
+                ✕
+              </button>
+            </header>
+            <form onSubmit={submitPayment} className="pay-fines-modal__form">
+              <label className="pay-fines-field">
+                <span>Card number</span>
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  placeholder="1234 5678 9012 3456"
+                  value={cardNumber}
+                  onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
+                  maxLength={19}
+                  required
+                />
+                {!isCardValid && cardNumber && <small className="pay-fines-field__error">Enter exactly 16 digits.</small>}
+              </label>
+              <div className="pay-fines-modal__row">
+                <label className="pay-fines-field">
+                  <span>CVV</span>
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    placeholder="123"
+                    value={cardCvv}
+                    onChange={(e) => setCardCvv(e.target.value)}
+                    maxLength={4}
+                    required
+                  />
+                  {!isCvvValid && cardCvv && <small className="pay-fines-field__error">3-4 digits.</small>}
+                </label>
+                <label className="pay-fines-field">
+                  <span>Expiry (MM/DD)</span>
+                  <input
+                    type="text"
+                    placeholder="12/31"
+                    value={cardExpiry}
+                    onChange={(e) => setCardExpiry(formatExpiry(e.target.value))}
+                    maxLength={5}
+                    required
+                  />
+                  {!isExpiryValid && cardExpiry && <small className="pay-fines-field__error">Use MM/DD.</small>}
+                </label>
+              </div>
+              <label className="pay-fines-field">
+                <span>Card holder name</span>
+                <input
+                  type="text"
+                  placeholder="Full name"
+                  value={cardName}
+                  onChange={(e) => setCardName(e.target.value)}
+                  required
+                />
+                {!isNameValid && cardName && <small className="pay-fines-field__error">Required.</small>}
+              </label>
+              <div className="pay-fines-modal__actions">
+                <button type="button" className="pay-fines-modal__btn pay-fines-modal__btn--ghost" onClick={() => setPaymentFine(null)}>
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="pay-fines-modal__btn pay-fines-modal__btn--primary"
+                  disabled={!canSubmitPayment}
+                >
+                  {payingId === paymentFine.fine_id ? "Processing…" : `Pay ${formatCurrency(paymentFine.outstanding)}`}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

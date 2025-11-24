@@ -9,13 +9,17 @@ export default function Locked() {
     //const [amount,setAmount] = useState(0);
     //const [isEditing,setIsEditing] = useState(true);
 
-    //card detail variables
+    // card detail variables
     const [cardNum,setCardNum] = useState("");
     const[cvv,setCvv] = useState("");
     const[expiry,setExpiry] = useState("");
     const[holder,setHolder] = useState("");
 
-    const isDisabled = !cardNum || !cvv || !expiry || !holder;
+    const sanitizedCardNum = cardNum.replace(/\D/g, "");
+    const isCardValid = sanitizedCardNum.length === 16;
+    const isCvvValid = /^[0-9]{3,4}$/.test(cvv.trim());
+    const isExpiryValid = /^(0[1-9]|1[0-2])\/(0[1-9]|[12][0-9]|3[01])$/.test(expiry.trim());
+    const isDisabled = !cardNum || !cvv || !expiry || !holder || !isCardValid || !isCvvValid || !isExpiryValid;
     const [due, setDue] = useState(0);
     const [toast, setToast] = useState(null);
     const showToast = useCallback((payload) => {
@@ -29,9 +33,35 @@ export default function Locked() {
         navigate('/login');
     }
 
+    const formatCardNumber = (value = "") => {
+        const digitsOnly = value.replace(/\D/g, "").slice(0, 16);
+        const groups = digitsOnly.match(/.{1,4}/g) || [];
+        return groups.join(" ");
+    };
+
+    const formatCvv = (value = "") => value.replace(/\D/g, "").slice(0, 4);
+
+    const formatExpiry = (value = "") => {
+        const digits = value.replace(/\D/g, "").slice(0, 4);
+        if (digits.length <= 2) return digits;
+        return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+    };
+
     async function handlePay(){
         if(!cardNum || !cvv || !expiry || !holder){
-            setToast({ type: "error", message: "Please fill all payment fields" });
+            showToast({ type: "error", text: "Please fill all payment fields" });
+            return;
+        }
+        if(!isCardValid){
+            showToast({ type: "error", text: "Card number must be 13-19 digits" });
+            return;
+        }
+        if(!isCvvValid){
+            showToast({ type: "error", text: "CVV must be 3 or 4 digits" });
+            return;
+        }
+        if(!isExpiryValid){
+            showToast({ type: "error", text: "Use MM/DD format for expiry date" });
             return;
         }
         try{
@@ -88,14 +118,15 @@ export default function Locked() {
                             </div>*/}
                             <div className="cardNum-field">
                                 <label htmlFor="card-number">Card Number:</label>
-                                <input className = "cardNum-input"
+                                    <input className = "cardNum-input"
                                     type = "tel"
                                     id = "card-number"
                                     inputMode="numeric"
-                                    pattern="[0-9\s]{13,19}" 
+                                    pattern="[0-9\s]{16,19}" 
                                     maxLength="19" 
                                     placeholder="---- ---- ---- ----" 
-                                    onChange={e=>setCardNum(e.target.value)}
+                                    value={cardNum}
+                                    onChange={e=>setCardNum(formatCardNumber(e.target.value))}
                                     required
                                 >
                                 </input>
@@ -110,7 +141,8 @@ export default function Locked() {
                                     maxLength="4"
                                     id="card-CVV"
                                     placeholder="CVV"
-                                    onChange={e=>setCvv(e.target.value)}
+                                    value={cvv}
+                                    onChange={e=>setCvv(formatCvv(e.target.value))}
                                     required
                                     >
                                     </input>
@@ -119,9 +151,11 @@ export default function Locked() {
                                     <label htmlFor = "expiry-date">Expiry Date:</label>
                                     <input id ="expiry-date"
                                     type="text"
-                                    pattern="(0[1-9]|1[0-2])/[0-9]{2}"
-                                    onChange={e=>setExpiry(e.target.value)}
-                                    placeholder="MM/YY"
+                                    pattern="(0[1-9]|1[0-2])/(0[1-9]|[12][0-9]|3[01])"
+                                    value={expiry}
+                                    maxLength="5"
+                                    onChange={e=>setExpiry(formatExpiry(e.target.value))}
+                                    placeholder="MM/DD"
                                     required
                                     >
                                     </input>
