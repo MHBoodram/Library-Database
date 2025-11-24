@@ -28,7 +28,7 @@ export async function fetchUserRole(conn, userId) {
 export async function expireReadyHolds(conn) {
   const [rows] = await conn.query(
     `
-      SELECT hold_id, item_id, copy_id
+      SELECT hold_id, item_id, copy_id, user_id, expires_at
       FROM hold
       WHERE status = 'ready'
         AND expires_at IS NOT NULL
@@ -44,6 +44,28 @@ export async function expireReadyHolds(conn) {
       [row.hold_id]
     );
     await resolveHoldNotifications(conn, row.hold_id);
+
+    const liftedExists = await notificationExists(conn, {
+      userId: row.user_id,
+      type: NOTIFICATION_TYPES.HOLD_LIFTED,
+      uniqueField: "hold_id",
+      uniqueValue: row.hold_id,
+    });
+    if (!liftedExists) {
+      await createNotification(conn, {
+        userId: row.user_id,
+        type: NOTIFICATION_TYPES.HOLD_LIFTED,
+        title: "Hold expired",
+        message: "Your hold has expired and was returned to the queue.",
+        metadata: {
+          hold_id: row.hold_id,
+          item_id: row.item_id,
+          copy_id: row.copy_id,
+          expired_at: row.expires_at ? iso(row.expires_at) : null,
+        },
+      });
+    }
+
     if (row.copy_id) {
       await conn.execute("UPDATE copy SET status='available' WHERE copy_id=?", [row.copy_id]);
       await assignCopyToNextHold(conn, row.copy_id, row.item_id);

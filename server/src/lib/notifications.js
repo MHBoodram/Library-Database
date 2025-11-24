@@ -226,8 +226,6 @@ export async function resolveHoldNotifications(conn, holdId, status = NOTIFICATI
 
 export async function createHoldReadyNotification(conn, { holdId, userId, itemId, copyId, itemTitle, availableSince, expiresAt, queuePosition }) {
   if (!holdId || !userId) return;
-  // Hold notifications are currently disabled.
-  return;
   const metadata = {
     hold_id: holdId,
     item_id: itemId ?? null,
