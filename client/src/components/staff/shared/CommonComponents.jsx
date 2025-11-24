@@ -8,8 +8,12 @@ export function Th({ children }) {
   );
 }
 
-export function Td({ children, className = "" }) {
-  return <td className={`px-4 py-3 align-top ${className}`}>{children}</td>;
+export function Td({ children, className = "", colSpan = 1 }) {
+  return (
+    <td colSpan={colSpan} className={`px-4 py-3 align-top ${className}`}>
+      {children}
+    </td>
+  );
 }
 
 export function StatusPill({ status }) {

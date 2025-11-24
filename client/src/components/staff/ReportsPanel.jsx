@@ -322,10 +322,12 @@ function UserTypeBreakdownList({ breakdown, total }) {
           const numeric = Number(value || 0);
           const percent = safeTotal ? ((numeric / safeTotal) * 100).toFixed(1) : "0.0";
           return (
-            <li key={label} className="flex items-center gap-2">
-              <span className="flex-1 text-gray-700 capitalize">{label}</span>
-              <span className="text-gray-900 font-semibold">{numberFormatter.format(numeric)}</span>
-              <span className="text-xs text-gray-500">{percent}%</span>
+            <li key={label} className="flex flex-wrap items-center justify-between gap-1">
+              <span className="text-gray-700 capitalize">{label}</span>
+              <div className="flex items-baseline gap-3">
+                <span className="text-gray-900 font-semibold">{numberFormatter.format(numeric)}</span>
+                <span className="text-xs text-gray-500">{percent}%</span>
+              </div>
             </li>
           );
         })}
@@ -423,15 +425,72 @@ function NewPatronInsights({ report, loading }) {
   );
 }
 
+
+
 function NewPatronsReportTable({ data, loading }) {
+  const [expandedRowKey, setExpandedRowKey] = useState("");
+  const rows = Array.isArray(data) ? data : [];
+  const activeRowKey = expandedRowKey;
+
   if (loading) {
     return <div className="p-8 text-center text-gray-500">Loading report...</div>;
   }
-  const rows = Array.isArray(data) ? data : [];
   if (!rows.length) {
     return <div className="p-8 text-center text-gray-500">No patron signups in the selected window</div>;
   }
+
   const total = rows.reduce((sum, row) => sum + Number(row.new_patrons || 0), 0);
+
+  const renderPatronDetails = (row, startLabel, endLabel) => {
+    const patrons = Array.isArray(row.patrons) ? row.patrons : [];
+    if (!patrons.length) {
+      return (
+        <div className="rounded-md border bg-white p-3 text-sm text-gray-600">
+          No patrons joined during this period.
+        </div>
+      );
+    }
+
+    return (
+      <div className="rounded-md border bg-white p-3 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-3">
+          <div>
+            <p className="text-sm font-semibold text-gray-900">
+              {numberFormatter.format(patrons.length)} patron{patrons.length === 1 ? "" : "s"}
+            </p>
+            <p className="text-xs text-gray-500">
+              Joined between {startLabel}
+              {row.start_date && row.end_date && row.start_date !== row.end_date ? ` and ${endLabel}` : ""}
+            </p>
+          </div>
+          <span className="text-xs text-gray-500">Click a row to pin, or hover to preview.</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-xs sm:text-sm">
+            <thead className="text-left text-[11px] uppercase tracking-wide text-gray-500">
+              <tr>
+                <th className="px-3 py-2 font-semibold">Patron</th>
+                <th className="px-3 py-2 font-semibold">Patron ID</th>
+                <th className="px-3 py-2 font-semibold">Type</th>
+              </tr>
+            </thead>
+            <tbody>
+              {patrons.map((patron) => (
+                <tr key={`${row.row_key || row.period}-${patron.patron_id}`} className="border-t text-gray-900">
+                  <td className="px-3 py-2">
+                    <div className="font-medium">{patron.patron_name || `Patron ${patron.patron_id}`}</div>
+                  </td>
+                  <td className="px-3 py-2 text-sm text-gray-700">{patron.patron_id ?? "-"}</td>
+                  <td className="px-3 py-2 text-sm text-gray-700">{toTitle(patron.patron_type || "unknown")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full text-sm">
@@ -441,49 +500,80 @@ function NewPatronsReportTable({ data, loading }) {
             <Th>New Patrons</Th>
             <Th>Cumulative</Th>
             <Th>% of Total</Th>
-            <Th>Δ vs Prev</Th>
+            <Th>Delta vs Prev</Th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => {
-            const startLabel = row.start_date ? formatDate(row.start_date) : "—";
-            const endLabel = row.end_date ? formatDate(row.end_date) : "—";
-            const rowKey = `${row.period}-${row.start_date ?? row.period}`;
+            const startLabel = row.start_date ? formatDate(row.start_date) : "-";
+            const endLabel = row.end_date ? formatDate(row.end_date) : "-";
+            const rowKey = row.row_key || `${row.period}-${row.start_date ?? row.period}`;
+            const patrons = Array.isArray(row.patrons) ? row.patrons : [];
+            const isActive = activeRowKey === rowKey;
+            const arrowRotation = isActive ? "rotate-180" : "";
+
             return (
-              <tr key={rowKey} className="border-t">
-                <Td>
-                  <div className="font-semibold text-gray-900">{row.period}</div>
-                  <div className="text-xs text-gray-500">
-                    {row.start_date && row.end_date && row.start_date !== row.end_date
-                      ? `${startLabel} → ${endLabel}`
-                      : startLabel}
-                  </div>
-                </Td>
-              <Td>
-                <span
-                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
-                    row.new_patrons > 0 ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600"
-                  }`}
+              <React.Fragment key={rowKey}>
+                <tr
+                  className={`border-t transition-colors ${
+                    isActive ? "bg-blue-50" : "hover:bg-gray-50"
+                  } cursor-pointer`}
+                  onClick={() => setExpandedRowKey((prev) => (prev === rowKey ? "" : rowKey))}
                 >
-                  {numberFormatter.format(row.new_patrons || 0)}
-                </span>
-              </Td>
-              <Td className="font-medium text-gray-900">{numberFormatter.format(row.cumulative || 0)}</Td>
-              <Td className="text-gray-900">
-                {row.percent_of_total != null
-                  ? `${Number(row.percent_of_total).toFixed(1)}%`
-                  : "—"}
-              </Td>
-              <Td className="text-gray-900">{formatPercent(row.change_percent)}</Td>
-            </tr>
+                  <Td>
+                    <div className="font-semibold text-gray-900">{row.period}</div>
+                    <div className="text-xs text-gray-500">
+                      {row.start_date && row.end_date && row.start_date !== row.end_date
+                        ? `${startLabel} to ${endLabel}`
+                        : startLabel}
+                    </div>
+                    <button
+                      type="button"
+                      className="mt-1 inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 transition hover:bg-blue-100"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setExpandedRowKey((prev) => (prev === rowKey ? "" : rowKey));
+                      }}
+                    >
+                      View {numberFormatter.format(patrons.length)} patron{patrons.length === 1 ? "" : "s"}
+                      <svg
+                        className={`h-1.5 w-1.5 text-blue-700 transition-transform ${arrowRotation}`}
+                        viewBox="0 0 8 5"
+                        aria-hidden="true"
+                      >
+                        <path d="M4 5L0 0h8L4 5z" fill="currentColor" />
+                      </svg>
+                    </button>
+                  </Td>
+                  <Td>
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+                        row.new_patrons > 0 ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600"
+                      }`}
+                    >
+                      {numberFormatter.format(row.new_patrons || 0)}
+                    </span>
+                  </Td>
+                  <Td className="font-medium text-gray-900">{numberFormatter.format(row.cumulative || 0)}</Td>
+                  <Td className="text-gray-900">
+                    {row.percent_of_total != null ? `${Number(row.percent_of_total).toFixed(1)}%` : "-"}
+                  </Td>
+                  <Td className="text-gray-900">{formatPercent(row.change_percent)}</Td>
+                </tr>
+                {isActive ? (
+                  <tr className="border-t bg-gray-50">
+                    <Td colSpan={5}>{renderPatronDetails(row, startLabel, endLabel)}</Td>
+                  </tr>
+                ) : null}
+              </React.Fragment>
             );
           })}
           <tr className="bg-gray-50 border-t">
             <Td className="font-semibold">Grand Total</Td>
             <Td className="font-semibold">{numberFormatter.format(total)}</Td>
-            <Td className="font-semibold text-gray-500">—</Td>
+            <Td className="font-semibold text-gray-500">-</Td>
             <Td className="font-semibold text-gray-500">100%</Td>
-            <Td className="font-semibold text-gray-500">—</Td>
+            <Td className="font-semibold text-gray-500">-</Td>
           </tr>
         </tbody>
       </table>
@@ -1481,8 +1571,21 @@ export default function ReportsPanel({ api }) {
   // handleRefresh removed (unused)
 
   function handleExport() {
-    const exportRows = activeReport === 'overdue' ? overdueFilteredRows : (activeReport === 'transactions' ? transactionsFilteredRows : reportData);
-    if (!exportRows || exportRows.length === 0) { 
+    const baseRows =
+      activeReport === "overdue"
+        ? overdueFilteredRows
+        : activeReport === "transactions"
+        ? transactionsFilteredRows
+        : reportData;
+    const exportRows =
+      activeReport === "newPatrons"
+        ? baseRows.map((row) => {
+            const safeRow = row || {};
+            const { patrons, ...rest } = safeRow;
+            return rest;
+          })
+        : baseRows;
+    if (!exportRows || exportRows.length === 0) {
       showToast({ type: "error", text: "No data to export" });
       return;
     }

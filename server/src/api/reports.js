@@ -485,6 +485,7 @@ export const newPatronsByMonth = (JWT_SECRET) => async (req, res) => {
         label: bucketLabel(cursor, timeframe),
         total: 0,
         breakdown: {},
+        patrons: [],
       });
       cursor = advanceBucket(cursor, timeframe);
     }
@@ -503,11 +504,17 @@ export const newPatronsByMonth = (JWT_SECRET) => async (req, res) => {
         const joined_at = normalizeDateString(row.joined_at);
         if (!joined_at) return null;
         availableUserTypes.add(userType);
+        const firstName = row.first_name || "";
+        const lastName = row.last_name || "";
+        const fullName = `${firstName} ${lastName}`.trim() || row.email || `User ${row.user_id}`;
         return {
           user_id: Number(row.user_id),
           joined_at,
           user_type: userType,
           email: row.email,
+          first_name: firstName,
+          last_name: lastName,
+          full_name: fullName,
         };
       })
       .filter(Boolean);
@@ -527,6 +534,11 @@ export const newPatronsByMonth = (JWT_SECRET) => async (req, res) => {
       if (!bucket) return;
       bucket.total += 1;
       bucket.breakdown[row.user_type] = (bucket.breakdown[row.user_type] || 0) + 1;
+      bucket.patrons.push({
+        patron_id: row.user_id,
+        patron_name: row.full_name,
+        patron_type: row.user_type,
+      });
     });
 
     const totalNewPatrons = filteredRows.length;
@@ -548,10 +560,12 @@ export const newPatronsByMonth = (JWT_SECRET) => async (req, res) => {
         cumulative: runningTotal,
         percentOfTotal,
         changePercent: change === null ? null : Number(change.toFixed(1)),
+        patrons: bucket.patrons,
       };
     });
 
     const tableRows = timeline.map((entry) => ({
+      row_key: entry.key,
       period: entry.label,
       start_date: entry.bucketStart,
       end_date: entry.bucketEnd,
@@ -559,6 +573,7 @@ export const newPatronsByMonth = (JWT_SECRET) => async (req, res) => {
       cumulative: entry.cumulative,
       percent_of_total: entry.percentOfTotal,
       change_percent: entry.changePercent,
+      patrons: Array.isArray(entry.patrons) ? entry.patrons : [],
     }));
 
     const averagePerBucket =
