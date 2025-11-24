@@ -6,11 +6,12 @@ import {
   notificationExists,
 } from "./notifications.js";
 
-const DUE_SOON_HOURS = Number(process.env.LOAN_DUE_SOON_HOURS || 48);
+const DUE_SOON_HOURS = Number(process.env.LOAN_DUE_SOON_HOURS || 24);
 const LOST_AFTER_DAYS = Number(process.env.LOAN_LOST_AFTER_DAYS || 28);
 const LOST_SUSPEND_GRACE_DAYS = Number(process.env.LOST_SUSPEND_GRACE_DAYS || 3);
 const LOST_REPLACEMENT_FEE = Number(process.env.LOST_REPLACEMENT_FEE || 20);
-const ROOM_EXPIRING_MINUTES = Number(process.env.ROOM_EXPIRING_MINUTES || 30);
+const ROOM_EXPIRING_MINUTES = Number(process.env.ROOM_EXPIRING_MINUTES || 15);
+const LOST_WARNING_DAYS_BEFORE_LOST = Number(process.env.LOST_WARNING_DAYS_BEFORE_LOST || 3);
 
 function hoursFromNow(hours) {
   return new Date(Date.now() + hours * 60 * 60 * 1000);
@@ -101,7 +102,7 @@ export async function sweepLoanNotifications() {
     const now = new Date();
     const dueSoonAt = hoursFromNow(DUE_SOON_HOURS);
     const lostCutoff = hoursFromNow(-24 * LOST_AFTER_DAYS);
-    const suspendCutoff = hoursFromNow(-24 * (LOST_AFTER_DAYS + LOST_SUSPEND_GRACE_DAYS));
+    const lostWarningStart = hoursFromNow(-24 * (LOST_AFTER_DAYS - LOST_WARNING_DAYS_BEFORE_LOST));
 
     const [loans] = await conn.query(
       `
@@ -128,7 +129,6 @@ export async function sweepLoanNotifications() {
           type: NOTIFICATION_TYPES.DUE_SOON,
           uniqueField: 'loan_id',
           uniqueValue: loan.loan_id,
-          statusNot: 'resolved',
         });
         if (!exists) {
           await createNotification(conn, {
@@ -149,7 +149,6 @@ export async function sweepLoanNotifications() {
           type: NOTIFICATION_TYPES.OVERDUE,
           uniqueField: 'loan_id',
           uniqueValue: loan.loan_id,
-          statusNot: 'resolved',
         });
         if (!exists) {
           await createNotification(conn, {
@@ -163,68 +162,35 @@ export async function sweepLoanNotifications() {
         continue;
       }
 
-      // lost threshold reached
-      if (due <= lostCutoff) {
-        await markLoanAndCopyLost(conn, loan);
-        await ensureLostFine(conn, loan);
-        const lostExists = await notificationExists(conn, {
-          userId: loan.user_id,
-          type: NOTIFICATION_TYPES.LOST_MARKED,
-          uniqueField: 'loan_id',
-          uniqueValue: loan.loan_id,
-        });
-        if (!lostExists) {
-          await createNotification(conn, {
-            userId: loan.user_id,
-            type: NOTIFICATION_TYPES.LOST_MARKED,
-            title: `Marked lost: ${loan.item_title}`,
-            message: `This item has been marked lost. A replacement fee may apply.`,
-            metadata: meta,
-          });
-        }
-
-        // Lost warning / suspension countdown
-        const suspendExists = await notificationExists(conn, {
+      // lost warning window (before lost cutoff)
+      if (isActiveLoan && due < now && due <= lostWarningStart && due > lostCutoff) {
+        const warnExists = await notificationExists(conn, {
           userId: loan.user_id,
           type: NOTIFICATION_TYPES.LOST_WARNING,
           uniqueField: 'loan_id',
           uniqueValue: loan.loan_id,
         });
-        if (!suspendExists) {
+        if (!warnExists) {
           await createNotification(conn, {
             userId: loan.user_id,
             type: NOTIFICATION_TYPES.LOST_WARNING,
-            title: `Account warning for lost item`,
-            message: `Please pay the lost fee within ${LOST_SUSPEND_GRACE_DAYS} days to avoid suspension.`,
+            title: `At risk of lost: ${loan.item_title}`,
+            message: `This item is overdue and will be marked lost soon. Please return it or pay the replacement fee.`,
             actionRequired: true,
-            metadata: { ...meta, suspend_after: iso(hoursFromNow(24 * LOST_SUSPEND_GRACE_DAYS)) },
+            metadata: meta,
           });
         }
+      }
 
-        if (due <= suspendCutoff) {
-          const suspended = await notificationExists(conn, {
-            userId: loan.user_id,
-            type: NOTIFICATION_TYPES.SUSPENDED,
-            uniqueField: 'loan_id',
-            uniqueValue: loan.loan_id,
-          });
-          if (!suspended) {
-            await createNotification(conn, {
-              userId: loan.user_id,
-              type: NOTIFICATION_TYPES.SUSPENDED,
-              title: `Account suspended`,
-              message: `Your account has been temporarily suspended due to unpaid lost item fees.`,
-              actionRequired: true,
-              metadata: meta,
-            });
-          }
-        }
+      // lost threshold reached
+      if (due <= lostCutoff) {
+        await markLoanAndCopyLost(conn, loan);
+        await ensureLostFine(conn, loan);
+        // No longer emitting lost_marked or suspended notifications.
       }
     }
 
-    // Auto-resolve suspension-related notifications once accounts are active again.
-    // If an account is no longer locked (is_active = 1), clear any lingering
-    // LOST_WARNING or SUSPENDED notifications so they don't confuse patrons.
+    // Auto-resolve lost warnings if account is active (no suspensions emitted)
     await conn.execute(
       `
         UPDATE notification n
@@ -233,7 +199,7 @@ export async function sweepLoanNotifications() {
           n.status = 'resolved',
           n.read_at = COALESCE(n.read_at, NOW()),
           n.resolved_at = NOW()
-        WHERE n.type IN ('lost_warning','suspended')
+        WHERE n.type = 'lost_warning'
           AND n.status <> 'resolved'
           AND a.is_active = 1
       `

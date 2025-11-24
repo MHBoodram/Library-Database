@@ -101,10 +101,10 @@ export async function listUserNotifications(runner, userId, { status = "open", l
 /**
  * Checks for existence of a notification by user, type, and optionally a unique field in metadata and status.
  * @param {object} runner - DB connection
- * @param {object} opts - { userId, type, uniqueField, uniqueValue, statusNot, hint }
+ * @param {object} opts - { userId, type, uniqueField, uniqueValue, hint }
  * @returns {Promise<boolean>}
  */
-export async function notificationExists(runner, { userId, type, uniqueField, uniqueValue, statusNot, hint }) {
+export async function notificationExists(runner, { userId, type, uniqueField, uniqueValue, hint }) {
   const conn = ensureRunner(runner);
   if (!userId || !type) return false;
 
@@ -118,10 +118,6 @@ export async function notificationExists(runner, { userId, type, uniqueField, un
         AND JSON_EXTRACT(metadata, ?) = ?
     `;
     const params = [userId, type, `$.${uniqueField}`, uniqueValue];
-    if (statusNot) {
-      query += ' AND status != ?';
-      params.push(statusNot);
-    }
     query += '\n      LIMIT 1';
     const [rows] = await conn.query(query, params);
     return rows.length > 0;
@@ -137,10 +133,6 @@ export async function notificationExists(runner, { userId, type, uniqueField, un
       ${likeHint ? "AND metadata LIKE ?" : ""}
   `;
   const params = likeHint ? [userId, type, likeHint] : [userId, type];
-  if (statusNot) {
-    query += ' AND status != ?';
-    params.push(statusNot);
-  }
   query += '\n    LIMIT 1';
   const [rows] = await conn.query(query, params);
   return rows.length > 0;
@@ -234,6 +226,8 @@ export async function resolveHoldNotifications(conn, holdId, status = NOTIFICATI
 
 export async function createHoldReadyNotification(conn, { holdId, userId, itemId, copyId, itemTitle, availableSince, expiresAt, queuePosition }) {
   if (!holdId || !userId) return;
+  // Hold notifications are currently disabled.
+  return;
   const metadata = {
     hold_id: holdId,
     item_id: itemId ?? null,
@@ -243,13 +237,12 @@ export async function createHoldReadyNotification(conn, { holdId, userId, itemId
     expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
     queue_position: queuePosition ?? null,
   };
-  // Only create if not already present for this user, type, hold_id, and status != 'resolved'
+  // Only create if not already present for this user, type, and hold_id
   const exists = await notificationExists(conn, {
     userId,
     type: NOTIFICATION_TYPES.HOLD_READY,
     uniqueField: 'hold_id',
     uniqueValue: holdId,
-    statusNot: 'resolved',
   });
   if (exists) return;
   await conn.execute(
