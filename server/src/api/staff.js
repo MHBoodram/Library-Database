@@ -97,6 +97,11 @@ export const listFines = (JWT_SECRET) => async (req, res) => {
           WHERE f.loan_id = l.loan_id 
             AND f.status NOT IN ('paid', 'waived')
         )
+        AND NOT EXISTS (
+          SELECT 1 FROM fine f2
+          WHERE f2.loan_id = l.loan_id
+            AND f2.reason = 'lost'
+        )
     `);
   } catch (err) {
     console.error("Failed to auto-create overdue fines:", err.message);
