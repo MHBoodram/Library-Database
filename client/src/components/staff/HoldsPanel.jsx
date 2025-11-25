@@ -110,7 +110,11 @@ export default function HoldsPanel({ api }) {
                       {hold.status}
                     </span>
                   </Td>
-                  <Td>{hold.status === "queued" ? hold.queue_position : hold.queue_position || "—"}</Td>
+                  <Td>
+                    {hold.status === "queued"
+                      ? (hold.queue_display_position ?? hold.queue_position ?? "-")
+                      : (hold.queue_display_position ?? hold.queue_position ?? "-")}
+                  </Td>
                   <Td>
                     {hold.status === "ready" ? (
                       <>

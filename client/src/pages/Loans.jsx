@@ -306,11 +306,12 @@ export default function Loans() {
                         <span className={`hold-status ${hold.status}`}>{hold.status}</span>
                       </Td>
                       <Td>
-                        {hold.status === "queued"
-                          ? hold.queue_position
-                          : hold.status === "ready"
-                            ? "Ready"
-                            : "—"}
+                        {(() => {
+                          const queuePos = hold.queue_display_position ?? hold.queue_position;
+                          if (hold.status === "queued") return queuePos ?? "-";
+                          if (hold.status === "ready") return "Ready";
+                          return "-";
+                        })()}
                       </Td>
                       <Td>
                         {hold.status === "ready"

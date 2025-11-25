@@ -273,21 +273,32 @@ export const listHolds = (JWT_SECRET) => async (req, res) => {
           h.available_since,
           h.expires_at,
           h.created_at,
-          h.item_id,
-          i.title AS item_title,
+        h.item_id,
+        i.title AS item_title,
           h.user_id,
           u.first_name,
           u.last_name,
           u.email,
           h.copy_id,
-          c.barcode AS copy_barcode
+          c.barcode AS copy_barcode,
+          CASE
+            WHEN h.status = 'queued' THEN (
+              SELECT COUNT(*)
+              FROM hold h2
+              WHERE h2.item_id = h.item_id
+                AND h2.status = 'queued'
+                AND h2.queue_position IS NOT NULL
+                AND h2.queue_position <= h.queue_position
+            )
+            ELSE h.queue_position
+          END AS queue_display_position
         FROM hold h
         JOIN item i ON i.item_id = h.item_id
         JOIN user u ON u.user_id = h.user_id
         LEFT JOIN copy c ON c.copy_id = h.copy_id
         ${whereSQL}
         ORDER BY FIELD(h.status,'ready','queued','fulfilled','cancelled','expired'),
-                 h.queue_position ASC,
+                 queue_display_position ASC,
                  h.created_at ASC
       `
       , params
