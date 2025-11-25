@@ -71,11 +71,13 @@ For locally hosted frontend/backend but using our Azure database:
   ```
 4. Run the webapp (run both frontend and backend)
 - Run the backend by opening a terminal to the project folder, navigating to the `server` directory and running `npm run dev`
+
   ```bash
   cd server
   npm run dev
   ```
 - Run the frontend by opening a terminal to the project folder, navigating to the `client` directory and running `npm run dev`
+
   ```bash
   cd client
   npm run dev
