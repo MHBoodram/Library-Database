@@ -74,7 +74,7 @@
 }
 
 /* Column widths */
-.accounts-table th:nth-child(1), .accounts-table td:nth-child(1) { width: 5%; }  /* ID */
+.accounts-table th:nth-child(1), .accounts-table td:nth-child(1) { width: 5%; }  /* User ID */
 .accounts-table th:nth-child(2), .accounts-table td:nth-child(2) { width: 11%; } /* Name */
 .accounts-table th:nth-child(3), .accounts-table td:nth-child(3) { width: 10%; } /* Email */
 .accounts-table th:nth-child(4), .accounts-table td:nth-child(4) { width: 10%; } /* Phone */

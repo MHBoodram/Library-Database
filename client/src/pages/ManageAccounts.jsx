@@ -267,7 +267,7 @@ export default function ManageAccounts() {
                         key={row.account_id}
                         className={row.flagged_for_deletion ? "flagged-row" : ""}
                       >
-                        <Td>#{row.account_id}</Td>
+                        <Td>#{row.user_id}</Td>
                         <Td>
                           {isEditing ? (
                             <div className="edit-name-fields">
