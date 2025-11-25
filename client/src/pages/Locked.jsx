@@ -15,11 +15,6 @@ export default function Locked() {
     const[expiry,setExpiry] = useState("");
     const[holder,setHolder] = useState("");
 
-    const sanitizedCardNum = cardNum.replace(/\D/g, "");
-    const isCardValid = sanitizedCardNum.length === 16;
-    const isCvvValid = /^[0-9]{3,4}$/.test(cvv.trim());
-    const isExpiryValid = /^(0[1-9]|1[0-2])\/(0[1-9]|[12][0-9]|3[01])$/.test(expiry.trim());
-    const isDisabled = !cardNum || !cvv || !expiry || !holder || !isCardValid || !isCvvValid || !isExpiryValid;
     const [due, setDue] = useState(0);
     const [toast, setToast] = useState(null);
     const showToast = useCallback((payload) => {
@@ -47,6 +42,25 @@ export default function Locked() {
         return `${digits.slice(0, 2)}/${digits.slice(2)}`;
     };
 
+    const isExpiryCurrentOrFuture = (value = "") => {
+        const match = value.match(/^(0[1-9]|1[0-2])\/([0-9]{2})$/);
+        if (!match) return false;
+        const month = Number(match[1]);
+        const year = Number(match[2]);
+        const now = new Date();
+        const currentYear = now.getFullYear() % 100;
+        const currentMonth = now.getMonth() + 1;
+        if (year < currentYear) return false;
+        if (year === currentYear && month < currentMonth) return false;
+        return true;
+    };
+
+    const sanitizedCardNum = cardNum.replace(/\D/g, "");
+    const isCardValid = sanitizedCardNum.length === 16;
+    const isCvvValid = /^[0-9]{3,4}$/.test(cvv.trim());
+    const isExpiryValid = isExpiryCurrentOrFuture(expiry.trim());
+    const isDisabled = !cardNum || !cvv || !expiry || !holder || !isCardValid || !isCvvValid || !isExpiryValid;
+
     async function handlePay(){
         if(!cardNum || !cvv || !expiry || !holder){
             showToast({ type: "error", text: "Please fill all payment fields" });
@@ -61,7 +75,7 @@ export default function Locked() {
             return;
         }
         if(!isExpiryValid){
-            showToast({ type: "error", text: "Use MM/DD format for expiry date" });
+            showToast({ type: "error", text: "Use MM/YY for a current or future expiry date" });
             return;
         }
         try{
@@ -124,7 +138,7 @@ export default function Locked() {
                                     inputMode="numeric"
                                     pattern="[0-9\s]{16,19}" 
                                     maxLength="19" 
-                                    placeholder="---- ---- ---- ----" 
+                                    placeholder="" 
                                     value={cardNum}
                                     onChange={e=>setCardNum(formatCardNumber(e.target.value))}
                                     autoComplete="off"
@@ -141,7 +155,7 @@ export default function Locked() {
                                     pattern="[0-9]{3,4}"
                                     maxLength="4"
                                     id="card-CVV"
-                                    placeholder="CVV"
+                                    placeholder=""
                                     value={cvv}
                                     onChange={e=>setCvv(formatCvv(e.target.value))}
                                     autoComplete="off"
@@ -150,14 +164,14 @@ export default function Locked() {
                                     </input>
                                 </div>
                                 <div className = "cardDate-field">
-                                    <label htmlFor = "expiry-date">Expiry Date:</label>
+                                    <label htmlFor = "expiry-date">Expiry Date (MM/YY):</label>
                                     <input id ="expiry-date"
                                     type="text"
-                                    pattern="(0[1-9]|1[0-2])/(0[1-9]|[12][0-9]|3[01])"
+                                    pattern="(0[1-9]|1[0-2])/[0-9]{2}"
                                     value={expiry}
                                     maxLength="5"
                                     onChange={e=>setExpiry(formatExpiry(e.target.value))}
-                                    placeholder="MM/DD"
+                                    placeholder=""
                                     autoComplete="off"
                                     required
                                     >
@@ -168,7 +182,7 @@ export default function Locked() {
                                 <label htmlFor="card-holder">Card Holder:</label>
                                 <input 
                                 className = "cardHolder-input"
-                                placeholder="Full Name"
+                                placeholder=""
                                 onChange={e=>setHolder(e.target.value)}
                                 autoComplete="off"
                                 required
