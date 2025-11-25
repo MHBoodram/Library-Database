@@ -127,6 +127,7 @@ export default function Locked() {
                                     placeholder="---- ---- ---- ----" 
                                     value={cardNum}
                                     onChange={e=>setCardNum(formatCardNumber(e.target.value))}
+                                    autoComplete="off"
                                     required
                                 >
                                 </input>
@@ -143,6 +144,7 @@ export default function Locked() {
                                     placeholder="CVV"
                                     value={cvv}
                                     onChange={e=>setCvv(formatCvv(e.target.value))}
+                                    autoComplete="off"
                                     required
                                     >
                                     </input>
@@ -156,6 +158,7 @@ export default function Locked() {
                                     maxLength="5"
                                     onChange={e=>setExpiry(formatExpiry(e.target.value))}
                                     placeholder="MM/DD"
+                                    autoComplete="off"
                                     required
                                     >
                                     </input>
@@ -167,6 +170,7 @@ export default function Locked() {
                                 className = "cardHolder-input"
                                 placeholder="Full Name"
                                 onChange={e=>setHolder(e.target.value)}
+                                autoComplete="off"
                                 required
                                 >
                                 </input>

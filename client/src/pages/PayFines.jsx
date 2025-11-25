@@ -212,7 +212,7 @@ export default function PayFines() {
                 ✕
               </button>
             </header>
-            <form onSubmit={submitPayment} className="pay-fines-modal__form">
+            <form onSubmit={submitPayment} className="pay-fines-modal__form" autoComplete="off">
               <label className="pay-fines-field">
                 <span>Card number</span>
                 <input
@@ -222,6 +222,7 @@ export default function PayFines() {
                   value={cardNumber}
                   onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
                   maxLength={19}
+                  autoComplete="off"
                   required
                 />
                 {!isCardValid && cardNumber && <small className="pay-fines-field__error">Enter exactly 16 digits.</small>}
@@ -236,6 +237,7 @@ export default function PayFines() {
                     value={cardCvv}
                     onChange={(e) => setCardCvv(e.target.value)}
                     maxLength={4}
+                    autoComplete="off"
                     required
                   />
                   {!isCvvValid && cardCvv && <small className="pay-fines-field__error">3-4 digits.</small>}
@@ -248,6 +250,7 @@ export default function PayFines() {
                     value={cardExpiry}
                     onChange={(e) => setCardExpiry(formatExpiry(e.target.value))}
                     maxLength={5}
+                    autoComplete="off"
                     required
                   />
                   {!isExpiryValid && cardExpiry && <small className="pay-fines-field__error">Use MM/DD.</small>}
@@ -260,6 +263,7 @@ export default function PayFines() {
                   placeholder="Full name"
                   value={cardName}
                   onChange={(e) => setCardName(e.target.value)}
+                  autoComplete="off"
                   required
                 />
                 {!isNameValid && cardName && <small className="pay-fines-field__error">Required.</small>}
