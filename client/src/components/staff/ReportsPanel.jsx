@@ -267,7 +267,10 @@ function RetentionSnapshotCard({ retention, loading }) {
   if (!retention) {
     return (
       <div className="rounded-xl border bg-white p-4 shadow-sm">
-        <p className="text-sm text-gray-500">Retention Snapshot</p>
+        <p className="text-sm text-gray-500 flex flex-wrap items-baseline gap-2">
+          <span>Retention Snapshot</span>
+          <span className="text-[11px] text-gray-400 font-normal">Share of newcomers who used the library again within 30 days</span>
+        </p>
         <p className="text-sm text-gray-500 mt-4">Not enough data yet.</p>
       </div>
     );
@@ -280,7 +283,10 @@ function RetentionSnapshotCard({ retention, loading }) {
   return (
     <div className="rounded-xl border bg-white p-4 shadow-sm flex flex-col gap-3">
       <div>
-        <p className="text-sm text-gray-500">Retention Snapshot</p>
+        <p className="text-sm text-gray-500 flex flex-wrap items-baseline gap-2">
+          <span>Retention Snapshot</span>
+          <span className="text-[11px] text-gray-400 font-normal">Share of newcomers who used the library again within 30 days</span>
+        </p>
         <p className="text-2xl font-bold text-gray-900 mt-2">{rateLabel}</p>
         <p className="text-xs text-gray-500">
           {hasCohort
@@ -760,7 +766,6 @@ function TransactionReportTable({ data = [], loading }) {
             <SortableTh label="Event Type" keyName="event_type" />
             <SortableTh label="Event Timestamp" keyName="event_timestamp" />
             <SortableTh label="Staff User" keyName="employee_last_name" />
-            <SortableTh label="Current Status" keyName="current_status" />
           </tr>
         </thead>
         <tbody>
@@ -787,7 +792,6 @@ function TransactionReportTable({ data = [], loading }) {
                   ? `${row.employee_first_name || ""} ${row.employee_last_name || ""}`.trim()
                   : "—"}
               </Td>
-              <Td>{row.current_status || '—'}</Td>
             </tr>
           ))}
         </tbody>
@@ -805,15 +809,12 @@ function TransactionsFilters({
   onRefresh,
   eventTypes,
   setEventTypes,
-  statuses,
-  setStatuses,
   staff,
   setStaff,
   search,
   setSearch,
 }) {
   const allTypes = transactionEventOptions;
-  const allStatuses = ['Pending','Approved & Active','Rejected','Returned'];
   const staffOptions = React.useMemo(() => {
     const byId = new Map();
     (data || []).forEach(r => {
@@ -837,7 +838,6 @@ function TransactionsFilters({
     setStartDate(sd.toISOString().slice(0,10));
     setEndDate(d.toISOString().slice(0,10));
     setEventTypes([...allTypes]);
-    setStatuses(allStatuses);
     setStaff('');
     setSearch('');
     onRefresh && onRefresh();
@@ -846,7 +846,6 @@ function TransactionsFilters({
     setStartDate('');
     setEndDate('');
     setEventTypes([...allTypes]);
-    setStatuses(allStatuses);
     setStaff('');
     setSearch('');
     onRefresh && onRefresh();
@@ -868,16 +867,6 @@ function TransactionsFilters({
           {allTypes.map(t => (
             <label key={t} className="inline-flex items-center gap-1 text-xs">
               <input type="checkbox" checked={eventTypes.includes(t)} onChange={()=>toggleIn(eventTypes, t, setEventTypes)} /> {t}
-            </label>
-          ))}
-        </div>
-      </div>
-      <div className="flex flex-col">
-        <span className="block text-xs font-medium text-gray-600 mb-1">Current Status</span>
-        <div className="flex flex-wrap gap-2">
-          {['Pending','Approved & Active','Rejected','Returned'].map(s => (
-            <label key={s} className="inline-flex items-center gap-1 text-xs">
-              <input type="checkbox" checked={statuses.includes(s)} onChange={()=>toggleIn(statuses, s, setStatuses)} /> {s}
             </label>
           ))}
         </div>
@@ -980,7 +969,6 @@ export default function ReportsPanel({ api }) {
   const txPageSizeRef = useRef(txPageSize);
   // Transactions filters
   const [txEventTypes, setTxEventTypes] = useState([...transactionEventOptions]);
-  const [txStatuses, setTxStatuses] = useState(['Pending','Approved & Active','Rejected','Returned']);
   const [txPatronId, setTxPatronId] = useState("");
   const [txItemType, setTxItemType] = useState("");
   const [txItemTitle, setTxItemTitle] = useState("");
@@ -1105,7 +1093,6 @@ export default function ReportsPanel({ api }) {
               params.set("types", rawEventFilters.join(","));
             }
           }
-          if (Array.isArray(txStatuses) && txStatuses.length) params.set("statuses", txStatuses.join(","));
           break;
         }
         default:
@@ -1169,7 +1156,7 @@ export default function ReportsPanel({ api }) {
     } finally {
       setLoading(false);
     }
-  }, [api, activeReport, overdueStartDate, overdueEndDate, balancesStartDate, balancesEndDate, topItemsStartDate, topItemsEndDate, newPatronsStartDate, newPatronsEndDate, newPatronsTimeframe, newPatronsUserTypes, transactionsStartDate, transactionsEndDate, txEventTypes, txStatuses]);
+  }, [api, activeReport, overdueStartDate, overdueEndDate, balancesStartDate, balancesEndDate, topItemsStartDate, topItemsEndDate, newPatronsStartDate, newPatronsEndDate, newPatronsTimeframe, newPatronsUserTypes, transactionsStartDate, transactionsEndDate, txEventTypes]);
 
   // Derived media types from the currently loaded overdue dataset
   const mediaTypeOptions = useMemo(() => {
@@ -1306,23 +1293,21 @@ export default function ReportsPanel({ api }) {
     if (activeReport !== "transactions" || !txHasGenerated) return sourceRows;
     const typeSet = new Set(txEventTypes.map((value) => canonicalEventCode(value)));
     const typeActive = typeSet.size > 0;
-    const statuses = new Set(txStatuses);
     const patronFilter = txPatronId ? txPatronId.toLowerCase() : "";
     const itemTypeFilter = txItemType ? txItemType.toLowerCase() : "";
     const itemTitleFilter = txItemTitle ? txItemTitle.toLowerCase() : "";
     return sourceRows.filter((r) => {
       const rowEventCode = canonicalEventCode(r.event_type || r.raw_type || "");
       const typeOk = !typeActive || !rowEventCode || typeSet.has(rowEventCode);
-      const statusOk = !r.current_status || statuses.has(String(r.current_status));
       const patronValue = String(r.user_id ?? r.patron_id ?? r.account_id ?? "");
       const patronOk = !patronFilter || patronValue.toLowerCase() === patronFilter;
       const rowType = String(r.media_type || r.item_type || "").trim().toLowerCase();
       const itemTypeOk = !itemTypeFilter || rowType === itemTypeFilter;
       const rowTitle = String(r.item_title || "").trim().toLowerCase();
       const itemTitleOk = !itemTitleFilter || rowTitle === itemTitleFilter;
-      return typeOk && statusOk && patronOk && itemTypeOk && itemTitleOk;
+      return typeOk && patronOk && itemTypeOk && itemTitleOk;
     });
-  }, [activeReport, reportData, txEventTypes, txStatuses, txPatronId, txItemType, txItemTitle, txHasGenerated]);
+  }, [activeReport, reportData, txEventTypes, txPatronId, txItemType, txItemTitle, txHasGenerated]);
 
   const filteredTransactionCount = txHasGenerated ? transactionsFilteredRows.length : 0;
   const totalTransactionsCount = txHasGenerated ? reportData.length : 0;
@@ -1549,7 +1534,7 @@ export default function ReportsPanel({ api }) {
   useEffect(() => {
     if (activeReport !== "transactions") return;
     loadReport("transactions");
-  }, [activeReport, loadReport, transactionsStartDate, transactionsEndDate, txEventTypes, txStatuses]);
+  }, [activeReport, loadReport, transactionsStartDate, transactionsEndDate, txEventTypes]);
 
   useEffect(() => {
     if (activeReport === "transactions") return;
@@ -1635,17 +1620,6 @@ export default function ReportsPanel({ api }) {
               }`}
             >
               Overdue Loans
-            </button>
-            {/* Fines and User Balances removed */}
-            <button
-              onClick={() => setActiveReport("topItems")}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                activeReport === "topItems"
-                  ? "bg-blue-600 text-white"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-              }`}
-            >
-              Top Items
             </button>
             <button
               onClick={() => setActiveReport("newPatrons")}
@@ -1826,35 +1800,6 @@ export default function ReportsPanel({ api }) {
             </div>
           )}
 
-          {/* Filters section - now below the panels */}
-          {activeReport !== "overdue" && activeReport !== "newPatrons" && (
-          <div className="space-y-3">
-            {activeReport === "topItems" && (
-              <div className="flex flex-wrap items-end gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
-                  <input
-                    type="date"
-                    value={topItemsStartDate}
-                    onChange={(e) => setTopItemsStartDate(e.target.value)}
-                    className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
-                  <input
-                    type="date"
-                    value={topItemsEndDate}
-                    onChange={(e) => setTopItemsEndDate(e.target.value)}
-                    className="rounded-md border-2 bg-white px-3 py-2 text-sm font-medium shadow-sm"
-                   />
-                 </div>
-               </div>
-             )}
-          </div>
-          )}
-
-
           {activeReport === "fines" && (
             <div className="flex justify-end">
               <div className="w-full md:w-72">
@@ -1996,25 +1941,6 @@ export default function ReportsPanel({ api }) {
                       ))}
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-2">Current Status</label>
-                    <div className="flex gap-3 flex-wrap pb-1">
-                      {["Pending", "Approved & Active", "Rejected", "Returned"].map((status) => (
-                        <label key={status} className="inline-flex items-center gap-1.5 text-xs cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={txStatuses.includes(status)}
-                            onChange={() => {
-                              setTxStatuses((prev) => (prev.includes(status) ? prev.filter((x) => x !== status) : [...prev, status]));
-                              setTxPage(1);
-                            }}
-                            className="w-4 h-4"
-                          />
-                          <span>{status}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
                   <SearchableDropdown
                     label="Patron"
                     options={transactionPatronOptions}
@@ -2053,7 +1979,6 @@ export default function ReportsPanel({ api }) {
                           setTransactionStartDate(sd.toISOString().slice(0, 10));
                           setTransactionsEndDate(d.toISOString().slice(0, 10));
                           setTxEventTypes([...transactionEventOptions]);
-                          setTxStatuses(["Pending", "Approved & Active", "Rejected", "Returned"]);
                           setTxPatronId("");
                           setTxItemType("");
                           setTxItemTitle("");
@@ -2069,7 +1994,6 @@ export default function ReportsPanel({ api }) {
                           setTransactionStartDate("");
                           setTransactionsEndDate("");
                           setTxEventTypes([...transactionEventOptions]);
-                          setTxStatuses(["Pending", "Approved & Active", "Rejected", "Returned"]);
                           setTxPatronId("");
                           setTxItemType("");
                           setTxItemTitle("");
@@ -2175,12 +2099,12 @@ export default function ReportsPanel({ api }) {
                 )}
               </div>
             </div>
-          ) : (
+          ) : activeReport === "topItems" ? (
             <div className="rounded-lg border overflow-hidden">
 {/* User Balances table removed */}
-              {activeReport === "topItems" && <TopItemsReportTable data={reportData} loading={loading} />}
+              <TopItemsReportTable data={reportData} loading={loading} />
             </div>
-          )}
+          ) : null}
         </div>
       </div>
     </section>

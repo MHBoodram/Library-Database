@@ -690,7 +690,6 @@ export const listTransactions = (JWT_SECRET) => async (req, res) => {
     const startDateParam = (url.searchParams.get("start_date") || "").trim();
     const endDateParam = (url.searchParams.get("end_date") || "").trim();
     const typesParam = (url.searchParams.get("types") || "").trim(); // comma-separated normalized types
-    const statusesParam = (url.searchParams.get("statuses") || "").trim(); // comma-separated normalized current statuses
     const staffParam = (url.searchParams.get("staff") || "").trim(); // staff id or name substring
     const qParam = (url.searchParams.get("q") || "").trim(); // free text: patron name/email, item title, loan id, copy id
     // Validate date parameters (YYYY-MM-DD format)
@@ -781,15 +780,6 @@ export const listTransactions = (JWT_SECRET) => async (req, res) => {
       ) ls ON ls.loan_id = t.loan_id
     `;
 
-    // Status filter (based on derived latest status)
-    let statusList = [];
-    if (statusesParam) {
-      statusList = statusesParam.split(',').map(s => s.trim()).filter(Boolean);
-      if (statusList.length) {
-        conditions.push("(ls.current_status IS NOT NULL AND ls.current_status COLLATE utf8mb4_unicode_ci IN (" + statusList.map(()=>'?').join(',') + "))");
-        params.push(...statusList);
-      }
-    }
 
     const whereClause = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
     const sql = `
@@ -1000,7 +990,6 @@ export const listTransactionsEvents = (JWT_SECRET) => async (req, res) => {
     const startDateParam = (url.searchParams.get("start_date") || "").trim();
     const endDateParam = (url.searchParams.get("end_date") || "").trim();
     const typesParam = (url.searchParams.get("types") || "").trim();
-    const statusesParam = (url.searchParams.get("statuses") || "").trim();
     const staffParam = (url.searchParams.get("staff") || "").trim();
     const qParam = (url.searchParams.get("q") || "").trim();
 
@@ -1087,15 +1076,6 @@ export const listTransactionsEvents = (JWT_SECRET) => async (req, res) => {
       ) ls ON ls.loan_id = le.loan_id
     `;
 
-    // Status filter
-    let statusList = [];
-    if (statusesParam) {
-      statusList = statusesParam.split(',').map(s => s.trim()).filter(Boolean);
-      if (statusList.length) {
-        conditions.push("(ls.current_status IS NOT NULL AND ls.current_status COLLATE utf8mb4_unicode_ci IN (" + statusList.map(()=>'?').join(',') + "))");
-        params.push(...statusList);
-      }
-    }
 
     const whereClause = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
     const whereClauseNoStatus = conditions.length ? `WHERE ${conditions.filter(c => !c.includes('ls.current_status')).join(" AND ")}` : "";
@@ -1225,14 +1205,6 @@ export const listTransactionsEvents = (JWT_SECRET) => async (req, res) => {
           ) ls ON ls.loan_id = t.loan_id
         `;
         let tWhere = tConditions.length ? `WHERE ${tConditions.join(' AND ')}` : '';
-        // apply statuses filter based on derived latest status
-        if (statusesParam) {
-          const statusList = statusesParam.split(',').map(s=>s.trim()).filter(Boolean);
-          if (statusList.length) {
-            tWhere = (tWhere ? tWhere + ' AND ' : 'WHERE ') + '(ls.current_status IS NOT NULL AND ls.current_status COLLATE utf8mb4_unicode_ci IN (' + statusList.map(()=>'?').join(',') + '))';
-            tParams.push(...statusList);
-          }
-        }
         const tCountSql = `SELECT COUNT(*) AS total
           FROM \`transaction\` t
           JOIN user u     ON u.user_id = t.user_id
