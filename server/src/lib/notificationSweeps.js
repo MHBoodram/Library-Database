@@ -9,7 +9,7 @@ import {
 const DUE_SOON_HOURS = Number(process.env.LOAN_DUE_SOON_HOURS || 24);
 const LOST_AFTER_DAYS = Number(process.env.LOAN_LOST_AFTER_DAYS || 28);
 const LOST_SUSPEND_GRACE_DAYS = Number(process.env.LOST_SUSPEND_GRACE_DAYS || 3);
-const LOST_REPLACEMENT_FEE = Number(process.env.LOST_REPLACEMENT_FEE || 20);
+const LOST_REPLACEMENT_FEE = Number(process.env.LOST_REPLACEMENT_FEE || 80);
 const ROOM_EXPIRING_MINUTES = Number(process.env.ROOM_EXPIRING_MINUTES || 15);
 const LOST_WARNING_DAYS_BEFORE_LOST = Number(process.env.LOST_WARNING_DAYS_BEFORE_LOST || 3);
 

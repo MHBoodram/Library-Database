@@ -17,7 +17,7 @@ const MONTH_LABELS = [
 ];
 const DAY_MS = 24 * 60 * 60 * 1000;
 const TIMEFRAMES = new Set(["day", "week", "month", "quarter", "year"]);
-const LOST_FLAT_FEE = Number(process.env.LOST_REPLACEMENT_FEE || 20);
+const LOST_FLAT_FEE = Number(process.env.LOST_REPLACEMENT_FEE || 80);
 
 function parseDateOnly(value) {
   if (!value) return null;

@@ -35,7 +35,12 @@ export const placeHold = (JWT_SECRET) => async (req, res) => {
     }
 
     const [[posRow]] = await conn.query(
-      "SELECT COALESCE(MAX(queue_position), 0) + 1 AS next_position FROM hold WHERE item_id = ?",
+      `
+        SELECT COALESCE(MAX(queue_position), 0) + 1 AS next_position
+        FROM hold
+        WHERE item_id = ?
+          AND status IN ('queued','ready')
+      `,
       [item_id]
     );
     const queue_position = Number(posRow?.next_position || 1);
@@ -286,7 +291,7 @@ export const listHolds = (JWT_SECRET) => async (req, res) => {
               SELECT COUNT(*)
               FROM hold h2
               WHERE h2.item_id = h.item_id
-                AND h2.status = 'queued'
+                AND h2.status IN ('queued','ready')
                 AND h2.queue_position IS NOT NULL
                 AND h2.queue_position <= h.queue_position
             )
@@ -299,7 +304,8 @@ export const listHolds = (JWT_SECRET) => async (req, res) => {
         ${whereSQL}
         ORDER BY FIELD(h.status,'ready','queued','fulfilled','cancelled','expired'),
                  queue_display_position ASC,
-                 h.created_at ASC
+                 h.created_at ASC,
+                 h.hold_id ASC
       `
       , params
     );
