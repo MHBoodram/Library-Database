@@ -77,10 +77,23 @@ export default function PayFines() {
     return `${digits.slice(0, 2)}/${digits.slice(2)}`;
   };
 
+  const isExpiryCurrentOrFuture = (value = "") => {
+    const match = value.match(/^(0[1-9]|1[0-2])\/([0-9]{2})$/);
+    if (!match) return false;
+    const month = Number(match[1]);
+    const year = Number(match[2]);
+    const now = new Date();
+    const currentYear = now.getFullYear() % 100;
+    const currentMonth = now.getMonth() + 1;
+    if (year < currentYear) return false;
+    if (year === currentYear && month < currentMonth) return false;
+    return true;
+  };
+
   const sanitizedCardNumber = cardNumber.replace(/\D/g, "");
   const isCardValid = sanitizedCardNumber.length === 16;
   const isCvvValid = /^[0-9]{3,4}$/.test(cardCvv.trim());
-  const isExpiryValid = /^(0[1-9]|1[0-2])\/(0[1-9]|[12][0-9]|3[01])$/.test(cardExpiry.trim());
+  const isExpiryValid = isExpiryCurrentOrFuture(cardExpiry.trim());
   const isNameValid = cardName.trim().length > 1;
   const canSubmitPayment = paymentFine && isCardValid && isCvvValid && isExpiryValid && isNameValid && !payingId;
 
@@ -96,7 +109,7 @@ export default function PayFines() {
       return;
     }
     if (!isExpiryValid) {
-      showToast({ type: "error", text: "Use MM/DD format for expiry date." });
+      showToast({ type: "error", text: "Use MM/YY for a current or future expiry date." });
       return;
     }
     if (!isNameValid) {
@@ -218,7 +231,7 @@ export default function PayFines() {
                 <input
                   type="tel"
                   inputMode="numeric"
-                  placeholder="1234 5678 9012 3456"
+                  placeholder=""
                   value={cardNumber}
                   onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
                   maxLength={19}
@@ -233,7 +246,7 @@ export default function PayFines() {
                   <input
                     type="tel"
                     inputMode="numeric"
-                    placeholder="123"
+                    placeholder=""
                     value={cardCvv}
                     onChange={(e) => setCardCvv(e.target.value)}
                     maxLength={4}
@@ -243,24 +256,25 @@ export default function PayFines() {
                   {!isCvvValid && cardCvv && <small className="pay-fines-field__error">3-4 digits.</small>}
                 </label>
                 <label className="pay-fines-field">
-                  <span>Expiry (MM/DD)</span>
+                  <span>Expiry (MM/YY)</span>
                   <input
                     type="text"
-                    placeholder="12/31"
+                    placeholder=""
                     value={cardExpiry}
                     onChange={(e) => setCardExpiry(formatExpiry(e.target.value))}
                     maxLength={5}
+                    pattern="(0[1-9]|1[0-2])/[0-9]{2}"
                     autoComplete="off"
-                    required
-                  />
-                  {!isExpiryValid && cardExpiry && <small className="pay-fines-field__error">Use MM/DD.</small>}
+                  required
+                />
+                {!isExpiryValid && cardExpiry && <small className="pay-fines-field__error">Use MM/YY for a current or future date.</small>}
                 </label>
               </div>
               <label className="pay-fines-field">
                 <span>Card holder name</span>
                 <input
                   type="text"
-                  placeholder="Full name"
+                  placeholder=""
                   value={cardName}
                   onChange={(e) => setCardName(e.target.value)}
                   autoComplete="off"
