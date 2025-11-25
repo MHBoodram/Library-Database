@@ -623,6 +623,8 @@ export const newPatronsByMonth = (JWT_SECRET) => async (req, res) => {
       engagementRate: 0,
       windowStart: null,
       windowEnd: endDate,
+      avgTimeToFirstActionHours: null,
+      firstActionSampleSize: 0,
     };
 
     if (filteredRows.length) {
@@ -657,6 +659,75 @@ export const newPatronsByMonth = (JWT_SECRET) => async (req, res) => {
         retentionSummary.engagementRate = cohort.length
           ? Number(((engagedCount / cohort.length) * 100).toFixed(1))
           : 0;
+      }
+    }
+
+    if (filteredRows.length) {
+      const uniquePatronIds = Array.from(
+        new Set(
+          filteredRows
+            .map((row) => Number(row.user_id))
+            .filter((id) => Number.isFinite(id))
+        )
+      );
+      if (uniquePatronIds.length) {
+        const firstActionMap = new Map();
+        const recordFirstAction = (userId, timestamp) => {
+          if (!timestamp) return;
+          const ms = Date.parse(timestamp);
+          if (!Number.isFinite(ms)) return;
+          const existing = firstActionMap.get(userId);
+          if (existing === undefined || ms < existing) {
+            firstActionMap.set(userId, ms);
+          }
+        };
+        const chunkSize = 400;
+        for (let i = 0; i < uniquePatronIds.length; i += chunkSize) {
+          const chunk = uniquePatronIds.slice(i, i + chunkSize);
+          if (!chunk.length) continue;
+          const placeholders = chunk.map(() => "?").join(",");
+          const [loanFirstRows] = await pool.query(
+            `
+              SELECT user_id, MIN(checkout_date) AS first_checkout
+              FROM loan
+              WHERE user_id IN (${placeholders})
+                AND checkout_date IS NOT NULL
+              GROUP BY user_id
+            `,
+            chunk
+          );
+          loanFirstRows.forEach((row) => recordFirstAction(Number(row.user_id), row.first_checkout));
+          const [reservationFirstRows] = await pool.query(
+            `
+              SELECT user_id, MIN(start_time) AS first_reservation
+              FROM reservation
+              WHERE user_id IN (${placeholders})
+                AND start_time IS NOT NULL
+              GROUP BY user_id
+            `,
+            chunk
+          );
+          reservationFirstRows.forEach((row) =>
+            recordFirstAction(Number(row.user_id), row.first_reservation)
+          );
+        }
+
+        const actionDiffs = [];
+        filteredRows.forEach((row) => {
+          const joinedMs = Date.parse(row.joined_at);
+          if (!Number.isFinite(joinedMs)) return;
+          const firstActionMs = firstActionMap.get(Number(row.user_id));
+          if (!Number.isFinite(firstActionMs)) return;
+          const delta = firstActionMs - joinedMs;
+          if (delta >= 0) actionDiffs.push(delta);
+        });
+
+        if (actionDiffs.length) {
+          const avgMs = actionDiffs.reduce((sum, value) => sum + value, 0) / actionDiffs.length;
+          const avgHours = avgMs / (60 * 60 * 1000);
+          retentionSummary.avgTimeToFirstActionHours = Number(avgHours.toFixed(1));
+          retentionSummary.firstActionSampleSize = actionDiffs.length;
+        }
       }
     }
 

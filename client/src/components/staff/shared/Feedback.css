@@ -8,26 +8,26 @@
   border-radius: 10px;
   border: 1px solid #e5e7eb;
   background: #f8fafc;
-  color: #1f2937;
+  color: #ffffff;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
 }
 
 .staff-toast--success {
-  border-color: #c5e3d5;
-  background: #edf7f1;
-  color: #0f5132;
+  border-color: #34d399;
+  background: #10b981;
+  color: #ffffff;
 }
 
 .staff-toast--error {
-  border-color: #fbcfe8;
-  background: #fff1f2;
-  color: #9f1239;
+  border-color: #f87171;
+  background: #ef4444;
+  color: #ffffff;
 }
 
 .staff-toast--info {
-  border-color: #e0e7ff;
-  background: #eef2ff;
-  color: #1e3a8a;
+  border-color: #60a5fa;
+  background: #2563eb;
+  color: #ffffff;
 }
 
 .staff-toast__dismiss {

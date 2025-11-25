@@ -4,6 +4,7 @@ import { ToastBanner } from "./shared/Feedback";
 import { formatDate } from "../../utils";
 
 const numberFormatter = new Intl.NumberFormat();
+const currencyFormatter = new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" });
 const timeframePresets = [
   { label: "By Day", value: "day" },
   { label: "By Week", value: "week" },
@@ -268,39 +269,64 @@ function RetentionSnapshotCard({ retention, loading }) {
     return (
       <div className="rounded-xl border bg-white p-4 shadow-sm">
         <p className="text-sm text-gray-500 flex flex-wrap items-baseline gap-2">
-          <span>Retention Snapshot</span>
-          <span className="text-[11px] text-gray-400 font-normal">Share of newcomers who used the library again within 30 days</span>
+          <span className="text-[11px] text-gray-400 font-normal">Average time for newcomers to reach their first checkout or room reservation</span>
         </p>
         <p className="text-sm text-gray-500 mt-4">Not enough data yet.</p>
       </div>
     );
   }
-  const { cohortLabel, cohortSize, engagedCount, engagementRate, windowStart, windowEnd } = retention;
-  const hasCohort = cohortSize > 0;
-  const numericRate = typeof engagementRate === "number" ? engagementRate : 0;
-  const progressWidth = Math.min(100, Math.max(0, numericRate || 0));
-  const rateLabel = hasCohort ? `${numericRate.toFixed(1)}%` : "—";
+  const {
+    cohortLabel,
+    cohortSize,
+    windowStart,
+    windowEnd,
+    avgTimeToFirstActionHours,
+    firstActionSampleSize,
+  } = retention;
+  const avgHours =
+    typeof avgTimeToFirstActionHours === "number" && !Number.isNaN(avgTimeToFirstActionHours)
+      ? avgTimeToFirstActionHours
+      : null;
+  const sampleSize = Number(firstActionSampleSize || 0);
+  const hasSample = avgHours !== null && sampleSize > 0;
+  const formatDuration = (hours) => {
+    if (hours === null) return "—";
+    if (hours < 1) {
+      const mins = Math.max(1, Math.round(hours * 60));
+      return `${mins} min`;
+    }
+    if (hours < 24) {
+      return `${hours.toFixed(1)} hrs`;
+    }
+    const days = hours / 24;
+    return `${days.toFixed(1)} days`;
+  };
+  const displayValue = formatDuration(avgHours);
+  const progressWidth = hasSample
+    ? Math.min(100, Math.max(0, (avgHours / (24 * 30)) * 100))
+    : 0;
+  const detailLine = hasSample
+    ? `Across ${sampleSize} patrons from ${cohortLabel || "the selected cohort"}.`
+    : "Need at least one patron with a recorded checkout or reservation.";
   return (
     <div className="rounded-xl border bg-white p-4 shadow-sm flex flex-col gap-3">
       <div>
         <p className="text-sm text-gray-500 flex flex-wrap items-baseline gap-2">
-          <span>Retention Snapshot</span>
-          <span className="text-[11px] text-gray-400 font-normal">Share of newcomers who used the library again within 30 days</span>
+          <span className="text-[11px] text-gray-400 font-normal">Average time for newcomers to reach their first checkout or room reservation</span>
         </p>
-        <p className="text-2xl font-bold text-gray-900 mt-2">{rateLabel}</p>
-        <p className="text-xs text-gray-500">
-          {hasCohort
-            ? `${engagedCount} of ${cohortSize} patrons from ${cohortLabel || "recent cohort"}`
-            : "Waiting for at least one new patron in the last 30 days"}
-        </p>
+        <p className="text-2xl font-bold text-gray-900 mt-2">{displayValue}</p>
+        <p className="text-xs text-gray-500">{detailLine}</p>
       </div>
       <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
-        <div className="h-full bg-green-500 transition-all" style={{ width: `${progressWidth}%` }} />
+        <div
+          className="h-full bg-green-500 transition-all"
+          style={{ width: `${progressWidth}%` }}
+        />
       </div>
       <p className="text-xs text-gray-500">
-        {hasCohort && windowStart
-          ? `Looks at checkouts between ${windowStart} and ${windowEnd}`
-          : "We need recent checkout activity to calculate retention."}
+        {hasSample && windowStart
+          ? `Measures join dates between ${windowStart} and ${windowEnd}.`
+          : "Waiting for recent activity data to calculate time to first action."}
       </p>
     </div>
   );
@@ -891,10 +917,13 @@ function TransactionsFilters({
   );
 }
 
-export default function ReportsPanel({ api }) {
+const REPORT_TABS = ["overdue", "topItems", "newPatrons", "transactions"];
+const normalizeReportTab = (value) => (REPORT_TABS.includes(value) ? value : "overdue");
+
+export default function ReportsPanel({ api, requestedReport }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [activeReport, setActiveReport] = useState("overdue"); // "overdue" | "fines" | "balances" | "topItems" | "newPatrons" | "transactions"
+  const [activeReport, setActiveReport] = useState(() => normalizeReportTab(requestedReport || "overdue")); // "overdue" | ...
   const [reportData, setReportData] = useState([]);
   const [toast, setToast] = useState(null);
   const showToast = useCallback((payload) => {
@@ -979,6 +1008,14 @@ export default function ReportsPanel({ api }) {
       )
     )
   );
+
+  useEffect(() => {
+    if (!requestedReport) return;
+    const normalized = normalizeReportTab(requestedReport);
+    if (normalized !== activeReport) {
+      setActiveReport(normalized);
+    }
+  }, [requestedReport, activeReport]);
 
   useEffect(() => {
     txPageRef.current = txPage;
@@ -1276,7 +1313,7 @@ export default function ReportsPanel({ api }) {
     if (activeReport !== 'overdue') return null;
     const rows = overdueFilteredRows;
     if (!rows.length) {
-      return { total: 0, uniqueBorrowers: 0, avg: 0, med: 0, max: 0 };
+      return { total: 0, uniqueBorrowers: 0, avg: 0, med: 0, max: 0, totalFines: 0 };
     }
     const total = rows.length;
     const uniqueBorrowers = new Set(rows.map(r => String(r.patron_id ?? r.user_id))).size;
@@ -1284,7 +1321,11 @@ export default function ReportsPanel({ api }) {
     const avg = total ? (days.reduce((s,x)=>s+x,0)/total) : 0;
     const med = total ? (days[Math.floor((total-1)/2)] + days[Math.ceil((total-1)/2)]) / 2 : 0;
     const max = total ? days[total-1] : 0;
-    return { total, uniqueBorrowers, avg: Number(avg.toFixed(1)), med, max };
+    const totalFines = rows.reduce((sum, row) => {
+      const estimate = Number(row.dynamic_est_fine ?? row.est_fine ?? row.current_fine ?? row.assessed_fine ?? 0);
+      return sum + (Number.isFinite(estimate) ? estimate : 0);
+    }, 0);
+    return { total, uniqueBorrowers, avg: Number(avg.toFixed(1)), med, max, totalFines: Number(totalFines.toFixed(2)) };
   }, [activeReport, overdueFilteredRows]);
 
   // Transactions filtering and KPIs
@@ -1597,6 +1638,12 @@ export default function ReportsPanel({ api }) {
     URL.revokeObjectURL(url);
   }
 
+  const reportTitles = {
+    overdue: "Overdue Loans",
+    newPatrons: "New Patrons",
+    transactions: "Transaction History",
+  };
+
   return (
     <section className="space-y-4">
       <ToastBanner toast={toast} onDismiss={() => setToast(null)} />
@@ -1609,48 +1656,20 @@ export default function ReportsPanel({ api }) {
         </div>
 
         <div className="p-5 space-y-4">
-          {/* Panel buttons row */}
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setActiveReport("overdue")}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                activeReport === "overdue"
-                  ? "bg-blue-600 text-white"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-              }`}
-            >
-              Overdue Loans
-            </button>
-            <button
-              onClick={() => setActiveReport("newPatrons")}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                activeReport === "newPatrons"
-                  ? "bg-blue-600 text-white"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-              }`}
-            >
-              New Patrons
-            </button>
-            <button
-              onClick={() => setActiveReport("transactions")}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                activeReport === "transactions"
-                  ? "bg-blue-600 text-white"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-              }`}
-            >
-              Transaction History
-            </button>
-            
-            {/* Export button aligned to the right */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="text-base font-semibold text-gray-800">
+              {reportTitles[activeReport] || "Report"}
+            </div>
             <div className="ml-auto">
               <button
                 onClick={handleExport}
                 disabled={
                   loading || (
-                    activeReport === 'overdue' ? overdueFilteredRows.length === 0 :
-                    activeReport === 'transactions' ? transactionsFilteredRows.length === 0 :
-                    reportData.length === 0
+                    activeReport === "overdue"
+                      ? overdueFilteredRows.length === 0
+                      : activeReport === "transactions"
+                      ? transactionsFilteredRows.length === 0
+                      : reportData.length === 0
                   )
                 }
                 className="px-4 py-2 rounded-md bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-50"
@@ -1758,7 +1777,7 @@ export default function ReportsPanel({ api }) {
               </aside>
               <div className="overdue-report-content space-y-4">
                 <div className="space-y-3">
-                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                     <div className="rounded-md border bg-white p-3 text-sm">
                       <div className="text-gray-500 whitespace-nowrap">Total Overdue</div>
                       <div className="text-xl font-semibold">{overdueKPIs?.total ?? 0}</div>
@@ -1776,6 +1795,13 @@ export default function ReportsPanel({ api }) {
                       <div className="text-xl font-semibold whitespace-nowrap">
                         {overdueKPIs?.med ?? 0} / {overdueKPIs?.max ?? 0}
                       </div>
+                    </div>
+                    <div className="rounded-md border bg-white p-3 text-sm">
+                      <div className="text-gray-500 whitespace-nowrap">Accrued Fines</div>
+                      <div className="text-xl font-semibold">
+                        {currencyFormatter.format(overdueKPIs?.totalFines ?? 0)}
+                      </div>
+                      <div className="text-xs text-gray-500">Across all active overdue items</div>
                     </div>
                   </div>
                   <div className="text-sm text-gray-700">
@@ -2032,18 +2058,6 @@ export default function ReportsPanel({ api }) {
                             {(transactionsKPIs?.avgReturnHours ?? 0).toFixed(1)}h
                           </div>
                           <p className="tx-kpi-description">Approval → return</p>
-                        </div>
-                        <div className="h-32 w-full rounded-lg border bg-white p-3 text-left sm:h-32 sm:w-40 lg:w-44 tx-kpi-card">
-                          <div className="tx-kpi-label">Overdue</div>
-                          <div className="tx-kpi-value">{transactionsKPIs?.overdueCount ?? 0}</div>
-                          <p className="tx-kpi-description">
-                            {(transactionsKPIs?.overduePercent ?? 0).toFixed(1)}% of active
-                          </p>
-                        </div>
-                        <div className="h-32 w-full rounded-lg border bg-white p-3 text-left sm:h-32 sm:w-40 lg:w-44 tx-kpi-card">
-                          <div className="tx-kpi-label">Lost Items</div>
-                          <div className="tx-kpi-value">{transactionsKPIs?.lostCount ?? 0}</div>
-                          <p className="tx-kpi-description">Latest status is lost</p>
                         </div>
                       </div>
                     ) : null}

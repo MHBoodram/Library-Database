@@ -3,7 +3,7 @@ import { Field, Th, Td } from "./shared/CommonComponents";
 import { ConfirmDialog, ToastBanner } from "./shared/Feedback";
 import { formatLibraryDateTime, libraryDateTimeToUTCISOString } from "../../utils";
 
-export default function ReservationsPanel({ api, staffUser, onChanged }) {
+export default function ReservationsPanel({ api, staffUser, onChanged, view = "create" }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -102,9 +102,14 @@ export default function ReservationsPanel({ api, staffUser, onChanged }) {
     }
   }
 
+  const showCreate = view === "create";
+  const showRooms = view === "rooms";
+  const showHistory = view === "history";
+
   return (
     <section className="space-y-4">
       <ToastBanner toast={toast} onDismiss={closeToast} />
+      {showCreate && (
       <div className="rounded-xl border bg-white p-4 shadow-sm">
         <h2 className="text-lg font-semibold">Create Room Reservation</h2>
         <div className="mb-4 p-3 bg-blue-50 rounded-md text-sm">
@@ -173,8 +178,10 @@ export default function ReservationsPanel({ api, staffUser, onChanged }) {
           </div>
         </form>
       </div>
+      )}
 
       {/* Manage Rooms Section */}
+      {showRooms && (
       <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
         <div className="flex items-center justify-between border-b bg-gray-50 px-5 py-3 text-sm">
           <span className="text-md font-semibold mb-2">Manage Rooms</span>
@@ -371,7 +378,9 @@ export default function ReservationsPanel({ api, staffUser, onChanged }) {
           </table>
         </div>
       </div>
+      )}
 
+      {showHistory && (
       <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
         <div className="flex items-center justify-between border-b bg-gray-50 px-5 py-3 text-sm">
           <span className="font-medium text-gray-700">Reservations History</span>
@@ -494,6 +503,7 @@ export default function ReservationsPanel({ api, staffUser, onChanged }) {
           </table>
         </div>
       </div>
+      )}
       <ConfirmDialog
         open={Boolean(confirmState)}
         title={confirmState?.title}

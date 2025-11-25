@@ -25,7 +25,7 @@ export default function EmployeeDashboard() {
     if (isAdmin){return "admin"}
     else{return "checkout"}
   }); 
-  // valid states: "checkout" | "activeLoans" | "reservations" | "addItem" | "removeItem" | "admin" (only available to admins)
+  // valid states: "checkout" | "activeLoans" | "reservationsCreate" | "reservationsRooms" | "reservationsHistory" | "reportsOverdue" | "reportsNewPatrons" | "reportsTransactions" | "addItem" | "removeItem" | "admin" (only available to admins)
   const [counts, setCounts] = useState({ fines: 0, activeLoans: 0, reservations: 0 });
   const [countsLoading, setCountsLoading] = useState(false);
   // removed countsLoaded state (no longer needed)
@@ -52,6 +52,8 @@ export default function EmployeeDashboard() {
   }, [api]);
   const [manageItemsOpen, setManageItemsOpen] = useState(false);
   const [manageLoansOpen, setManageLoansOpen] = useState(false);
+  const [manageRoomsOpen, setManageRoomsOpen] = useState(false);
+  const [manageReportsOpen, setManageReportsOpen] = useState(false);
   const contentWidth = 'min(1500px, calc(100vw - 2rem))';
   useEffect(() => {
     if (!api) return;
@@ -64,6 +66,8 @@ export default function EmployeeDashboard() {
       if (!event.target.closest('.dropdown-container')) {
         setManageItemsOpen(false);
         setManageLoansOpen(false);
+        setManageRoomsOpen(false);
+        setManageReportsOpen(false);
       }
     };
     
@@ -105,9 +109,9 @@ export default function EmployeeDashboard() {
 
               <button
                 type="button"
-                onClick={() => setTab('reservations')}
-                aria-label="View reservations"
-              >
+              onClick={() => setTab('reservationsCreate')}
+              aria-label="View reservations"
+            >
                 <div>
                   <div className="count-label">Reservations</div>
                   <div className="count-num">{countsLoading ? '…' : counts.reservations}</div>
@@ -123,7 +127,7 @@ export default function EmployeeDashboard() {
                 className={`tab-btn dropdown-btn ${["checkout", "return", "activeLoans"].includes(tab) ? "active" : ""}`}
                 onClick={() => setManageLoansOpen(!manageLoansOpen)}
               >
-                Manage Loans ▾
+                Manage Item Loans ▾
               </button>
               {manageLoansOpen && (
                 <div className="dropdown-menu">
@@ -155,18 +159,66 @@ export default function EmployeeDashboard() {
               )}
             </div>
 
-            <button
-              className={`tab-btn ${tab === "reservations" ? "active" : ""}`}
-              onClick={() => setTab("reservations")}
-            >
-              Room Reservations
-            </button>
-            <button
-              className={`tab-btn ${tab === "reports" ? "active" : ""}`}
-              onClick={() => setTab("reports")}
-            >
-              Reports
-            </button>
+            <div className="dropdown-container">
+              <button
+                className={`tab-btn dropdown-btn ${["reservationsCreate","reservationsRooms","reservationsHistory"].includes(tab) ? "active" : ""}`}
+                onClick={() => setManageRoomsOpen(!manageRoomsOpen)}
+              >
+                Manage Rooms ▾
+              </button>
+              {manageRoomsOpen && (
+                <div className="dropdown-menu">
+                  <button
+                    className="dropdown-item"
+                    onClick={() => { setTab("reservationsCreate"); setManageRoomsOpen(false); }}
+                  >
+                    Create Reservation
+                  </button>
+                  <button
+                    className="dropdown-item"
+                    onClick={() => { setTab("reservationsRooms"); setManageRoomsOpen(false); }}
+                  >
+                    Add/Edit rooms
+                  </button>
+                  <button
+                    className="dropdown-item"
+                    onClick={() => { setTab("reservationsHistory"); setManageRoomsOpen(false); }}
+                  >
+                    Reservation History
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="dropdown-container">
+              <button
+                className={`tab-btn dropdown-btn ${["reportsOverdue","reportsNewPatrons","reportsTransactions"].includes(tab) ? "active" : ""}`}
+                onClick={() => setManageReportsOpen(!manageReportsOpen)}
+              >
+                Reports ▾
+              </button>
+              {manageReportsOpen && (
+                <div className="dropdown-menu">
+                  <button
+                    className="dropdown-item"
+                    onClick={() => { setTab("reportsOverdue"); setManageReportsOpen(false); }}
+                  >
+                    Overdue Loans
+                  </button>
+                  <button
+                    className="dropdown-item"
+                    onClick={() => { setTab("reportsNewPatrons"); setManageReportsOpen(false); }}
+                  >
+                    New Patrons
+                  </button>
+                  <button
+                    className="dropdown-item"
+                    onClick={() => { setTab("reportsTransactions"); setManageReportsOpen(false); }}
+                  >
+                    Transaction History
+                  </button>
+                </div>
+              )}
+            </div>
             
             {/* Manage Items Dropdown */}
             <div className="dropdown-container">
@@ -174,7 +226,7 @@ export default function EmployeeDashboard() {
                 className={`tab-btn dropdown-btn ${["addItem", "editItem", "removeItem"].includes(tab) ? "active" : ""}`}
                 onClick={() => setManageItemsOpen(!manageItemsOpen)}
               >
-                Manage Items ▾
+                Manage Item Inventory ▾
               </button>
               {manageItemsOpen && (
                 <div className="dropdown-menu">
@@ -218,8 +270,32 @@ export default function EmployeeDashboard() {
   {tab === "return" && <ReturnLoanPanel api={api} staffUser={user} onChanged={loadCounts} />}
   {tab === "activeLoans" && <ActiveLoansPanel api={api} />}
   {tab === "holds" && <HoldsPanel api={api} onChanged={loadCounts} />}
-  {tab === "reservations" && <ReservationsPanel api={api} staffUser={user} onChanged={loadCounts} />}
-  {tab === "reports" && <ReportsPanel api={api} />}
+  {["reservationsCreate","reservationsRooms","reservationsHistory"].includes(tab) && (
+    <ReservationsPanel
+      api={api}
+      staffUser={user}
+      onChanged={loadCounts}
+      view={
+        tab === "reservationsRooms"
+          ? "rooms"
+          : tab === "reservationsHistory"
+          ? "history"
+          : "create"
+      }
+    />
+  )}
+  {["reportsOverdue","reportsNewPatrons","reportsTransactions"].includes(tab) && (
+    <ReportsPanel
+      api={api}
+      requestedReport={
+        tab === "reportsNewPatrons"
+          ? "newPatrons"
+          : tab === "reportsTransactions"
+          ? "transactions"
+          : "overdue"
+      }
+    />
+  )}
   {tab === "addItem" && <AddItemPanel api={api} />}
   {tab === "editItem" && <EditItemPanel api={api} />}
   {tab === "removeItem" && <RemoveItemPanel api={api} />}
