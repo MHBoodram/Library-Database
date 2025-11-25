@@ -1,11 +1,9 @@
 // Shared constants and utilities for Staff Dashboard
 
 export const STATUS_OPTIONS = [
-  { value: "active", label: "Active only" },
+  { value: "outstanding", label: "Outstanding (open/unpaid)" },
   { value: "all", label: "All statuses" },
-  { value: "unpaid", label: "Unpaid" },
   { value: "paid", label: "Paid" },
-  { value: "waived", label: "Waived" },
 ];
 
 export const EMPLOYEE_ROLE_OPTIONS = ["librarian", "clerk", "assistant", "admin"];

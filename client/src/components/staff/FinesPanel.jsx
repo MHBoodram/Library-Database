@@ -4,6 +4,8 @@ import { Th, Td, StatusPill } from "./shared/CommonComponents";
 import FiltersBar from "./shared/FiltersBar";
 import { formatDate } from "../../utils";
 
+const RESOLVED_STATUSES = ["paid", "waived", "written_off"];
+
 export default function FinesPanel({ api }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -11,8 +13,7 @@ export default function FinesPanel({ api }) {
 
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [status, setStatus] = useState("active");
-  const [onlyOverdue, setOnlyOverdue] = useState(false);
+  const [status, setStatus] = useState("outstanding");
 
   useEffect(() => {
     const handle = setTimeout(() => setDebouncedQuery(query.trim()), 250);
@@ -27,7 +28,7 @@ export default function FinesPanel({ api }) {
       try {
         const params = new URLSearchParams();
         if (debouncedQuery) params.set("q", debouncedQuery);
-        if (status) params.set("status", status);
+        params.set("status", "all");
         params.set("pageSize", "200");
 
         const qs = params.toString();
@@ -41,7 +42,7 @@ export default function FinesPanel({ api }) {
         if (!signal?.aborted) setLoading(false);
       }
     },
-    [api, debouncedQuery, status]
+    [api, debouncedQuery]
   );
 
   useEffect(() => {
@@ -53,6 +54,21 @@ export default function FinesPanel({ api }) {
   const filtered = useMemo(() => {
     const term = debouncedQuery.toLowerCase();
     return rows.filter((r) => {
+      const statusValue = String(r.status || "").toLowerCase();
+      const assessed = Number(r.amount_assessed ?? r.current_fine ?? 0);
+      const paid = Number(r.amount_paid ?? 0);
+      const outstanding = Math.max(0, Number((assessed - paid).toFixed(2)));
+      const isResolved = RESOLVED_STATUSES.includes(statusValue);
+
+      const matchesStatus = (() => {
+        if (status === "all") return true;
+        if (status === "outstanding") return outstanding > 0 && !isResolved;
+        if (status === "paid") return statusValue === "paid";
+        return true;
+      })();
+
+      if (!matchesStatus) return false;
+
       const matchesTerm =
         !term ||
         r.first_name?.toLowerCase().includes(term) ||
@@ -61,31 +77,21 @@ export default function FinesPanel({ api }) {
         String(r.loan_id).includes(term) ||
         r.title?.toLowerCase().includes(term);
 
-      const overdue = r.due_date ? new Date(r.due_date) < new Date() : false;
-      const matchesOverdue = !onlyOverdue || overdue;
-
-      return matchesTerm && matchesOverdue;
+      return matchesTerm;
     });
-  }, [rows, debouncedQuery, onlyOverdue]);
+  }, [rows, debouncedQuery, status]);
 
   const activeCount = useMemo(
     () =>
       rows.filter(
-        (r) => !["paid", "waived"].includes(String(r.status || "").toLowerCase())
+        (r) => !RESOLVED_STATUSES.includes(String(r.status || "").toLowerCase())
       ).length,
     [rows]
   );
 
   return (
     <section className="space-y-4">
-      <FiltersBar
-        q={query}
-        setQ={setQuery}
-        status={status}
-        setStatus={setStatus}
-        onlyOverdue={onlyOverdue}
-        setOnlyOverdue={setOnlyOverdue}
-      />
+      <FiltersBar q={query} setQ={setQuery} status={status} setStatus={setStatus} />
 
       <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
         <div className="flex items-center justify-between border-b bg-gray-50 px-5 py-3 text-sm">

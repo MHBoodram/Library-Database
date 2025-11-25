@@ -2,7 +2,7 @@
 import React from "react";
 import { STATUS_OPTIONS } from "./constants";
 
-export default function FiltersBar({ q, setQ, status, setStatus, onlyOverdue, setOnlyOverdue }) {
+export default function FiltersBar({ q, setQ, status, setStatus }) {
   return (
     <div className="flex flex-wrap items-end gap-3">
       <div className="flex-1 min-w-[240px]">
@@ -28,11 +28,6 @@ export default function FiltersBar({ q, setQ, status, setStatus, onlyOverdue, se
             </option>
           ))}
         </select>
-      </div>
-
-      <div className="flex items-center gap-2 mt-6">
-        <input id="overdue" type="checkbox" checked={onlyOverdue} onChange={(e) => setOnlyOverdue(e.target.checked)} />
-        <label htmlFor="overdue" className="text-sm">Only overdue</label>
       </div>
     </div>
   );
