@@ -360,34 +360,6 @@ export default function ReservationsPanel({ api, staffUser, onChanged }) {
                             >
                               Edit
                             </button>
-                            <button
-                              className="text-xs px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700"
-                              onClick={() =>
-                                openConfirm({
-                                  title: `Delete room ${r.room_number || r.room_id}?`,
-                                  message: "This will remove the room. Existing reservations will block deletion.",
-                                  confirmLabel: "Delete room",
-                                  cancelLabel: "Keep room",
-                                  tone: "danger",
-                                  onConfirm: async () => {
-                                    try {
-                                      await api(`staff/rooms/${r.room_id}`, { method: 'DELETE' });
-                                      setRefreshFlag((f) => f + 1);
-                                    } catch (err) {
-                                      const code = err?.data?.error;
-                                      const msg = err?.data?.message || err.message;
-                                      if (code === 'room_in_use') {
-                                        showToast({ type: "error", text: msg || 'Room has reservations and cannot be deleted.' });
-                                      } else {
-                                        showToast({ type: "error", text: msg || 'Failed to delete room' });
-                                      }
-                                    }
-                                  },
-                                })
-                              }
-                            >
-                              Delete
-                            </button>
                           </>
                         )}
                       </Td>
