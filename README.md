@@ -5,12 +5,12 @@ A Library database web application.
 
 Overview
 --------
-This application allows students and faculty to borrow library resources (books, media, devices, etc.) as well as book study rooms, librarians to manage these resources, and administrators to manage all of the accounts associated with the mentioned account types
+This application allows students and faculty (patron accounts) to borrow library resources (books, media, devices, etc.) as well as book study rooms, librarians to manage these resources, and administrators to manage all of the accounts associated with the mentioned account types
 
 Key features
 ------------
 - Borrow books, media, devices, and other items.
-- Separate user categories (e.g., student, faculty) with different:
+- Separate patron user categories (e.g., student, faculty) with different:
   - Maximum number of items they can borrow.
   - Loan period (number of days allowed before due).
 - Overdue fine calculation and storage
