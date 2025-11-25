@@ -139,12 +139,10 @@ export async function assignCopyToNextHold(conn, copyId, explicitItemId = null) 
     [itemId]
   );
   if (!holdRows.length) {
-    // If no queued holds remain, only mark the copy available if it is not
-    // already tied to an existing ready hold via the trigger. This prevents
-    // us from undoing trg_copy_available_promote's assignment.
+    // If no queued holds remain, see if a trigger already assigned this copy
     const [readyHolds] = await conn.query(
       `
-        SELECT hold_id
+        SELECT hold_id, user_id, item_id, queue_position, available_since, expires_at
         FROM hold
         WHERE copy_id = ?
           AND status = 'ready'
@@ -154,8 +152,32 @@ export async function assignCopyToNextHold(conn, copyId, explicitItemId = null) 
     );
     if (!readyHolds.length) {
       await conn.execute("UPDATE copy SET status='available' WHERE copy_id=?", [copyId]);
+      return null;
     }
-    return null;
+
+    const existing = readyHolds[0];
+    let title = null;
+    try {
+      const [itemRows] = await conn.query("SELECT title FROM item WHERE item_id = ? LIMIT 1", [
+        existing.item_id,
+      ]);
+      title = itemRows[0]?.title || null;
+    } catch {}
+    try {
+      await createHoldReadyNotification(conn, {
+        holdId: existing.hold_id,
+        userId: existing.user_id,
+        itemId: existing.item_id,
+        copyId,
+        itemTitle: title,
+        availableSince: existing.available_since,
+        expiresAt: existing.expires_at,
+        queuePosition: existing.queue_position,
+      });
+    } catch (err) {
+      console.error("Failed to create hold notification:", err);
+    }
+    return existing.hold_id;
   }
 
   const holdId = holdRows[0].hold_id;
