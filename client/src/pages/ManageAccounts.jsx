@@ -251,14 +251,13 @@ export default function ManageAccounts() {
                   <Th>Role</Th>
                   <Th>Status</Th>
                   <Th>Created</Th>
-                  <Th>Flag</Th>
                   <Th>Actions</Th>
                 </tr>
               </thead>
               <tbody>
                 {!rows.length && !loading ? (
                   <tr>
-                    <td colSpan={11} style={{ padding: 12 }}>No accounts found.</td>
+                    <td colSpan={10} style={{ padding: 12 }}>No accounts found.</td>
                   </tr>
                 ) : (
                   rows.map((row) => {
@@ -389,30 +388,6 @@ export default function ManageAccounts() {
                         </Td>
                         <Td>{formatDateTime(row.created_at)}</Td>
                         <Td>
-                          {row.flagged_for_deletion ? (
-                            <div className="flagged-cell">
-                              <span className="flagged-badge">
-                                Flagged {formatDate(row.flagged_at)}
-                              </span>
-                              <button
-                                className="action-btn subtle"
-                                disabled={flaggingId === row.account_id}
-                                onClick={() => handleFlag(row)}
-                              >
-                                {flaggingId === row.account_id ? "Updating…" : "Clear"}
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              className="action-btn subtle"
-                              disabled={flaggingId === row.account_id}
-                              onClick={() => handleFlag(row)}
-                            >
-                              {flaggingId === row.account_id ? "Flagging…" : "Flag"}
-                            </button>
-                          )}
-                        </Td>
-                        <Td>
                           {isEditing ? (
                             <div className="row-actions">
                               <button
@@ -433,15 +408,20 @@ export default function ManageAccounts() {
                               </button>
                               <button
                                 className="action-btn danger"
-                                disabled={row.flagged_for_deletion || flaggingId === row.account_id}
+                                disabled={flaggingId === row.account_id}
                                 onClick={() => handleFlag(row)}
                               >
-                                {row.flagged_for_deletion
-                                  ? "Flagged"
-                                  : flaggingId === row.account_id
-                                  ? "Flagging…"
+                                {flaggingId === row.account_id
+                                  ? "Updating…"
+                                  : row.flagged_for_deletion
+                                  ? "Clear Flag"
                                   : "Flag Delete"}
                               </button>
+                              {row.flagged_for_deletion && (
+                                <small className="flagged-badge">
+                                  Flagged {formatDate(row.flagged_at)}
+                                </small>
+                              )}
                             </div>
                           )}
                         </Td>
