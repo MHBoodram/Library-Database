@@ -286,7 +286,7 @@ export default function Loans() {
                 <tr>
                   <Th>Title</Th>
                   <Th>Status</Th>
-                  <Th>Queue</Th>
+                  <Th>{"Your\u00a0Position"}</Th>
                   <Th>Ready Window</Th>
                   <Th>Actions</Th>
                 </tr>
@@ -308,7 +308,21 @@ export default function Loans() {
                       <Td>
                         {(() => {
                           const queuePos = hold.queue_display_position ?? hold.queue_position;
-                          if (hold.status === "queued") return queuePos ?? "-";
+                          if (hold.status === "queued") {
+                            if (queuePos === null || queuePos === undefined) return "-";
+                            const pos = Number(queuePos);
+                            if (!Number.isFinite(pos) || pos <= 0) return "-";
+                            const mod10 = pos % 10;
+                            const mod100 = pos % 100;
+                            const suffix = mod10 === 1 && mod100 !== 11
+                              ? "st"
+                              : mod10 === 2 && mod100 !== 12
+                              ? "nd"
+                              : mod10 === 3 && mod100 !== 13
+                              ? "rd"
+                              : "th";
+                            return `${pos}${suffix}`;
+                          }
                           if (hold.status === "ready") return "Ready";
                           return "-";
                         })()}
