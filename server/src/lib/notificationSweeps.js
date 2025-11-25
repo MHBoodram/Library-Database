@@ -12,6 +12,99 @@ const LOST_SUSPEND_GRACE_DAYS = Number(process.env.LOST_SUSPEND_GRACE_DAYS || 3)
 const LOST_REPLACEMENT_FEE = Number(process.env.LOST_REPLACEMENT_FEE || 80);
 const ROOM_EXPIRING_MINUTES = Number(process.env.ROOM_EXPIRING_MINUTES || 15);
 const LOST_WARNING_DAYS_BEFORE_LOST = Number(process.env.LOST_WARNING_DAYS_BEFORE_LOST || 3);
+const LIBRARY_TZ = process.env.LIBRARY_TZ || "America/Chicago";
+
+const tzDtfCache = new Map();
+function getTimeZoneOffset(date, timeZone) {
+  let dtf = tzDtfCache.get(timeZone);
+  if (!dtf) {
+    dtf = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hour12: false,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+    tzDtfCache.set(timeZone, dtf);
+  }
+  const parts = dtf.formatToParts(date);
+  const map = {};
+  for (const { type, value } of parts) {
+    if (type !== "literal") map[type] = value;
+  }
+  const asUTC = Date.UTC(
+    Number(map.year),
+    Number(map.month) - 1,
+    Number(map.day),
+    Number(map.hour),
+    Number(map.minute),
+    Number(map.second)
+  );
+  return asUTC - date.getTime();
+}
+
+function libraryLocalToISOString(value) {
+  if (!value) return null;
+  const normalized = value.trim().replace(" ", "T");
+  const match =
+    /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2}))?)?$/.exec(normalized);
+  if (!match) return null;
+  const [, year, month, day, hour = "00", minute = "00", second = "00"] = match;
+  const base = Date.UTC(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    Number(second)
+  );
+  const tempDate = new Date(base);
+  const offset = getTimeZoneOffset(tempDate, LIBRARY_TZ);
+  return new Date(tempDate.getTime() - offset).toISOString();
+}
+
+const libraryDateFormatter = new Intl.DateTimeFormat("en-US", {
+  timeZone: LIBRARY_TZ,
+  year: "numeric",
+  month: "long",
+  day: "numeric",
+});
+
+const libraryDateTimeFormatter = new Intl.DateTimeFormat("en-US", {
+  timeZone: LIBRARY_TZ,
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+
+const libraryTimeFormatter = new Intl.DateTimeFormat("en-US", {
+  timeZone: LIBRARY_TZ,
+  hour: "numeric",
+  minute: "2-digit",
+});
+
+function formatLibraryDate(isoString) {
+  if (!isoString) return "";
+  const d = new Date(isoString);
+  if (Number.isNaN(d.getTime())) return "";
+  return libraryDateFormatter.format(d);
+}
+
+function formatLibraryDateTime(isoString) {
+  if (!isoString) return "";
+  const d = new Date(isoString);
+  if (Number.isNaN(d.getTime())) return "";
+  return libraryDateTimeFormatter.format(d);
+}
+
+function formatLibraryTime(isoString) {
+  if (!isoString) return "";
+  const d = new Date(isoString);
+  if (Number.isNaN(d.getTime())) return "";
+  return libraryTimeFormatter.format(d);
+}
 
 function hoursFromNow(hours) {
   return new Date(Date.now() + hours * 60 * 60 * 1000);
@@ -118,7 +211,9 @@ export async function sweepLoanNotifications() {
     for (const loan of loans) {
       const due = loan.due_date ? new Date(loan.due_date) : null;
       if (!due || Number.isNaN(due.getTime())) continue;
-      const meta = { loan_id: loan.loan_id, due_date: iso(due), item_title: loan.item_title };
+      const dueISO = libraryLocalToISOString(`${loan.due_date}T00:00:00`);
+      const meta = { loan_id: loan.loan_id, due_date: dueISO, item_title: loan.item_title };
+      const dueDisplay = formatLibraryDate(dueISO);
 
       const isActiveLoan = loan.status === "active";
 
@@ -135,7 +230,7 @@ export async function sweepLoanNotifications() {
             userId: loan.user_id,
             type: NOTIFICATION_TYPES.DUE_SOON,
             title: `Due soon: ${loan.item_title}`,
-            message: `Your loan is due on ${due.toLocaleString()}.`,
+            message: `Your loan is due on ${dueDisplay}.`,
             metadata: meta,
           });
         }
@@ -155,7 +250,7 @@ export async function sweepLoanNotifications() {
             userId: loan.user_id,
             type: NOTIFICATION_TYPES.OVERDUE,
             title: `Overdue: ${loan.item_title}`,
-            message: `Your loan is overdue. Please return it as soon as possible.`,
+            message: `Your loan (due on ${dueDisplay}) is overdue. Please return it as soon as possible.`,
             metadata: meta,
           });
         }
@@ -227,17 +322,18 @@ export async function sweepRoomNotifications() {
     );
 
     for (const res of rows) {
-      const start = new Date(res.start_time);
-      const end = new Date(res.end_time);
+      const startIso = libraryLocalToISOString(res.start_time);
+      const endIso = libraryLocalToISOString(res.end_time);
       const meta = {
         reservation_id: res.reservation_id,
         room_id: res.room_id,
         room_number: res.room_number,
-        start_time: iso(start),
-        end_time: iso(end),
+        start_time: startIso,
+        end_time: endIso,
       };
 
-      if (end > now && end <= expiringAt) {
+      const endDate = endIso ? new Date(endIso) : null;
+      if (endDate && endDate > now && endDate <= expiringAt) {
         const exists = await notificationExists(conn, {
           userId: res.user_id,
           type: NOTIFICATION_TYPES.ROOM_EXPIRING,
@@ -245,18 +341,19 @@ export async function sweepRoomNotifications() {
           uniqueValue: res.reservation_id,
         });
         if (!exists) {
+          const endDisplay = formatLibraryTime(endIso);
           await createNotification(conn, {
             userId: res.user_id,
             type: NOTIFICATION_TYPES.ROOM_EXPIRING,
             title: `Room ending soon`,
-            message: `Your reservation for room ${res.room_number} ends at ${end.toLocaleTimeString()}.`,
+            message: `Your reservation for room ${res.room_number} ends at ${endDisplay}.`,
             metadata: meta,
           });
         }
         continue;
       }
 
-      if (end <= now) {
+      if (endDate && endDate <= now) {
         const exists = await notificationExists(conn, {
           userId: res.user_id,
           type: NOTIFICATION_TYPES.ROOM_EXPIRED,
