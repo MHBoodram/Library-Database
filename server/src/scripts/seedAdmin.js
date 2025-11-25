@@ -4,11 +4,14 @@ import bcrypt from "bcryptjs";
 
 async function upsertAdmin() {
   // You can change these defaults if desired
-  const first_name = process.env.SEED_ADMIN_FIRST || "Staff";
+  const first_name = process.env.SEED_ADMIN_FIRST || "Admin";
   const last_name = process.env.SEED_ADMIN_LAST || "User";
-  const email = process.env.SEED_ADMIN_EMAIL || "staff@library.test";
-  const password = process.env.SEED_ADMIN_PASSWORD || "Staff!123";
+  const email = process.env.SEED_ADMIN_EMAIL || "admin@library.test";
+  const password = process.env.SEED_ADMIN_PASSWORD || "Admin!123";
+  const employee_role = "admin";
+  const account_role = "admin";
   const role = "staff";
+
 
   const conn = await pool.getConnection();
   try {
@@ -40,22 +43,30 @@ async function upsertAdmin() {
         [first_name, last_name, email.toLowerCase()]
       );
       user_id = u.insertId;
+
+      const [e] = await conn.execute(
+        "INSERT INTO employee(first_name,last_name,role,hire_date) VALUES(?,?,?,CURDATE())",
+        [first_name, last_name, employee_role]
+      );
+      const employee_id = e.insertId;
+
       const hash = await bcrypt.hash(password, 10);
       await conn.execute(
-        "INSERT INTO account(user_id,email,password_hash,role,is_active) VALUES(?,?,?,?,1)",
-        [user_id, email.toLowerCase(), hash, role]
+        "INSERT INTO account(user_id,employee_id,email,password_hash,role,is_active) VALUES(?,?,?,?,?,1)",
+        [user_id, employee_id, email.toLowerCase(), hash, account_role]
       );
     }
 
     await conn.commit();
-    console.log(`Staff account ready: ${email} / ${password}`);
+    console.log(`Admin account ready: ${email} / ${password}`);
     process.exit(0);
   } catch (e) {
     try { await conn.rollback(); } catch {}
-    console.error("Failed to seed staff account:", e.message);
+    console.error("Failed to seed admin account:", e.message);
     process.exit(1);
   } finally {
     conn.release();
+    process.exit(0);
   }
 }
 

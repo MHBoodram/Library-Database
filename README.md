@@ -47,12 +47,9 @@ cd Library-Database
 
 For locally hosted frontend/backend but using our Azure database:
 - Create a `.env` file in the `client` directory with the following variables
-
-  (replacing the #comment with corresponding info found in our project report):
   ```env
   NODE_ENV=production
   PORT=3000 
-  # REFER TO "Database .env variables" SECTION OF PROJECT REPORT FOR THIS LINE
   LIBRARY_TZ=America/Chicago
   JWT_SECRET=change_me_to_a_long_random_string
   FRONTEND_ORIGIN=http://localhost:5173
@@ -69,11 +66,31 @@ For locally hosted frontend/backend but using our Azure database:
   FRONTEND_ORIGIN=http://localhost:3000
   VITE_API_BASE = http://localhost:3000/api
   ```
-4. Run the webapp (run both frontend and backend)
-- Run the backend by opening a terminal to the project folder, navigating to the `server` directory and running `npm run dev`
+For locally hosted frontend/backend and database, you will also need to import schema dump `library_schema_11_24_2025.sql`
+- Your backend `.env` file will also be different, instead having these variables:
 
+  (replacing YourLocalDBPAss with your actual local db pass and the seed staff credentials with the ones of your choosing)
+  ```env
+  NODE_ENV=development
+  PORT=3000
+  DB_HOST=localhost
+  DB_USER=root
+  DB_PASSWORD=YourLocalDBPass
+  DB_NAME=library_team2
+  LIBRARY_TZ=-06:00
+  JWT_SECRET=change_me_to_a_long_random_string
+  FRONTEND_ORIGIN=http://localhost:5173
+  DB_SSL=off
+  SEED_ADMIN_FIRST=YourAdminFirstName
+  SEED_ADMIN_LAST=YourAdminLastName
+  SEED_ADMIN_EMAIL=YourAdmin@Email
+  SEED_ADMIN_PASSWORD=YourAdminPass
+  ```
+4. Run the webapp (run both frontend and backend)
+- Run the backend by opening a terminal to the project folder, navigating to the `server` directory and running `npm run dev`, also run `npm run seed-staff` to set up the first admin account so you will be able to log in
   ```bash
   cd server
+  # include this line if you are localhosting database: npm run seed-staff
   npm run dev
   ```
 - Run the frontend by opening a terminal to the project folder, navigating to the `client` directory and running `npm run dev`
