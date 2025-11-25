@@ -4,7 +4,7 @@ import { pool } from "../lib/db.js";
 
 const EMPLOYEE_ROLES = ["librarian", "clerk", "assistant", "admin"];
 const ACCOUNT_ROLES = ["student", "faculty", "staff", "admin"];
-const LOST_FLAT_FEE = Number(process.env.LOST_REPLACEMENT_FEE || 20);
+const LOST_FLAT_FEE = Number(process.env.LOST_REPLACEMENT_FEE || 80);
 
 export const adminOverview = (JWT_SECRET) => async (req, res) => {
   const auth = requireEmployeeRole(req, res, JWT_SECRET, "admin");

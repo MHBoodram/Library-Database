@@ -2,7 +2,7 @@ import { sendJSON, requireRole } from "../lib/http.js";
 import { pool } from "../lib/db.js";
 
 const ACTIVE_STATUSES = ["paid", "waived"]; // treated as inactive if matched
-const LOST_FLAT_FEE = Number(process.env.LOST_REPLACEMENT_FEE || 20);
+const LOST_FLAT_FEE = Number(process.env.LOST_REPLACEMENT_FEE || 80);
 
 export const listActiveLoans = (JWT_SECRET) => async (req, res) => {
   const auth = requireRole(req, res, JWT_SECRET, "staff");
@@ -178,6 +178,7 @@ export const listFines = (JWT_SECRET) => async (req, res) => {
            ELSE 'book' END AS media_type,
       GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) AS days_since_due,
       GREATEST(DATEDIFF(CURDATE(), l.due_date), 0) AS days_overdue,
+      CASE WHEN l.return_date IS NOT NULL THEN 1 ELSE 0 END AS copy_returned,
       -- dynamic estimate without grace
       ROUND(
         CASE

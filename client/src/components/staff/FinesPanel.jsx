@@ -105,8 +105,9 @@ export default function FinesPanel({ api }) {
                 <Th>Loan ID</Th>
                 <Th>Due Date</Th>
                 <Th>Days Overdue</Th>
-                <Th>Amount</Th>
-                <Th className="hidden md:table-cell">Est Now</Th>
+                <Th className="hidden md:table-cell">Returned?</Th>
+                <Th>Assessed amount</Th>
+                <Th className="hidden md:table-cell">Estimated now</Th>
                 <Th>Item Title</Th>
               </tr>
             </thead>
@@ -131,7 +132,20 @@ export default function FinesPanel({ api }) {
                 </tr>
               ) : (
                 filtered.map((r) => {
-                  const amount = r.amount_assessed != null ? `$${Number(r.amount_assessed).toFixed(2)}` : '—';
+                  const assessedRaw =
+                    r.amount_assessed != null
+                      ? Number(r.amount_assessed)
+                      : r.current_fine != null
+                      ? Number(r.current_fine)
+                      : null;
+                  const estRaw =
+                    r.dynamic_est_fine != null
+                      ? Number(r.dynamic_est_fine)
+                      : assessedRaw;
+                  const assessedDisplay =
+                    assessedRaw != null ? `$${assessedRaw.toFixed(2)}` : "—";
+                  const estDisplay =
+                    estRaw != null ? `$${estRaw.toFixed(2)}` : "—";
                   const daysOverdue = r.days_overdue != null ? r.days_overdue : 
                     (r.due_date ? Math.max(0, Math.floor((new Date() - new Date(r.due_date)) / 86400000)) : '—');
                   
@@ -146,11 +160,12 @@ export default function FinesPanel({ api }) {
                       <Td>#{r.loan_id}</Td>
                       <Td>{formatDate(r.due_date)}</Td>
                       <Td>{daysOverdue}</Td>
-                      <Td>{r.current_fine != null ? `$${Number(r.current_fine).toFixed(2)}` : amount}</Td>
                       <Td className="hidden md:table-cell text-gray-500">
-                        {r.amount_assessed != null && r.dynamic_est_fine != null && Number(r.dynamic_est_fine) > Number(r.amount_assessed) + 0.009
-                          ? `$${Number(r.dynamic_est_fine).toFixed(2)}`
-                          : '—'}
+                        {Number(r.copy_returned) ? "Yes" : "No"}
+                      </Td>
+                      <Td>{assessedDisplay}</Td>
+                      <Td className="hidden md:table-cell text-gray-500">
+                        {estDisplay}
                       </Td>
                       <Td className="max-w-[24ch] truncate" title={r.title}>
                         {r.title}
