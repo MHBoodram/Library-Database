@@ -1,10 +1,11 @@
 # Library Database
 
 A Library database web application.
+**Webapp Link:** [https://library-database-xi.vercel.app/]
 
 Overview
 --------
-This application allows students and faculty to borrow library resources (books, media, devices, etc.). It supports multiple copies of the same item, per-item identifiers, borrowing rules that vary by user category, holds/requests, and overdue fine handling.
+This application allows students and faculty to borrow library resources (books, media, devices, etc.) as well as book study rooms, librarians to manage these resources
 
 Key features
 ------------
@@ -12,65 +13,67 @@ Key features
 - Separate user categories (e.g., student, faculty) with different:
   - Maximum number of items they can borrow.
   - Loan period (number of days allowed before due).
-- Each item has a canonical Item ID; the library can track multiple Copies of an Item (each copy has its own barcode/ID).
-- Overdue fine calculation and storage — fine policies can vary by media type and user category.
-- Place holds/requests on items (by item or by copy).
-- Reports for overdue items, balances, and top-borrowed items.
+- Overdue fine calculation and storage
+- Place holds on items if requested item out of stock.
+- Reports for overdue items, new patrons, and transaction history.
 - Auth with admin-provisioned accounts and role-based access (student, faculty, staff).
 
-Architecture
+Architecture/Technologies
 ------------
-- server/ — Backend API (Node.js, MySQL2, JWT-based auth).
-- client/ — Frontend (React + Vite template).
+- Frontend: React d
+- Backend: Node.js
+- Database: MYSQL
 
-API highlights (server)
------------------------
-- Auth:
-  - POST /api/auth/login { email, password } -> { token }
-  - GET /api/me (Bearer token)
-  - POST /api/admin/accounts (admin-only; provision new users/staff)
-- Items & copies:
-  - POST /api/items { title, subject?, classification? }
-  - PUT /api/items/:id { title?, subject?, classification? }
-  - DELETE /api/items/:id
-  - POST /api/copies { item_id, barcode, status?, shelf_location? }
-  - PUT /api/copies/:id { status?, shelf_location? }
-  - DELETE /api/copies/:id -> marks lost
-- Loans:
-  - POST /api/loans/checkout { user_id?, copy_id, employee_id? }
-  - POST /api/loans/return { loan_id, employee_id? }
-  - Triggers compute due date, snapshot policy, set copy status, and create overdue fines on return.
-- Holds:
-  - POST /api/holds/place { user_id?, item_id | copy_id }
-  - DELETE /api/holds/:id
-  - GET /api/staff/holds (staff dashboard queue overview)
-- Reports:
-  - GET /api/reports/overdue
-  - GET /api/reports/balances
-  - GET /api/reports/top-items
-
-Policy & fines
---------------
-- Policy selection uses the combination of media type and user category (e.g., book x student, device x faculty).
-- The fine policy table should include loan_days and limits per (media_type, user_category) combination.
-- Loan snapshots are taken when checking out to ensure the due date and rules are preserved even if policies change later.
-- Overdue fines are created/updated when items are returned late or by scheduled processes that compute balances.
 
 Setup & running
 ---------------
-- See server/README.md for backend setup (env vars, database schema):
-  - You'll need to create a `.env` in `server` with configuration such as DATABASE_URL, JWT_SECRET, PORT, and FRONTEND_ORIGIN.
-  - Load `library_db.sql` into your MySQL instance before running.
-- See client/README.md for frontend notes.
-
-Contributing
-------------
-- Fork and open pull requests.
-- Add or update `fine_policy` rows for any new media types / user categories.
-- Add integration tests for checkout/return/hold flows when implementing policy changes.
-
-Notes
------
-- Make sure `fine_policy` entries exist for the combinations of item media types and user categories you intend to support (e.g., book/student, book/faculty, device/student).
-- The system expects that copies are individually tracked (barcode/ID) and that loans reference copies; holds can be placed either on an item (any available copy) or a specific copy.
+1. Clone the Repo and navigate to the project folder
+```bash
+git clone https://github.com/MHBoodram/Library-Database.git
+cd Library-Database
+```
+2. Install all needed dependencies
+- For client:
+  ```bash
+  cd client
+  npm install
+  ```
+- For server:
+  ```bash
+  cd server
+  npm install
+  ```
+3. Create .env files
+For locally hosted frontend/backend but using our Azure database:
+- Create a .env file in the client/ directory with the following variables
+  (replacing the #comment with corresponding info found in our project report):
+  ```env
+  NODE_ENV=production
+  PORT=3000 
+  # REFER TO "Database .env variables" SECTION OF PROJECT REPORT FOR THIS LINE
+  LIBRARY_TZ=America/Chicago
+  JWT_SECRET=change_me_to_a_long_random_string
+  FRONTEND_ORIGIN=http://localhost:5173
+  DB_SSL=on
+  ```
+- Create a .env file in the server/ directory with the following variables:
+  ```env
+  NODE_ENV=development
+  PORT=3000
+  # REFER TO "Database .env variables" SECTION OF PROJECT REPORT FOR THIS LINE
+  JWT_SECRET=change_me_to_a_long_random_string
+  FRONTEND_ORIGIN=http://localhost:3000
+  VITE_API_BASE = http://localhost:3000/api
+  ```
+4. Run the webapp (run both frontend and backend)
+- Run the backend by opening a terminal to the project folder, navigating to the server/ directory and running npm run dev
+  ```bash
+  cd server
+  npm run dev
+  ```
+- Run the frontend by opening a terminal to the project folder, navigating to the client/ directory and running npm run dev
+  ```bash
+  cd client
+  npm run dev
+  ```
 
