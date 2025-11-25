@@ -43,10 +43,10 @@ cd Library-Database
   cd server
   npm install
   ```
-3. Create .env files
+3. Create `.env` files
 
 For locally hosted frontend/backend but using our Azure database:
-- Create a .env file in the client/ directory with the following variables
+- Create a `.env` file in the `client` directory with the following variables
 
   (replacing the #comment with corresponding info found in our project report):
   ```env
@@ -58,7 +58,7 @@ For locally hosted frontend/backend but using our Azure database:
   FRONTEND_ORIGIN=http://localhost:5173
   DB_SSL=on
   ```
-- Create a .env file in the server/ directory with the following variables:
+- Create a .env file in the `server` directory with the following variables:
 
   (replacing the #comment with corresponding info found in our project report):
   ```env
@@ -70,12 +70,12 @@ For locally hosted frontend/backend but using our Azure database:
   VITE_API_BASE = http://localhost:3000/api
   ```
 4. Run the webapp (run both frontend and backend)
-- Run the backend by opening a terminal to the project folder, navigating to the server/ directory and running npm run dev
+- Run the backend by opening a terminal to the project folder, navigating to the `server` directory and running `npm run dev`
   ```bash
   cd server
   npm run dev
   ```
-- Run the frontend by opening a terminal to the project folder, navigating to the client/ directory and running npm run dev
+- Run the frontend by opening a terminal to the project folder, navigating to the `client` directory and running `npm run dev`
   ```bash
   cd client
   npm run dev
