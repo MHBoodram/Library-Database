@@ -1,4 +1,3 @@
-```markdown
 # Library Database
 
 A Library database web application.
@@ -75,7 +74,3 @@ Notes
 - Make sure `fine_policy` entries exist for the combinations of item media types and user categories you intend to support (e.g., book/student, book/faculty, device/student).
 - The system expects that copies are individually tracked (barcode/ID) and that loans reference copies; holds can be placed either on an item (any available copy) or a specific copy.
 
-License
--------
-(Include repository license here if applicable)
-```
