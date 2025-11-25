@@ -20,7 +20,7 @@ Key features
 
 Architecture/Technologies
 ------------
-- Frontend: React d
+- Frontend: React
 - Backend: Node.js
 - Database: MYSQL
 
@@ -44,8 +44,10 @@ cd Library-Database
   npm install
   ```
 3. Create .env files
+
 For locally hosted frontend/backend but using our Azure database:
 - Create a .env file in the client/ directory with the following variables
+
   (replacing the #comment with corresponding info found in our project report):
   ```env
   NODE_ENV=production
@@ -57,6 +59,8 @@ For locally hosted frontend/backend but using our Azure database:
   DB_SSL=on
   ```
 - Create a .env file in the server/ directory with the following variables:
+
+  (replacing the #comment with corresponding info found in our project report):
   ```env
   NODE_ENV=development
   PORT=3000
