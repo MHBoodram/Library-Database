@@ -5,7 +5,7 @@ A Library database web application.
 
 Overview
 --------
-This application allows students and faculty to borrow library resources (books, media, devices, etc.) as well as book study rooms, librarians to manage these resources
+This application allows students and faculty to borrow library resources (books, media, devices, etc.) as well as book study rooms, librarians to manage these resources, and administrators to manage all of the accounts associated with the mentioned account types
 
 Key features
 ------------
