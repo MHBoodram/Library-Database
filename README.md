@@ -90,27 +90,27 @@ Legacy Cloud Database Instructions (Deprecated)
 <details>
 <summary><b>Click to expand legacy instructions</b></summary>
   
-**Webapp Link:** [https://library-database-xi.vercel.app/]
+>**Webapp Link:** [https://library-database-xi.vercel.app/]
     
-### 3. Create `.env` files
-For locally hosted frontend/backend but using our Azure database:
-  - Create a `.env` file in the `client` directory with the following variables
-    ```env
-    NODE_ENV=production
-    PORT=3000 
-    LIBRARY_TZ=America/Chicago
-    JWT_SECRET=change_me_to_a_long_random_string
-    FRONTEND_ORIGIN=http://localhost:5173
-    DB_SSL=on
-    ```
-  - Create a .env file in the `server` directory with the following variables:
-    (replacing the #comment with corresponding info found in our project report):
-    ```env
-    NODE_ENV=development
-    PORT=3000
-    # REFER TO "Database .env variables" SECTION OF PROJECT REPORT FOR THIS LINE
-    JWT_SECRET=change_me_to_a_long_random_string
-    FRONTEND_ORIGIN=http://localhost:3000
-    VITE_API_BASE = http://localhost:3000/api
-    ```
+> ### 3. Create `.env` files
+>For locally hosted frontend/backend but using our Azure database:
+> - Create a `.env` file in the `client` directory with the following variables
+>    ```env
+>    NODE_ENV=production
+>   PORT=3000 
+>   LIBRARY_TZ=America/Chicago
+>   JWT_SECRET=change_me_to_a_long_random_string
+>   FRONTEND_ORIGIN=http://localhost:5173
+>   DB_SSL=on
+>   ```
+> - Create a .env file in the `server` directory with the following variables:
+>   (replacing the #comment with corresponding info found in our project report):
+>   ```env
+>   NODE_ENV=development
+>   PORT=3000
+>   # REFER TO "Database .env variables" SECTION OF PROJECT REPORT FOR THIS LINE
+>   JWT_SECRET=change_me_to_a_long_random_string
+>   FRONTEND_ORIGIN=http://localhost:3000
+>   VITE_API_BASE = http://localhost:3000/api
+>   ```
 </details>
