@@ -89,8 +89,10 @@ Legacy Cloud Database Instructions (Deprecated)
 *The instructions below are archived and kept strictly for documentation purposes. The Azure hosted database is no longer active.*
 <details>
   <summary><b>Click to expand legacy instructions</b></summary>
-    Webapp Link: [https://library-database-xi.vercel.app/]
-    3. Create `.env` files
+  
+    **Webapp Link:** [https://library-database-xi.vercel.app/]
+    
+    ### 3. Create `.env` files
     For locally hosted frontend/backend but using our Azure database:
   - Create a `.env` file in the `client` directory with the following variables
     ```env
