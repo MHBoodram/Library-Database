@@ -90,7 +90,7 @@ Legacy Cloud Database Instructions (Deprecated)
 <details>
 <summary><b>Click to expand legacy instructions</b></summary>
   
->**Webapp Link:** [https://library-database-xi.vercel.app/]
+>~~**Webapp Link:** [https://library-database-xi.vercel.app/]~~
     
 > ### 3. Create `.env` files
 >For locally hosted frontend/backend but using our Azure database:
