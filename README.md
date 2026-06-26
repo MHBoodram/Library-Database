@@ -1,7 +1,6 @@
 # Library Database
 
 A Library database web application.
-**Webapp Link:** [https://library-database-xi.vercel.app/]
 
 Overview
 --------
@@ -45,7 +44,6 @@ cd Library-Database
   ```
 3. Create `.env` files
 
-For locally hosted frontend/backend but using our Azure database:
 - Create a `.env` file in the `client` directory with the following variables
   ```env
   NODE_ENV=production
@@ -56,19 +54,6 @@ For locally hosted frontend/backend but using our Azure database:
   DB_SSL=on
   ```
 - Create a .env file in the `server` directory with the following variables:
-
-  (replacing the #comment with corresponding info found in our project report):
-  ```env
-  NODE_ENV=development
-  PORT=3000
-  # REFER TO "Database .env variables" SECTION OF PROJECT REPORT FOR THIS LINE
-  JWT_SECRET=change_me_to_a_long_random_string
-  FRONTEND_ORIGIN=http://localhost:3000
-  VITE_API_BASE = http://localhost:3000/api
-  ```
-For locally hosted frontend/backend and database, you will also need to import schema dump `library_schema_11_24_2025.sql`
-- Your backend `.env` file will also be different, instead having these variables:
-
   (replacing YourLocalDBPAss with your actual local db pass and the seed staff credentials with the ones of your choosing)
   ```env
   NODE_ENV=development
@@ -99,4 +84,34 @@ For locally hosted frontend/backend and database, you will also need to import s
   cd client
   npm run dev
   ```
-
+Legacy Cloud Database Instructions (Deprecated)
+---------------
+*The instructions below are archived and kept strictly for documentation purposes. The Azure hosted database is no longer active.*
+<details>
+  <summary><b>Click to expand legacy instructions</b></summary>
+  <span style="color: gray;">
+    **Webapp Link:** [https://library-database-xi.vercel.app/]
+    3. Create `.env` files
+    For locally hosted frontend/backend but using our Azure database:
+  - Create a `.env` file in the `client` directory with the following variables
+    ```env
+    NODE_ENV=production
+    PORT=3000 
+    LIBRARY_TZ=America/Chicago
+    JWT_SECRET=change_me_to_a_long_random_string
+    FRONTEND_ORIGIN=http://localhost:5173
+    DB_SSL=on
+    ```
+  - Create a .env file in the `server` directory with the following variables:
+  
+    (replacing the #comment with corresponding info found in our project report):
+    ```env
+    NODE_ENV=development
+    PORT=3000
+    # REFER TO "Database .env variables" SECTION OF PROJECT REPORT FOR THIS LINE
+    JWT_SECRET=change_me_to_a_long_random_string
+    FRONTEND_ORIGIN=http://localhost:3000
+    VITE_API_BASE = http://localhost:3000/api
+    ```
+  </span>
+</details>
